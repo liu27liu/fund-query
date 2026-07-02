@@ -25,6 +25,9 @@
     var currentDetailCode = null;    // 当前查看的基金代码
     var portfolioTimer = null;       // 持仓页自动刷新定时器
     var portfolioRefreshCountdown = null; // 倒计时定时器
+    var homeRefreshTimer = null;     // 首页自动刷新定时器
+    var currentRankingType = 'RZDF'; // 当前排行类型
+    var currentRankingOrder = 'desc';// 当前排行排序方向
 
     // ========== Toast 消息提示 ==========
     function showToast(message, type = 'default') {
@@ -50,6 +53,10 @@
         // 离开持仓页时清除自动刷新
         if (path !== '/portfolio') {
             stopPortfolioAutoRefresh();
+        }
+        // 离开首页时清除自动刷新
+        if (path !== '/' && path !== '') {
+            stopHomeAutoRefresh();
         }
 
         // 更新导航高亮
@@ -130,20 +137,30 @@
                 <div class="fund-card skeleton" style="height: 160px;"></div>
             </div>
 
-            <div class="section-title">
-                <span>🔥</span>
-                热门搜索
-            </div>
             <div class="hot-search-list" id="hotKeywordList"></div>
 
-            <div class="section-title">
-                <span>📊</span>
-                涨幅榜 TOP 10
+            <div class="ranking-tabs-section">
+                <div class="section-title no-margin">
+                    <span>📊</span>
+                    基金涨跌榜 TOP 10
+                </div>
+                <div class="ranking-tabs" id="rankingTabs">
+                    <span class="ranking-tab active" data-type="RZDF" data-order="desc">日涨幅榜</span>
+                    <span class="ranking-tab" data-type="RZDF" data-order="asc">日跌幅榜</span>
+                    <span class="ranking-tab" data-type="ZZF" data-order="desc">周涨幅榜</span>
+                    <span class="ranking-tab" data-type="1NZF" data-order="desc">近1年涨幅</span>
+                </div>
+                <div class="ranking-refresh-bar">
+                    <span class="refresh-info">
+                        <span class="refresh-dot"></span>
+                        <span id="rankingRefreshStatus">加载中...</span>
+                    </span>
+                </div>
             </div>
             <div class="fund-table-wrap" id="rankingTable">
                 <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
                     <div class="loader" style="margin: 0 auto 12px;"></div>
-                    正在加载涨幅排行...
+                    正在加载涨跌排行...
                 </div>
             </div>
         `;
@@ -164,12 +181,26 @@
             });
         });
 
+        // 排行榜Tab切换
+        document.querySelectorAll('.ranking-tab').forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                document.querySelectorAll('.ranking-tab').forEach(function (t) { t.classList.remove('active'); });
+                this.classList.add('active');
+                currentRankingType = this.dataset.type;
+                currentRankingOrder = this.dataset.order;
+                loadRanking(currentRankingType, currentRankingOrder);
+            });
+        });
+
         // 加载热门基金实时估值
         loadHotFunds();
-        // 加载涨幅榜
-        loadRanking();
+        // 加载涨跌榜
+        loadRanking(currentRankingType, currentRankingOrder);
         // 加载持仓概览
         loadPortfolioOverview();
+
+        // 启动首页自动刷新
+        startHomeAutoRefresh();
     }
 
     // ========== 持仓概览(首页) ==========
@@ -296,11 +327,21 @@
         });
     }
 
-    async function loadRanking() {
+    async function loadRanking(sortType, order) {
+        sortType = sortType || currentRankingType;
+        order = order || currentRankingOrder;
         var container = document.getElementById('rankingTable');
         if (!container) return;
 
-        var ranking = await FundAPI.getFundRanking('RZDF', 10);
+        // 显示加载状态
+        container.innerHTML = `
+            <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
+                <div class="loader" style="margin: 0 auto 12px;"></div>
+                正在加载排行榜...
+            </div>
+        `;
+
+        var ranking = await FundAPI.getFundRanking(sortType, 10, order);
 
         if (ranking.length === 0) {
             container.innerHTML = `
@@ -310,12 +351,18 @@
                     <p>数据接口可能暂时不可用,请稍后重试</p>
                 </div>
             `;
+            updateRankingRefreshStatus(true);
             return;
         }
 
         // 获取实时估值补充
         var codes = ranking.map(function (f) { return f.code; });
         var estimates = await FundAPI.batchRealtimeEstimate(codes);
+
+        // 根据排行类型确定涨跌幅列标题
+        var changeColTitle = '日涨跌幅';
+        if (sortType === 'ZZF') changeColTitle = '周涨幅';
+        else if (sortType === '1NZF') changeColTitle = '近1年涨幅';
 
         container.innerHTML = `
             <table class="fund-table">
@@ -324,14 +371,23 @@
                         <th>基金名称</th>
                         <th class="text-right">最新净值</th>
                         <th class="text-right">估值</th>
-                        <th class="text-right">日涨跌幅</th>
+                        <th class="text-right">${changeColTitle}</th>
                         <th class="text-right">操作</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${ranking.map(function (f, i) {
                         var est = estimates.find(function (e) { return e.fundcode === f.code; });
-                        var change = est ? est.gszzl : f.change;
+                        var change;
+                        if (sortType === 'RZDF') {
+                            change = est ? est.gszzl : f.change;
+                        } else if (sortType === 'ZZF') {
+                            change = f.weekChange;
+                        } else if (sortType === '1NZF') {
+                            change = f.yearChange;
+                        } else {
+                            change = est ? est.gszzl : f.change;
+                        }
                         var changeClass = FundAPI.getChangeClass(change);
                         var isFav = Store.isFavorite(f.code);
                         return `
@@ -375,6 +431,8 @@
                 handleFavToggle(this);
             });
         });
+
+        updateRankingRefreshStatus(true);
     }
 
     // ========== 搜索页 ==========
@@ -978,6 +1036,46 @@
         }
         el.classList.add('flash-update');
         setTimeout(function () { el.classList.remove('flash-update'); }, 600);
+    }
+
+    // ========== 首页自动刷新 ==========
+    var HOME_REFRESH_INTERVAL = 60; // 首页自动刷新间隔（秒）
+
+    function startHomeAutoRefresh() {
+        stopHomeAutoRefresh();
+        homeRefreshTimer = setInterval(function () {
+            // 仅在首页时刷新
+            var path = location.hash.slice(1) || '/';
+            if (path !== '/' && path !== '') {
+                stopHomeAutoRefresh();
+                return;
+            }
+            refreshHomeData();
+        }, HOME_REFRESH_INTERVAL * 1000);
+    }
+
+    function stopHomeAutoRefresh() {
+        if (homeRefreshTimer) { clearInterval(homeRefreshTimer); homeRefreshTimer = null; }
+    }
+
+    function updateRankingRefreshStatus(isSuccess) {
+        var statusEl = document.getElementById('rankingRefreshStatus');
+        if (!statusEl) return;
+        var now = new Date();
+        var timeStr = String(now.getHours()).padStart(2, '0') + ':' +
+            String(now.getMinutes()).padStart(2, '0') + ':' +
+            String(now.getSeconds()).padStart(2, '0');
+        statusEl.textContent = (isSuccess ? '已更新 ' : '更新失败 ') + timeStr;
+    }
+
+    // 刷新首页数据：热门基金估值 + 涨跌榜 + 持仓概览（不重新渲染框架）
+    async function refreshHomeData() {
+        // 1. 刷新热门基金
+        await loadHotFunds();
+        // 2. 刷新涨跌榜
+        await loadRanking(currentRankingType, currentRankingOrder);
+        // 3. 刷新持仓概览
+        await loadPortfolioOverview();
     }
 
     // ========== 添加持仓表单 ==========

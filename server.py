@@ -503,6 +503,7 @@ def api_ranking():
     sort_type = request.args.get('sort', 'RZDF')
     size = request.args.get('size', '10')
     fund_type = request.args.get('type', 'all')
+    order = request.args.get('order', 'desc')  # desc=降序(涨幅榜), asc=升序(跌幅榜)
 
     # 东方财富基金排行数据接口
     sort_map = {
@@ -517,6 +518,7 @@ def api_ranking():
         'JNZF': 'jnzf',   # 今年以来
     }
     sc = sort_map.get(sort_type, 'rzdf')
+    st = 'asc' if order == 'asc' else 'desc'
 
     url = 'https://fund.eastmoney.com/data/rankhandler.aspx'
     params = {
@@ -526,7 +528,7 @@ def api_ranking():
         'rs': '',
         'gs': 0,
         'sc': sc,
-        'st': 'desc',
+        'st': st,
         'pi': 1,
         'pn': size,
         'dx': 1

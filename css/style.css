@@ -509,6 +509,52 @@ ul, ol { list-style: none; }
 
 .section-title .more:hover { opacity: 0.75; }
 
+.section-title.no-margin {
+    margin-bottom: 0;
+}
+
+/* ========== 涨跌榜Tab切换 ========== */
+.ranking-tabs-section {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+
+.ranking-tabs {
+    display: flex;
+    gap: 4px;
+    background: #f3f6fa;
+    padding: 3px;
+    border-radius: var(--radius-sm);
+}
+
+.ranking-tab {
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: all 0.2s var(--ease);
+    white-space: nowrap;
+}
+
+.ranking-tab:hover {
+    color: var(--primary);
+}
+
+.ranking-tab.active {
+    background: #fff;
+    color: var(--primary);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+.ranking-refresh-bar {
+    margin-left: auto;
+}
+
 /* ========== 基金卡片网格 ========== */
 .fund-grid {
     display: grid;

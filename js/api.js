@@ -210,12 +210,16 @@ const FundAPI = (function () {
 
     /**
      * 获取基金涨幅排行
+     * @param {string} sortType - 排序类型 RZDF=日涨幅
+     * @param {number} pageSize - 数量
+     * @param {string} order - desc=降序(涨幅榜), asc=升序(跌幅榜)
      */
-    async function getFundRanking(sortType, pageSize) {
+    async function getFundRanking(sortType, pageSize, order) {
         sortType = sortType || 'RZDF';
         pageSize = pageSize || 10;
+        order = order || 'desc';
         try {
-            const data = await fetchJSON('/api/ranking?sort=' + sortType + '&size=' + pageSize);
+            const data = await fetchJSON('/api/ranking?sort=' + sortType + '&size=' + pageSize + '&order=' + order);
             if (Array.isArray(data)) return data;
             return [];
         } catch (e) {
@@ -225,19 +229,56 @@ const FundAPI = (function () {
     }
 
     /**
-     * 获取热门基金列表(预设知名基金代码)
+     * 热门基金池 - 每天随机展示8只
+     */
+    var HOT_FUND_POOL = [
+        { code: '110011', name: '易方达优质精选混合', type: '混合型' },
+        { code: '161725', name: '招商中证白酒指数', type: '指数型' },
+        { code: '005827', name: '易方达蓝筹精选混合', type: '混合型' },
+        { code: '163406', name: '兴全合润混合', type: '混合型' },
+        { code: '260108', name: '景顺长城新兴成长混合', type: '混合型' },
+        { code: '519674', name: '银河创新成长混合', type: '混合型' },
+        { code: '008888', name: '华夏国证半导体芯片ETF联接', type: '指数型' },
+        { code: '161903', name: '万家行业优选混合', type: '混合型' },
+        { code: '270042', name: '广发纳指100ETF联接', type: '指数型' },
+        { code: '320007', name: '诺安成长混合', type: '混合型' },
+        { code: '001102', name: '前海开源国家比较优势混合', type: '混合型' },
+        { code: '162605', name: '景顺长城鼎益混合', type: '混合型' },
+        { code: '519066', name: '汇添富蓝筹稳健混合', type: '混合型' },
+        { code: '000961', name: '天弘沪深300指数', type: '指数型' },
+        { code: '001643', name: '汇添富中证主要消费ETF联接', type: '指数型' },
+        { code: '005918', name: '天弘中证医药100指数', type: '指数型' },
+        { code: '000478', name: '嘉实新能源材料股票', type: '股票型' },
+        { code: '110003', name: '易方达50指数A', type: '指数型' },
+        { code: '180003', name: '银华-道琼斯88精选', type: '指数型' },
+        { code: '360013', name: '光大保德信优势配置混合', type: '混合型' },
+        { code: '012414', name: '嘉实中证科创创业50ETF联接', type: '指数型' },
+        { code: '001856', name: '国泰互联网+股票', type: '股票型' },
+        { code: '166009', name: '中欧新动力混合', type: '混合型' },
+        { code: '002340', name: '华夏行业景气混合', type: '混合型' }
+    ];
+
+    /**
+     * 获取热门基金列表 - 基于当天日期随机选取8只，每天更换
      */
     function getHotFunds() {
-        return [
-            { code: '110011', name: '易方达优质精选混合', type: '混合型' },
-            { code: '161725', name: '招商中证白酒指数', type: '指数型' },
-            { code: '005827', name: '易方达蓝筹精选混合', type: '混合型' },
-            { code: '163406', name: '兴全合润混合', type: '混合型' },
-            { code: '260108', name: '景顺长城新兴成长混合', type: '混合型' },
-            { code: '519674', name: '银河创新成长混合', type: '混合型' },
-            { code: '008888', name: '华夏国证半导体芯片ETF联接', type: '指数型' },
-            { code: '161903', name: '万家行业优选混合', type: '混合型' }
-        ];
+        // 用当天日期作为种子，保证同一天显示相同的基金
+        var today = new Date();
+        var seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+        
+        // Fisher-Yates 洗牌（基于种子）
+        var arr = HOT_FUND_POOL.slice();
+        var random = function () {
+            seed = (seed * 9301 + 49297) % 233280;
+            return seed / 233280;
+        };
+        for (var i = arr.length - 1; i > 0; i--) {
+            var j = Math.floor(random() * (i + 1));
+            var temp = arr[i];
+            arr[i] = arr[j];
+            arr[j] = temp;
+        }
+        return arr.slice(0, 8);
     }
 
     /**
