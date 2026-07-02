@@ -729,7 +729,7 @@ def api_sectors():
                     '&fields=f12,f14,f2,f3,f4,f104,f105'
                     '&_=' + ts)
         try:
-            resp = requests.get(full_url, headers=sector_headers, timeout=10)
+            resp = SESSION.get(full_url, headers=sector_headers, timeout=10)
             data = resp.json()
             if data.get('data') and data['data'].get('diff'):
                 for item in data['data']['diff']:
