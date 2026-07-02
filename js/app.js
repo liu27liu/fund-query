@@ -384,12 +384,16 @@
             var isUp = idx.changePercent >= 0;
             var colorClass = isUp ? 'market-up' : 'market-down';
             var sign = isUp ? '+' : '';
-            // 前8个是A股，第9个开始是美股，加分隔标记
-            var usLabel = (i === 8) ? '<div class="market-section-divider">🇺🇸 美股指数</div>' : '';
-            var usClass = (i >= 8) ? ' market-us' : ' market-cn';
+            // 分区标签: A股(前8个) / 美股 / 全球其他
+            var divider = '';
+            if (i === 8) {
+                divider = '<div class="market-section-divider">🇺🇸 美股指数</div>';
+            } else if (i === 13 && indices.length > 13) {
+                divider = '<div class="market-section-divider">🌍 全球指数</div>';
+            }
             return `
-                ${usLabel}
-                <div class="market-card ${colorClass}${usClass}" data-code="${idx.code}">
+                ${divider}
+                <div class="market-card ${colorClass}" data-code="${idx.code}">
                     <div class="market-name">${idx.name}</div>
                     <div class="market-price">${FundAPI.formatNum(idx.price)}</div>
                     <div class="market-change">

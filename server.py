@@ -574,10 +574,16 @@ def api_ranking():
 @app.route('/api/news')
 def api_news():
     """7x24实时财经资讯 - 对接东方财富7x24快讯接口"""
-    page = request.args.get('page', '1')
     page_size = request.args.get('size', '15')
     sort_end = request.args.get('sortEnd', '')
-    # 使用 getFastNewsList 接口，fastColumn=102 为7x24小时全球直播快讯
+
+    headers_news = {
+        'User-Agent': HEADERS['User-Agent'],
+        'Referer': 'https://kuaixun.eastmoney.com/',
+        'Accept': '*/*',
+    }
+
+    # 主接口: getFastNewsList (7x24实时快讯)
     url = 'https://np-listapi.eastmoney.com/comm/web/getFastNewsList'
     params = {
         'client': 'web',
@@ -595,30 +601,65 @@ def api_news():
             for item in data['data']['fastNewsList']:
                 results.append({
                     'title': item.get('title', ''),
-                    'summary': item.get('summary', '') or item.get('digest', ''),
+                    'summary': item.get('summary', '') or '',
                     'source': item.get('mediaName', '') or '东方财富',
                     'time': item.get('showTime', ''),
                     'url': item.get('url_w', '') or item.get('url', '') or item.get('uniqueUrl', '')
                 })
-            # 返回资讯列表和分页用的sortEnd
             return jsonify({
                 'list': results,
                 'sortEnd': data['data'].get('sortEnd', ''),
                 'total': data['data'].get('total', 0)
             })
-        print(f'[资讯] 接口返回无数据: code={data.get("code")}, message={data.get("message", "")}')
-        return jsonify({'list': [], 'sortEnd': '', 'total': 0})
+        print(f'[资讯] 主接口无数据: code={data.get("code")}, msg={data.get("message", "")}')
     except Exception as e:
-        print(f'[资讯异常]: {e}')
-        return jsonify({'list': [], 'sortEnd': '', 'total': 0})
+        print(f'[资讯] 主接口异常: {e}')
+
+    # 备用接口: getNewsByColumns (财经要闻)
+    url2 = 'https://np-listapi.eastmoney.com/comm/web/getNewsByColumns'
+    params2 = {
+        'client': 'web',
+        'biz': 'web_news_col',
+        'column': '350',
+        'pageSize': page_size,
+        'page': '1',
+        'req_trace': str(int(time.time() * 1000))
+    }
+    try:
+        resp2 = SESSION.get(url2, params=params2, timeout=10)
+        data2 = resp2.json()
+        if data2.get('code') == 1 and data2.get('data') and data2['data'].get('list'):
+            results = []
+            for item in data2['data']['list']:
+                results.append({
+                    'title': item.get('title', ''),
+                    'summary': item.get('summary', '') or '',
+                    'source': item.get('mediaName', '') or '东方财富',
+                    'time': item.get('showTime', ''),
+                    'url': item.get('url_w', '') or item.get('url', '') or item.get('uniqueUrl', '')
+                })
+            print(f'[资讯] 备用接口返回 {len(results)} 条')
+            return jsonify({
+                'list': results,
+                'sortEnd': '',
+                'total': data2['data'].get('totle_hits', 0)
+            })
+        print(f'[资讯] 备用接口也无数据: code={data2.get("code")}, msg={data2.get("message", "")}')
+    except Exception as e:
+        print(f'[资讯] 备用接口异常: {e}')
+
+    return jsonify({'list': [], 'sortEnd': '', 'total': 0})
 
 
 @app.route('/api/market-indices')
 def api_market_indices():
     """大盘指数实时行情 - 对接东方财富push2接口"""
     # A股核心指数: 上证指数, 深证成指, 创业板指, 沪深300, 上证50, 中证500, 科创50, 北证50
-    # 美股核心指数: 道琼斯, 标普500, 纳斯达克
-    secids = '1.000001,0.399001,0.399006,1.000300,1.000016,1.000905,1.000688,0.899050,100.DJIA,100.SPX,100.NDX'
+    # 美股核心指数: 道琼斯, 标普500, 纳斯达克, 罗素2000, VIX恐慌指数
+    # 全球其他指数: 恒生指数, 日经225, 英国富时100, 德国DAX, 法国CAC40, 美元指数
+    secids = ('1.000001,0.399001,0.399006,1.000300,1.000016,1.000905,1.000688,0.899050,'
+              '100.DJIA,100.SPX,100.NDX,100.RUT,100.VIX,'
+              '100.HSI,100.N225,100.FTSE,100.GDAXI,100.FCHI,100.UDI')
     url = 'https://push2.eastmoney.com/api/qt/ulist.np/get'
     params = {
         'fltt': 2,
@@ -633,14 +674,18 @@ def api_market_indices():
         if data.get('data') and data['data'].get('diff'):
             results = []
             for item in data['data']['diff']:
+                price = safe_float(item.get('f2'))
+                if price <= 0:
+                    continue  # 过滤无效指数
                 results.append({
                     'code': item.get('f12', ''),
                     'name': item.get('f14', ''),
-                    'price': safe_float(item.get('f2')),
+                    'price': price,
                     'change': safe_float(item.get('f4')),
                     'changePercent': safe_float(item.get('f3')),
                 })
             return jsonify(results)
+        print(f'[大盘指数] 无数据: {json.dumps(data, ensure_ascii=False)[:200]}')
         return jsonify([])
     except Exception as e:
         print(f'[大盘指数异常]: {e}')
