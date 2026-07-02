@@ -214,12 +214,13 @@ const FundAPI = (function () {
      * @param {number} pageSize - 数量
      * @param {string} order - desc=降序(涨幅榜), asc=升序(跌幅榜)
      */
-    async function getFundRanking(sortType, pageSize, order) {
+    async function getFundRanking(sortType, pageSize, order, fundType) {
         sortType = sortType || 'RZDF';
         pageSize = pageSize || 10;
         order = order || 'desc';
+        fundType = fundType || 'all';
         try {
-            const data = await fetchJSON('/api/ranking?sort=' + sortType + '&size=' + pageSize + '&order=' + order);
+            const data = await fetchJSON('/api/ranking?sort=' + sortType + '&size=' + pageSize + '&order=' + order + '&type=' + fundType);
             if (Array.isArray(data)) return data;
             return [];
         } catch (e) {
@@ -414,6 +415,34 @@ const FundAPI = (function () {
         }
     }
 
+    // ========== 行业/概念板块实时行情 ==========
+    async function getSectors(boardType) {
+        boardType = boardType || 'all';
+        try {
+            const data = await fetchJSON('/api/sectors?type=' + boardType);
+            if (Array.isArray(data)) return data;
+            return [];
+        } catch (e) {
+            console.warn('板块接口异常:', e);
+            return [];
+        }
+    }
+
+    // ========== 基金经理排行榜 ==========
+    async function getFundManagers(page, pageSize, fundType) {
+        page = page || 1;
+        pageSize = pageSize || 20;
+        fundType = fundType || 'all';
+        try {
+            const data = await fetchJSON('/api/fund-managers?page=' + page + '&size=' + pageSize + '&type=' + fundType);
+            if (data && Array.isArray(data.list)) return data;
+            return { list: [], total: 0, pages: 0 };
+        } catch (e) {
+            console.warn('基金经理接口异常:', e);
+            return { list: [], total: 0, pages: 0 };
+        }
+    }
+
     return {
         searchFunds: searchFunds,
         getRealtimeEstimate: getRealtimeEstimate,
@@ -427,6 +456,8 @@ const FundAPI = (function () {
         getNews: getNews,
         resetNewsCursor: function () { newsSortEnd = ''; },
         getMarketIndices: getMarketIndices,
+        getSectors: getSectors,
+        getFundManagers: getFundManagers,
         parseFundType: parseFundType,
         getTypeColor: getTypeColor,
         formatNum: formatNum,

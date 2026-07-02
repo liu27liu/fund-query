@@ -692,6 +692,103 @@ def api_market_indices():
         return jsonify([])
 
 
+@app.route('/api/sectors')
+def api_sectors():
+    """行业板块+概念板块实时行情 - 对接东方财富push2接口"""
+    board_type = request.args.get('type', 'all')  # all/industry/concept
+    results = []
+
+    def fetch_boards(fs_type, label):
+        url = 'https://push2.eastmoney.com/api/qt/clist/get'
+        params = {
+            'pn': 1, 'pz': 500, 'po': 1, 'np': 1,
+            'ut': 'bd1d9ddb04089700cf9c27f6f7426281',
+            'fltt': 2, 'invt': 2, 'fid': 'f3',
+            'fs': fs_type,
+            'fields': 'f12,f14,f2,f3,f4,f104,f105',
+            '_': str(int(time.time() * 1000))
+        }
+        try:
+            resp = SESSION.get(url, params=params, timeout=10)
+            data = resp.json()
+            if data.get('data') and data['data'].get('diff'):
+                for item in data['data']['diff']:
+                    results.append({
+                        'code': item.get('f12', ''),
+                        'name': item.get('f14', ''),
+                        'price': safe_float(item.get('f2')),
+                        'changePercent': safe_float(item.get('f3')),
+                        'change': safe_float(item.get('f4')),
+                        'upCount': safe_float(item.get('f104', 0)),
+                        'downCount': safe_float(item.get('f105', 0)),
+                        'type': label
+                    })
+        except Exception as e:
+            print(f'[板块异常-{label}]: {e}')
+
+    if board_type in ('all', 'industry'):
+        fetch_boards('m:90+t:2', 'industry')
+    if board_type in ('all', 'concept'):
+        fetch_boards('m:90+t:3', 'concept')
+
+    # 按涨跌幅降序排序
+    results.sort(key=lambda x: x.get('changePercent', 0), reverse=True)
+    return jsonify(results)
+
+
+@app.route('/api/fund-managers')
+def api_fund_managers():
+    """基金经理排行榜 - 对接东方财富基金经理接口"""
+    page = request.args.get('page', '1')
+    page_size = request.args.get('size', '20')
+    fund_type = request.args.get('type', 'all')  # all/gp/hh/zq/zs/qdii/fof
+
+    url = 'https://fund.eastmoney.com/Data/FundDataPortfolio_Interface.aspx'
+    params = {
+        'dt': 14,
+        'mc': 'returnjson',
+        'ft': fund_type,
+        'pn': page_size,
+        'pi': page,
+        'sc': 'abbname',
+        'st': 'asc'
+    }
+    try:
+        resp = SESSION.get(url, params=params, timeout=10)
+        text = resp.text.strip()
+        # 解析 var returnjson= {...} 格式
+        match = re.search(r'var\s+returnjson\s*=\s*(\{.*\})', text, re.DOTALL)
+        if match:
+            import json as json_module
+            data = json_module.loads(match.group(1))
+            if data.get('data'):
+                results = []
+                for item in data['data']:
+                    results.append({
+                        'managerId': item[0] if len(item) > 0 else '',
+                        'name': item[1] if len(item) > 1 else '',
+                        'companyId': item[2] if len(item) > 2 else '',
+                        'companyName': item[3] if len(item) > 3 else '',
+                        'fundCodes': item[4] if len(item) > 4 else '',
+                        'fundNames': item[5] if len(item) > 5 else '',
+                        'workDays': item[6] if len(item) > 6 else '',
+                        'bestReturn': item[7] if len(item) > 7 else '',
+                        'representFundCode': item[8] if len(item) > 8 else '',
+                        'representFundName': item[9] if len(item) > 9 else '',
+                        'totalScale': item[10] if len(item) > 10 else '',
+                        'bestReturnRate': item[11] if len(item) > 11 else ''
+                    })
+                return jsonify({
+                    'list': results,
+                    'total': data.get('record', 0),
+                    'pages': data.get('pages', 0)
+                })
+        return jsonify({'list': [], 'total': 0, 'pages': 0})
+    except Exception as e:
+        print(f'[基金经理异常]: {e}')
+        return jsonify({'list': [], 'total': 0, 'pages': 0})
+
+
 @app.route('/api/fund/detail')
 def api_fund_detail_page():
     """基金详情页信息 - 对接东方财富fundf10"""

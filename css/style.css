@@ -1159,6 +1159,149 @@ ul, ol { list-style: none; }
     .market-dashboard { grid-template-columns: repeat(2, 1fr); }
 }
 
+/* ========== 赛道行业板块看板 ========== */
+.sector-dashboard {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    margin-bottom: 28px;
+}
+
+.sector-card {
+    background: var(--card-bg);
+    border-radius: var(--radius-xs);
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: all 0.2s var(--ease);
+    position: relative;
+    overflow: hidden;
+}
+
+.sector-card::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+}
+
+.sector-card.sector-up::before { background: #f5222d; }
+.sector-card.sector-down::before { background: #52c41a; }
+
+.sector-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    border-color: var(--primary);
+}
+
+.sector-info {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
+.sector-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sector-type-badge {
+    font-size: 10px;
+    padding: 0 4px;
+    border-radius: 2px;
+    background: #f0f4ff;
+    color: var(--primary);
+    flex-shrink: 0;
+}
+
+.sector-data {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+.sector-pct {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.sector-card.sector-up .sector-pct { color: #f5222d; }
+.sector-card.sector-down .sector-pct { color: #52c41a; }
+
+.sector-updown {
+    font-size: 11px;
+    color: var(--text-tertiary, #999);
+}
+
+.sector-filter-bar {
+    margin-left: auto;
+    display: flex;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: normal;
+}
+
+.sector-tab {
+    padding: 3px 10px;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all 0.2s var(--ease);
+    background: #f3f6fa;
+}
+
+.sector-tab:hover { color: var(--primary); }
+.sector-tab.active {
+    background: var(--primary);
+    color: #fff;
+}
+
+@media (max-width: 1024px) {
+    .sector-dashboard { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 640px) {
+    .sector-dashboard { grid-template-columns: repeat(3, 1fr); }
+    .sector-name { font-size: 12px; }
+    .sector-pct { font-size: 13px; }
+}
+
+/* ========== 基金类型筛选 ========== */
+.ranking-type-filter {
+    display: flex;
+    gap: 3px;
+    flex-wrap: wrap;
+}
+
+.type-tab {
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: all 0.2s var(--ease);
+    background: transparent;
+    border: 1px solid var(--border-color);
+}
+
+.type-tab:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.type-tab.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+
 /* ========== 7x24实时资讯 ========== */
 .news-refresh-info {
     margin-left: auto;

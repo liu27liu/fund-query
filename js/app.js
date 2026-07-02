@@ -28,6 +28,7 @@
     var homeRefreshTimer = null;     // 首页自动刷新定时器
     var currentRankingType = 'RZDF'; // 当前排行类型
     var currentRankingOrder = 'desc';// 当前排行排序方向
+    var currentFundType = 'all';     // 当前基金类型筛选
 
     // ========== Toast 消息提示 ==========
     function showToast(message, type = 'default') {
@@ -139,13 +140,20 @@
 
             <div class="section-title">
                 <span class="pulse-dot"></span>
-                热门基金实时估值
+                赛道行业板块实时行情
+                <div class="sector-filter-bar">
+                    <span class="sector-tab active" data-board="all">全部板块</span>
+                    <span class="sector-tab" data-board="industry">行业板块</span>
+                    <span class="sector-tab" data-board="concept">概念板块</span>
+                </div>
             </div>
-            <div class="fund-grid" id="hotFundGrid">
-                <div class="fund-card skeleton" style="height: 160px;"></div>
-                <div class="fund-card skeleton" style="height: 160px;"></div>
-                <div class="fund-card skeleton" style="height: 160px;"></div>
-                <div class="fund-card skeleton" style="height: 160px;"></div>
+            <div class="sector-dashboard" id="sectorDashboard">
+                <div class="sector-card skeleton" style="height: 72px;"></div>
+                <div class="sector-card skeleton" style="height: 72px;"></div>
+                <div class="sector-card skeleton" style="height: 72px;"></div>
+                <div class="sector-card skeleton" style="height: 72px;"></div>
+                <div class="sector-card skeleton" style="height: 72px;"></div>
+                <div class="sector-card skeleton" style="height: 72px;"></div>
             </div>
 
             <div class="hot-search-list" id="hotKeywordList"></div>
@@ -153,13 +161,22 @@
             <div class="ranking-tabs-section">
                 <div class="section-title no-margin">
                     <span>📊</span>
-                    基金涨跌榜 TOP 10
+                    基金榜单
                 </div>
                 <div class="ranking-tabs" id="rankingTabs">
-                    <span class="ranking-tab active" data-type="RZDF" data-order="desc">日涨幅榜</span>
-                    <span class="ranking-tab" data-type="RZDF" data-order="asc">日跌幅榜</span>
-                    <span class="ranking-tab" data-type="ZZF" data-order="desc">周涨幅榜</span>
-                    <span class="ranking-tab" data-type="1NZF" data-order="desc">近1年涨幅</span>
+                    <span class="ranking-tab active" data-type="RZDF" data-order="desc" data-ft="all">日涨幅榜</span>
+                    <span class="ranking-tab" data-type="RZDF" data-order="asc" data-ft="all">日跌幅榜</span>
+                    <span class="ranking-tab" data-type="ZZF" data-order="desc" data-ft="all">周涨幅榜</span>
+                    <span class="ranking-tab" data-type="1NZF" data-order="desc" data-ft="all">近1年涨幅</span>
+                </div>
+                <div class="ranking-type-filter" id="rankingTypeFilter">
+                    <span class="type-tab active" data-ft="all">全部</span>
+                    <span class="type-tab" data-ft="gp">股票型</span>
+                    <span class="type-tab" data-ft="hh">混合型</span>
+                    <span class="type-tab" data-ft="zq">债券型</span>
+                    <span class="type-tab" data-ft="zs">指数型</span>
+                    <span class="type-tab" data-ft="qdii">QDII</span>
+                    <span class="type-tab" data-ft="fof">FOF</span>
                 </div>
                 <div class="ranking-refresh-bar">
                     <span class="refresh-info">
@@ -210,6 +227,15 @@
             });
         });
 
+        // 板块Tab切换
+        document.querySelectorAll('.sector-tab').forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                document.querySelectorAll('.sector-tab').forEach(function (t) { t.classList.remove('active'); });
+                this.classList.add('active');
+                loadSectors(this.dataset.board);
+            });
+        });
+
         // 排行榜Tab切换
         document.querySelectorAll('.ranking-tab').forEach(function (tab) {
             tab.addEventListener('click', function () {
@@ -217,16 +243,29 @@
                 this.classList.add('active');
                 currentRankingType = this.dataset.type;
                 currentRankingOrder = this.dataset.order;
-                loadRanking(currentRankingType, currentRankingOrder);
+                // 同步基金类型筛选
+                var activeTypeTab = document.querySelector('.type-tab.active');
+                currentFundType = activeTypeTab ? activeTypeTab.dataset.ft : 'all';
+                loadRanking(currentRankingType, currentRankingOrder, currentFundType);
+            });
+        });
+
+        // 基金类型筛选
+        document.querySelectorAll('.type-tab').forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                document.querySelectorAll('.type-tab').forEach(function (t) { t.classList.remove('active'); });
+                this.classList.add('active');
+                currentFundType = this.dataset.ft;
+                loadRanking(currentRankingType, currentRankingOrder, currentFundType);
             });
         });
 
         // 加载大盘指数
         loadMarketIndices();
-        // 加载热门基金实时估值
-        loadHotFunds();
+        // 加载赛道板块
+        loadSectors('all');
         // 加载涨跌榜
-        loadRanking(currentRankingType, currentRankingOrder);
+        loadRanking(currentRankingType, currentRankingOrder, currentFundType);
         // 加载持仓概览
         loadPortfolioOverview();
         // 加载实时资讯
@@ -368,6 +407,53 @@
         });
     }
 
+    // ========== 赛道行业板块看板 ==========
+    var allSectorsCache = []; // 缓存全部板块数据
+
+    async function loadSectors(boardType) {
+        var container = document.getElementById('sectorDashboard');
+        if (!container) return;
+
+        var sectors = await FundAPI.getSectors(boardType);
+        allSectorsCache = sectors;
+
+        if (sectors.length === 0) {
+            container.innerHTML = '<div style="grid-column: 1/-1; padding: 20px; text-align: center; color: var(--text-secondary);">暂无板块数据</div>';
+            return;
+        }
+
+        // 显示前48个板块（涨跌幅排序后）
+        var display = sectors.slice(0, 48);
+
+        container.innerHTML = display.map(function (s) {
+            var isUp = s.changePercent >= 0;
+            var colorClass = isUp ? 'sector-up' : 'sector-down';
+            var sign = isUp ? '+' : '';
+            var typeBadge = s.type === 'industry' ? '行业' : '概念';
+            return `
+                <div class="sector-card ${colorClass}" data-code="${s.code}" data-name="${s.name}">
+                    <div class="sector-info">
+                        <span class="sector-name">${s.name}</span>
+                        <span class="sector-type-badge">${typeBadge}</span>
+                    </div>
+                    <div class="sector-data">
+                        <span class="sector-pct">${sign}${s.changePercent.toFixed(2)}%</span>
+                        <span class="sector-updown">${s.upCount}/${s.downCount}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // 点击板块搜索相关基金
+        container.querySelectorAll('.sector-card').forEach(function (card) {
+            card.addEventListener('click', function () {
+                var name = this.dataset.name;
+                searchInput.value = name;
+                navigate('/search?q=' + encodeURIComponent(name));
+            });
+        });
+    }
+
     // ========== 大盘指数看板 ==========
     async function loadMarketIndices() {
         var container = document.getElementById('marketDashboard');
@@ -489,9 +575,10 @@
         statusEl.textContent = (isSuccess ? '已更新 ' : '更新失败 ') + timeStr;
     }
 
-    async function loadRanking(sortType, order) {
+    async function loadRanking(sortType, order, fundType) {
         sortType = sortType || currentRankingType;
         order = order || currentRankingOrder;
+        fundType = fundType || currentFundType;
         var container = document.getElementById('rankingTable');
         if (!container) return;
 
@@ -503,7 +590,7 @@
             </div>
         `;
 
-        var ranking = await FundAPI.getFundRanking(sortType, 10, order);
+        var ranking = await FundAPI.getFundRanking(sortType, 10, order, fundType);
 
         if (ranking.length === 0) {
             container.innerHTML = `
@@ -1230,17 +1317,20 @@
         statusEl.textContent = (isSuccess ? '已更新 ' : '更新失败 ') + timeStr;
     }
 
-    // 刷新首页数据：大盘指数 + 热门基金估值 + 涨跌榜 + 持仓概览 + 资讯
+    // 刷新首页数据：大盘指数 + 板块行情 + 涨跌榜 + 持仓概览 + 资讯
     async function refreshHomeData() {
         // 1. 刷新大盘指数
         await loadMarketIndices();
-        // 2. 刷新热门基金
-        await loadHotFunds();
+        // 2. 刷新赛道板块
+        var activeSectorTab = document.querySelector('.sector-tab.active');
+        if (activeSectorTab) {
+            await loadSectors(activeSectorTab.dataset.board);
+        }
         // 3. 刷新涨跌榜
-        await loadRanking(currentRankingType, currentRankingOrder);
+        await loadRanking(currentRankingType, currentRankingOrder, currentFundType);
         // 4. 刷新持仓概览
         await loadPortfolioOverview();
-        // 5. 刷新资讯（只刷新第一页，保留用户已加载的更多内容会被覆盖）
+        // 5. 刷新资讯
         await loadNews(1);
     }
 
