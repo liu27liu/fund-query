@@ -57,6 +57,14 @@ HEADERS = {
 SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
 
+# 资讯专用session（避免主SESSION的cookies影响快讯接口）
+NEWS_SESSION = requests.Session()
+NEWS_SESSION.headers.update({
+    'User-Agent': HEADERS['User-Agent'],
+    'Referer': 'https://kuaixun.eastmoney.com/',
+    'Accept': '*/*',
+})
+
 
 @app.route('/')
 def index():
@@ -578,12 +586,6 @@ def api_news():
     page_size = request.args.get('size', '15')
     sort_end = request.args.get('sortEnd', '')
 
-    news_headers = {
-        'User-Agent': HEADERS['User-Agent'],
-        'Referer': 'https://kuaixun.eastmoney.com/',
-        'Accept': '*/*',
-    }
-
     # 主接口: getFastNewsList (7x24实时快讯)
     url = 'https://np-listapi.eastmoney.com/comm/web/getFastNewsList'
     params = {
@@ -594,8 +596,13 @@ def api_news():
         'sortEnd': sort_end,
         'req_trace': str(int(time.time() * 1000))
     }
+    news_headers = {
+        'User-Agent': HEADERS['User-Agent'],
+        'Referer': 'https://kuaixun.eastmoney.com/',
+        'Accept': '*/*',
+    }
     try:
-        resp = SESSION.get(url, params=params, headers=news_headers, timeout=10)
+        resp = requests.get(url, params=params, headers=news_headers, timeout=10)
         data = resp.json()
         print(f'[资讯] 主接口 code={data.get("code")}, has_data={data.get("data") is not None}', flush=True)
         if data.get('code') == 1 and data.get('data') and data['data'].get('fastNewsList'):
@@ -614,6 +621,9 @@ def api_news():
                 'sortEnd': data['data'].get('sortEnd', ''),
                 'total': data['data'].get('total', 0)
             })
+        # 打印data的keys帮助调试
+        if data.get('data'):
+            print(f'[资讯] 主接口data keys: {list(data["data"].keys())}', flush=True)
         print(f'[资讯] 主接口无数据: code={data.get("code")}, msg={data.get("message", "")}', flush=True)
     except Exception as e:
         print(f'[资讯] 主接口异常: {e}', flush=True)
@@ -629,7 +639,7 @@ def api_news():
         'req_trace': str(int(time.time() * 1000))
     }
     try:
-        resp2 = SESSION.get(url2, params=params2, headers=news_headers, timeout=10)
+        resp2 = requests.get(url2, params=params2, headers=news_headers, timeout=10)
         data2 = resp2.json()
         print(f'[资讯] 备用接口 code={data2.get("code")}', flush=True)
         if data2.get('code') == 1 and data2.get('data') and data2['data'].get('list'):
@@ -651,38 +661,6 @@ def api_news():
         print(f'[资讯] 备用接口也无数据: msg={data2.get("message", "")}', flush=True)
     except Exception as e:
         print(f'[资讯] 备用接口异常: {e}', flush=True)
-
-    # 第三备用: 直接抓取东方财富7x24快讯页面数据
-    try:
-        url3 = 'https://np-listapi.eastmoney.com/comm/web/getFastNewsList'
-        params3 = {
-            'client': 'web',
-            'biz': 'web_724',
-            'fastColumn': '350',
-            'pageSize': page_size,
-            'sortEnd': '',
-            'req_trace': str(int(time.time() * 1000))
-        }
-        resp3 = SESSION.get(url3, params=params3, headers=news_headers, timeout=10)
-        data3 = resp3.json()
-        if data3.get('code') == 1 and data3.get('data') and data3['data'].get('fastNewsList'):
-            results = []
-            for item in data3['data']['fastNewsList']:
-                results.append({
-                    'title': item.get('title', ''),
-                    'summary': item.get('summary', '') or '',
-                    'source': item.get('mediaName', '') or '东方财富',
-                    'time': item.get('showTime', ''),
-                    'url': item.get('url_w', '') or item.get('url', '') or item.get('uniqueUrl', '')
-                })
-            print(f'[资讯] 第三备用返回 {len(results)} 条', flush=True)
-            return jsonify({
-                'list': results,
-                'sortEnd': data3['data'].get('sortEnd', ''),
-                'total': data3['data'].get('total', 0)
-            })
-    except Exception as e:
-        print(f'[资讯] 第三备用异常: {e}', flush=True)
 
     return jsonify({'list': [], 'sortEnd': '', 'total': 0})
 
