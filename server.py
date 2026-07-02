@@ -10,6 +10,7 @@ import time
 import os
 import random
 import hashlib
+import urllib.parse
 from datetime import datetime
 import requests
 from flask import Flask, request, jsonify, send_from_directory, Response
@@ -577,7 +578,7 @@ def api_news():
     page_size = request.args.get('size', '15')
     sort_end = request.args.get('sortEnd', '')
 
-    headers_news = {
+    news_headers = {
         'User-Agent': HEADERS['User-Agent'],
         'Referer': 'https://kuaixun.eastmoney.com/',
         'Accept': '*/*',
@@ -594,8 +595,9 @@ def api_news():
         'req_trace': str(int(time.time() * 1000))
     }
     try:
-        resp = SESSION.get(url, params=params, timeout=10)
+        resp = SESSION.get(url, params=params, headers=news_headers, timeout=10)
         data = resp.json()
+        print(f'[资讯] 主接口 code={data.get("code")}, has_data={data.get("data") is not None}', flush=True)
         if data.get('code') == 1 and data.get('data') and data['data'].get('fastNewsList'):
             results = []
             for item in data['data']['fastNewsList']:
@@ -606,14 +608,15 @@ def api_news():
                     'time': item.get('showTime', ''),
                     'url': item.get('url_w', '') or item.get('url', '') or item.get('uniqueUrl', '')
                 })
+            print(f'[资讯] 主接口返回 {len(results)} 条', flush=True)
             return jsonify({
                 'list': results,
                 'sortEnd': data['data'].get('sortEnd', ''),
                 'total': data['data'].get('total', 0)
             })
-        print(f'[资讯] 主接口无数据: code={data.get("code")}, msg={data.get("message", "")}')
+        print(f'[资讯] 主接口无数据: code={data.get("code")}, msg={data.get("message", "")}', flush=True)
     except Exception as e:
-        print(f'[资讯] 主接口异常: {e}')
+        print(f'[资讯] 主接口异常: {e}', flush=True)
 
     # 备用接口: getNewsByColumns (财经要闻)
     url2 = 'https://np-listapi.eastmoney.com/comm/web/getNewsByColumns'
@@ -626,8 +629,9 @@ def api_news():
         'req_trace': str(int(time.time() * 1000))
     }
     try:
-        resp2 = SESSION.get(url2, params=params2, timeout=10)
+        resp2 = SESSION.get(url2, params=params2, headers=news_headers, timeout=10)
         data2 = resp2.json()
+        print(f'[资讯] 备用接口 code={data2.get("code")}', flush=True)
         if data2.get('code') == 1 and data2.get('data') and data2['data'].get('list'):
             results = []
             for item in data2['data']['list']:
@@ -638,15 +642,47 @@ def api_news():
                     'time': item.get('showTime', ''),
                     'url': item.get('url_w', '') or item.get('url', '') or item.get('uniqueUrl', '')
                 })
-            print(f'[资讯] 备用接口返回 {len(results)} 条')
+            print(f'[资讯] 备用接口返回 {len(results)} 条', flush=True)
             return jsonify({
                 'list': results,
                 'sortEnd': '',
-                'total': data2['data'].get('totle_hits', 0)
+                'total': 0
             })
-        print(f'[资讯] 备用接口也无数据: code={data2.get("code")}, msg={data2.get("message", "")}')
+        print(f'[资讯] 备用接口也无数据: msg={data2.get("message", "")}', flush=True)
     except Exception as e:
-        print(f'[资讯] 备用接口异常: {e}')
+        print(f'[资讯] 备用接口异常: {e}', flush=True)
+
+    # 第三备用: 直接抓取东方财富7x24快讯页面数据
+    try:
+        url3 = 'https://np-listapi.eastmoney.com/comm/web/getFastNewsList'
+        params3 = {
+            'client': 'web',
+            'biz': 'web_724',
+            'fastColumn': '350',
+            'pageSize': page_size,
+            'sortEnd': '',
+            'req_trace': str(int(time.time() * 1000))
+        }
+        resp3 = SESSION.get(url3, params=params3, headers=news_headers, timeout=10)
+        data3 = resp3.json()
+        if data3.get('code') == 1 and data3.get('data') and data3['data'].get('fastNewsList'):
+            results = []
+            for item in data3['data']['fastNewsList']:
+                results.append({
+                    'title': item.get('title', ''),
+                    'summary': item.get('summary', '') or '',
+                    'source': item.get('mediaName', '') or '东方财富',
+                    'time': item.get('showTime', ''),
+                    'url': item.get('url_w', '') or item.get('url', '') or item.get('uniqueUrl', '')
+                })
+            print(f'[资讯] 第三备用返回 {len(results)} 条', flush=True)
+            return jsonify({
+                'list': results,
+                'sortEnd': data3['data'].get('sortEnd', ''),
+                'total': data3['data'].get('total', 0)
+            })
+    except Exception as e:
+        print(f'[资讯] 第三备用异常: {e}', flush=True)
 
     return jsonify({'list': [], 'sortEnd': '', 'total': 0})
 
@@ -698,18 +734,26 @@ def api_sectors():
     board_type = request.args.get('type', 'all')  # all/industry/concept
     results = []
 
+    sector_headers = {
+        'User-Agent': HEADERS['User-Agent'],
+        'Referer': 'https://quote.eastmoney.com/center/boardlist.html',
+        'Accept': '*/*',
+    }
+
     def fetch_boards(fs_type, label):
-        url = 'https://push2.eastmoney.com/api/qt/clist/get'
-        params = {
-            'pn': 1, 'pz': 500, 'po': 1, 'np': 1,
-            'ut': 'bd1d9ddb04089700cf9c27f6f7426281',
-            'fltt': 2, 'invt': 2, 'fid': 'f3',
-            'fs': fs_type,
-            'fields': 'f12,f14,f2,f3,f4,f104,f105',
-            '_': str(int(time.time() * 1000))
-        }
+        # 手动构建URL，避免Python requests对+和:的编码问题
+        base_url = 'https://push2.eastmoney.com/api/qt/clist/get'
+        query_parts = [
+            'pn=1', 'pz=500', 'po=1', 'np=1',
+            'ut=bd1d9ddb04089700cf9c27f6f7426281',
+            'fltt=2', 'invt=2', 'fid=f3',
+            'fs=' + urllib.parse.quote(fs_type, safe='+:'),
+            'fields=f12,f14,f2,f3,f4,f104,f105',
+            '_=' + str(int(time.time() * 1000))
+        ]
+        full_url = base_url + '?' + '&'.join(query_parts)
         try:
-            resp = SESSION.get(url, params=params, timeout=10)
+            resp = SESSION.get(full_url, headers=sector_headers, timeout=10)
             data = resp.json()
             if data.get('data') and data['data'].get('diff'):
                 for item in data['data']['diff']:
@@ -723,8 +767,11 @@ def api_sectors():
                         'downCount': safe_float(item.get('f105', 0)),
                         'type': label
                     })
+                print(f'[板块-{label}] 返回 {len(data["data"]["diff"])} 个', flush=True)
+            else:
+                print(f'[板块-{label}] 无数据: {str(data)[:200]}', flush=True)
         except Exception as e:
-            print(f'[板块异常-{label}]: {e}')
+            print(f'[板块异常-{label}]: {e}', flush=True)
 
     if board_type in ('all', 'industry'):
         fetch_boards('m:90+t:2', 'industry')
