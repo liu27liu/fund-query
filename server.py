@@ -10,8 +10,6 @@ import time
 import os
 import random
 import hashlib
-import smtplib
-from email.mime.text import MIMEText
 from datetime import datetime
 import requests
 from flask import Flask, request, jsonify, send_from_directory, Response
@@ -29,16 +27,11 @@ def add_no_cache_headers(resp):
 # ========== 邮箱验证码存储（内存，5分钟过期）==========
 _email_codes = {}  # {email: {code, expire_time, attempts}}
 
-# ========== SMTP 邮件配置 ==========
-# 方式一：设置环境变量  方式二：直接修改下方默认值
-# QQ邮箱:      SMTP_HOST=smtp.qq.com   SMTP_PORT=465  授权码在邮箱设置中开启
-# 163邮箱:     SMTP_HOST=smtp.163.com  SMTP_PORT=465
-# Gmail:       SMTP_HOST=smtp.gmail.com SMTP_PORT=587
-# Outlook:     SMTP_HOST=smtp-mail.outlook.com SMTP_PORT=587
-SMTP_HOST = os.environ.get('SMTP_HOST', '')         # SMTP服务器地址
-SMTP_PORT = int(os.environ.get('SMTP_PORT', '465'))  # 465=SSL, 587=TLS
-SMTP_USER = os.environ.get('SMTP_USER', '')          # 发件邮箱地址
-SMTP_PASS = os.environ.get('SMTP_PASS', '')          # 邮箱授权码（非登录密码）
+# ========== Resend 邮件 API 配置 ==========
+# 使用 Resend HTTP API (走 443 端口)，每月免费 3000 封
+# 获取 API Key: https://resend.com/api-keys
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')               # Resend API Key
+RESEND_FROM_EMAIL = os.environ.get('RESEND_FROM_EMAIL', 'onboarding@resend.dev') # 发件邮箱地址（需在Resend验证）
 SMTP_FROM_NAME = os.environ.get('SMTP_FROM_NAME', '基金净值通')
 
 # 请求头模拟浏览器
@@ -671,14 +664,13 @@ def _clean_expired_codes():
 
 
 def _send_email_code(to_email, code):
-    """通过SMTP发送验证码邮件，返回是否成功"""
-    if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
-        # 未配置SMTP，打印到控制台（开发模式）
-        print(f'[验证码-未配置SMTP] 邮箱: {to_email}, 验证码: {code}', flush=True)
-        print('提示: 配置 SMTP_HOST / SMTP_USER / SMTP_PASS 环境变量后可发送真实邮件', flush=True)
+    """通过Resend HTTP API发送验证码邮件，返回是否成功"""
+    if not RESEND_API_KEY:
+        # 未配置Resend，打印到控制台（开发模式）
+        print(f'[验证码-未配置RESEND_API_KEY] 邮箱: {to_email}, 验证码: {code}', flush=True)
+        print('提示: 配置 RESEND_API_KEY / RESEND_FROM_EMAIL 环境变量后可发送真实邮件', flush=True)
         return False
 
-    subject = '【基金净值通】您的登录验证码'
     html_body = f"""\
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
     <div style="background: linear-gradient(135deg, #1677ff, #13c2c2); border-radius: 12px 12px 0 0; padding: 20px 24px;">
@@ -694,22 +686,26 @@ def _send_email_code(to_email, code):
     </div>
 </div>"""
 
-    msg = MIMEText(html_body, 'html', 'utf-8')
-    msg['Subject'] = subject
-    msg['From'] = f'{SMTP_FROM_NAME} <{SMTP_USER}>'
-    msg['To'] = to_email
+    url = 'https://api.resend.com/emails'
+    headers = {
+        'Authorization': f'Bearer {RESEND_API_KEY}',
+        'Content-Type': 'application/json'
+    }
+    payload = {
+        'from': f'{SMTP_FROM_NAME} <{RESEND_FROM_EMAIL}>',
+        'to': [to_email],
+        'subject': '【基金净值通】您的登录验证码',
+        'html': html_body
+    }
 
     try:
-        if SMTP_PORT == 465:
-            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=15)
+        resp = requests.post(url, json=payload, headers=headers, timeout=15)
+        if resp.status_code in (200, 201):
+            print(f'[邮件已发送] {to_email}')
+            return True
         else:
-            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15)
-            server.starttls()
-        server.login(SMTP_USER, SMTP_PASS)
-        server.sendmail(SMTP_USER, [to_email], msg.as_string())
-        server.quit()
-        print(f'[邮件已发送] {to_email}')
-        return True
+            print(f'[邮件发送失败] {to_email}: {resp.status_code} {resp.text}')
+            return False
     except Exception as e:
         print(f'[邮件发送失败] {to_email}: {e}')
         return False
@@ -740,13 +736,13 @@ def api_send_code():
         'attempts': 0
     }
 
-    # 通过SMTP发送验证码邮件
+    # 通过Resend API发送验证码邮件
     sent = _send_email_code(email, code)
     if not sent:
-        if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
+        if not RESEND_API_KEY:
             return jsonify({
                 'success': True,
-                'message': '验证码已发送（SMTP未配置，请查看服务器控制台）'
+                'message': '验证码已发送（Resend未配置，请查看服务器控制台）'
             })
         else:
             return jsonify({
@@ -817,10 +813,10 @@ if __name__ == '__main__':
     print('基金净值查询后端服务启动')
     print(f'访问地址: http://localhost:{port}')
     print('数据来源: 东方财富/天天基金 (实时数据)')
-    if SMTP_HOST and SMTP_USER:
-        print(f'邮件服务: {SMTP_HOST}:{SMTP_PORT} ({SMTP_USER})')
+    if RESEND_API_KEY:
+        print(f'邮件服务: Resend API (发件人: {RESEND_FROM_EMAIL})')
     else:
-        print('邮件服务: 未配置SMTP (验证码将打印到控制台)')
-        print('  配置方法: 设置环境变量 SMTP_HOST / SMTP_USER / SMTP_PASS')
+        print('邮件服务: 未配置Resend (验证码将打印到控制台)')
+        print('  配置方法: 设置环境变量 RESEND_API_KEY / RESEND_FROM_EMAIL')
     print('='*50)
     app.run(host='0.0.0.0', port=port, debug=False)
