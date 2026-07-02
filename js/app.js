@@ -170,27 +170,27 @@
         var container = document.getElementById('portfolioOverview');
         if (!container) return;
 
-        var holdings = Store.getHoldings();
-        if (holdings.length === 0) return;
+        var positions = Store.getAggregatedPositions();
+        if (positions.length === 0) return;
 
         // 获取所有持仓基金的实时估值
-        var codes = holdings.map(function (h) { return h.code; });
+        var codes = positions.map(function (p) { return p.code; });
         var estimates = await FundAPI.batchRealtimeEstimate(codes);
 
         // 构建净值映射 (优先用估值gsz,没有就用dwjz)
         var navMap = {};
-        holdings.forEach(function (h) {
-            var est = estimates.find(function (e) { return e.fundcode === h.code; });
+        positions.forEach(function (p) {
+            var est = estimates.find(function (e) { return e.fundcode === p.code; });
             if (est) {
-                navMap[h.code] = est.gsz || est.dwjz || h.buyPrice;
+                navMap[p.code] = est.gsz || est.dwjz || p.costPrice;
             } else {
-                navMap[h.code] = h.buyPrice;
+                navMap[p.code] = p.costPrice;
             }
         });
 
-        var totals = Store.calcTotalProfit(holdings, navMap);
-        var profitClass = totals.totalProfit >= 0 ? 'profit-positive' : 'profit-negative';
-        var profitSign = totals.totalProfit >= 0 ? '+' : '';
+        var totals = Store.calcTotalAggregatedProfit(positions, navMap);
+        var profitClass = totals.totalHoldingProfit >= 0 ? 'profit-positive' : 'profit-negative';
+        var profitSign = totals.totalHoldingProfit >= 0 ? '+' : '';
 
         container.innerHTML = `
             <div class="portfolio-summary" style="margin-bottom: 24px;">
@@ -200,19 +200,19 @@
                 </div>
                 <div class="summary-grid">
                     <div class="summary-item">
-                        <div class="summary-label">总市值</div>
+                        <div class="summary-label">持仓市值</div>
                         <div class="summary-value">¥${formatMoney(totals.totalValue)}</div>
                     </div>
                     <div class="summary-item">
-                        <div class="summary-label">总投入</div>
+                        <div class="summary-label">持仓成本</div>
                         <div class="summary-value">¥${formatMoney(totals.totalCost)}</div>
                     </div>
                     <div class="summary-item">
-                        <div class="summary-label">总盈亏</div>
-                        <div class="summary-value ${profitClass}">${profitSign}${formatMoney(totals.totalProfit)}</div>
+                        <div class="summary-label">持仓收益</div>
+                        <div class="summary-value ${profitClass}">${profitSign}${formatMoney(totals.totalHoldingProfit)}</div>
                     </div>
                     <div class="summary-item">
-                        <div class="summary-label">总收益率</div>
+                        <div class="summary-label">收益率</div>
                         <div class="summary-value ${profitClass}">${profitSign}${(totals.totalProfitRate * 100).toFixed(2)}%</div>
                     </div>
                 </div>
@@ -586,7 +586,7 @@
 
     // ========== 持仓页 ==========
     function renderPortfolio() {
-        var holdings = Store.getHoldings();
+        var positions = Store.getAggregatedPositions();
 
         app.innerHTML = `
             <div class="favorites-header">
@@ -606,14 +606,14 @@
             showHoldingForm({});
         });
 
-        loadPortfolioData(holdings);
+        loadPortfolioData(positions);
     }
 
-    async function loadPortfolioData(holdings) {
+    async function loadPortfolioData(positions) {
         var container = document.getElementById('portfolioContent');
         if (!container) return;
 
-        if (holdings.length === 0) {
+        if (positions.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
                     <div class="icon">💼</div>
@@ -632,53 +632,54 @@
         }
 
         // 获取所有持仓基金的实时估值
-        var codes = holdings.map(function (h) { return h.code; });
+        var codes = positions.map(function (p) { return p.code; });
         var estimates = await FundAPI.batchRealtimeEstimate(codes);
 
         // 构建净值映射
         var navMap = {};
-        var nameMap = {};
-        var typeMap = {};
-        holdings.forEach(function (h) {
-            var est = estimates.find(function (e) { return e.fundcode === h.code; });
+        positions.forEach(function (p) {
+            var est = estimates.find(function (e) { return e.fundcode === p.code; });
             if (est) {
-                navMap[h.code] = est.gsz || est.dwjz || h.buyPrice;
-                nameMap[h.code] = est.name || h.name;
+                navMap[p.code] = est.gsz || est.dwjz || p.costPrice;
             } else {
-                navMap[h.code] = h.buyPrice;
-                nameMap[h.code] = h.name;
+                navMap[p.code] = p.costPrice;
             }
-            typeMap[h.code] = h.type;
         });
 
         // 计算总盈亏
-        var totals = Store.calcTotalProfit(holdings, navMap);
-        var profitClass = totals.totalProfit >= 0 ? 'profit-positive' : 'profit-negative';
-        var profitSign = totals.totalProfit >= 0 ? '+' : '';
+        var totals = Store.calcTotalAggregatedProfit(positions, navMap);
+        var profitClass = totals.totalHoldingProfit >= 0 ? 'profit-positive' : 'profit-negative';
+        var profitSign = totals.totalHoldingProfit >= 0 ? '+' : '';
+        var cumClass = totals.totalCumulativeProfit >= 0 ? 'profit-positive' : 'profit-negative';
+        var cumSign = totals.totalCumulativeProfit >= 0 ? '+' : '';
 
         // 渲染持仓总览 + 持仓表格
         container.innerHTML = `
             <div class="portfolio-summary">
                 <div class="summary-header">
                     <span class="summary-title">📊 持仓总览</span>
-                    <span class="summary-count">共 ${holdings.length} 笔持仓 · ${totals.count} 只基金</span>
+                    <span class="summary-count">共 ${positions.length} 只基金</span>
                 </div>
-                <div class="summary-grid">
+                <div class="summary-grid summary-grid-5">
                     <div class="summary-item">
-                        <div class="summary-label">总市值</div>
+                        <div class="summary-label">持仓市值</div>
                         <div class="summary-value">¥${formatMoney(totals.totalValue)}</div>
                     </div>
                     <div class="summary-item">
-                        <div class="summary-label">总投入</div>
+                        <div class="summary-label">持仓成本</div>
                         <div class="summary-value">¥${formatMoney(totals.totalCost)}</div>
                     </div>
                     <div class="summary-item">
-                        <div class="summary-label">总盈亏</div>
-                        <div class="summary-value ${profitClass}">${profitSign}${formatMoney(totals.totalProfit)}</div>
+                        <div class="summary-label">持仓收益</div>
+                        <div class="summary-value ${profitClass}">${profitSign}${formatMoney(totals.totalHoldingProfit)}</div>
                     </div>
                     <div class="summary-item">
-                        <div class="summary-label">总收益率</div>
+                        <div class="summary-label">收益率</div>
                         <div class="summary-value ${profitClass}">${profitSign}${(totals.totalProfitRate * 100).toFixed(2)}%</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">累计收益</div>
+                        <div class="summary-value ${cumClass}">${cumSign}${formatMoney(totals.totalCumulativeProfit)}</div>
                     </div>
                 </div>
             </div>
@@ -688,43 +689,46 @@
                     <thead>
                         <tr>
                             <th>基金名称</th>
-                            <th class="text-right">持有金额</th>
-                            <th class="text-right">当前净值</th>
-                            <th class="text-right">当前市值</th>
-                            <th class="text-right">盈亏</th>
+                            <th class="text-right">持有份额</th>
+                            <th class="text-right">成本价</th>
+                            <th class="text-right">最新净值</th>
+                            <th class="text-right">持仓市值</th>
+                            <th class="text-right">持仓收益</th>
                             <th class="text-right">收益率</th>
                             <th class="text-right">操作</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${holdings.map(function (h) {
-                            var currentNav = navMap[h.code] || h.buyPrice;
-                            var calc = Store.calcHoldingProfit(h, currentNav);
-                            var pClass = calc.profit >= 0 ? 'profit-positive' : 'profit-negative';
-                            var pSign = calc.profit >= 0 ? '+' : '';
-                            var changeClass = FundAPI.getChangeClass(0);
-                            var est = estimates.find(function (e) { return e.fundcode === h.code; });
-                            var displayName = (est && est.name) || h.name;
+                        ${positions.map(function (p) {
+                            var currentNav = navMap[p.code] || p.costPrice;
+                            var calc = Store.calcPositionProfit(p, currentNav);
+                            var pClass = calc.holdingProfit >= 0 ? 'profit-positive' : 'profit-negative';
+                            var pSign = calc.holdingProfit >= 0 ? '+' : '';
+                            var est = estimates.find(function (e) { return e.fundcode === p.code; });
+                            var displayName = (est && est.name) || p.name;
+                            var clearedBadge = p.isCleared ? '<span class="cleared-badge">已清仓</span>' : '';
                             return `
-                                <tr data-code="${h.code}">
+                                <tr data-code="${p.code}">
                                     <td class="col-name">
                                         <div class="fund-name-cell">
-                                            <span class="name">${displayName}</span>
-                                            <span class="code">${h.code} · ${h.type || ''} · ${h.buyDate || ''}</span>
+                                            <span class="name">${displayName} ${clearedBadge}</span>
+                                            <span class="code">${p.code} · ${p.type || ''} · ${p.transactionCount}笔交易</span>
                                         </div>
                                     </td>
-                                    <td class="num-cell">¥${formatMoney(h.amount !== undefined ? h.amount : (h.buyPrice * h.shares))}</td>
+                                    <td class="num-cell">${p.currentShares.toFixed(2)}</td>
+                                    <td class="num-cell">${FundAPI.formatNum(p.costPrice)}</td>
                                     <td class="num-cell">${FundAPI.formatNum(currentNav)}</td>
                                     <td class="num-cell">¥${formatMoney(calc.currentValue)}</td>
-                                    <td class="num-cell ${pClass}">${pSign}${formatMoney(calc.profit)}</td>
+                                    <td class="num-cell ${pClass}">${pSign}${formatMoney(calc.holdingProfit)}</td>
                                     <td class="num-cell">
                                         <span class="change-badge ${pClass === 'profit-positive' ? 'bg-up' : 'bg-down'}">
-                                            ${pSign}${(calc.profitRate * 100).toFixed(2)}%
+                                            ${pSign}${(calc.holdingProfitRate * 100).toFixed(2)}%
                                         </span>
                                     </td>
                                     <td class="action-cell">
-                                        <button class="action-btn add-position" data-action="add-position" data-id="${h.addTime}">加仓</button>
-                                        <button class="action-btn" data-action="remove-holding" data-id="${h.addTime}">删除</button>
+                                        <button class="action-btn add-position" data-action="add-position" data-code="${p.code}">加仓</button>
+                                        ${p.isCleared ? '' : '<button class="action-btn sell-position" data-action="reduce-position" data-code="' + p.code + '">减仓</button>'}
+                                        <button class="action-btn" data-action="delete-fund" data-code="${p.code}">删除</button>
                                     </td>
                                 </tr>
                             `;
@@ -742,27 +746,43 @@
             });
         });
 
-        // 绑定删除按钮
-        container.querySelectorAll('.action-btn[data-action="remove-holding"]').forEach(function (btn) {
-            btn.addEventListener('click', function (e) {
-                e.stopPropagation();
-                var id = parseInt(this.dataset.id);
-                var result = Store.removeHolding(id);
-                showToast(result.message, result.success ? 'success' : 'error');
-                if (result.success) {
-                    renderPortfolio();
-                }
-            });
-        });
-
         // 绑定加仓按钮
         container.querySelectorAll('.action-btn[data-action="add-position"]').forEach(function (btn) {
             btn.addEventListener('click', function (e) {
                 e.stopPropagation();
-                var id = parseInt(this.dataset.id);
-                var holding = holdings.find(function (h) { return h.addTime === id; });
-                if (holding) {
-                    showAddPositionForm(holding);
+                var code = this.dataset.code;
+                var position = positions.find(function (p) { return p.code === code; });
+                if (position) {
+                    showAddPositionForm(position);
+                }
+            });
+        });
+
+        // 绑定减仓按钮
+        container.querySelectorAll('.action-btn[data-action="reduce-position"]').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var code = this.dataset.code;
+                var position = positions.find(function (p) { return p.code === code; });
+                if (position) {
+                    showReducePositionForm(position);
+                }
+            });
+        });
+
+        // 绑定删除按钮
+        container.querySelectorAll('.action-btn[data-action="delete-fund"]').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var code = this.dataset.code;
+                var position = positions.find(function (p) { return p.code === code; });
+                if (!position) return;
+                if (confirm('确定删除「' + (position.name || code) + '」的所有交易记录？此操作不可撤销。')) {
+                    var result = Store.removeFundTransactions(code);
+                    showToast(result.message, result.success ? 'success' : 'error');
+                    if (result.success) {
+                        renderPortfolio();
+                    }
                 }
             });
         });
@@ -929,21 +949,31 @@
     }
 
     // ========== 加仓表单 ==========
-    function showAddPositionForm(holding) {
+    function showAddPositionForm(position) {
         var holdingModal = document.getElementById('holdingModal');
         var holdingFormContent = document.getElementById('holdingFormContent');
 
         holdingFormContent.innerHTML = `
             <div class="form-header">
-                <h3>📈 加仓 · ${holding.name || holding.code}</h3>
+                <h3>📈 加仓 · ${position.name || position.code}</h3>
             </div>
             <div class="form-body">
                 <div class="form-group">
                     <label class="form-label">基金代码</label>
-                    <input type="text" class="form-input" value="${holding.code}" readonly style="background: #f5f7fa;">
+                    <input type="text" class="form-input" value="${position.code}" readonly style="background: #f5f7fa;">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">当前持有份额</label>
+                        <input type="text" class="form-input" value="${position.currentShares.toFixed(2)} 份" readonly style="background: #f5f7fa;">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">成本价</label>
+                        <input type="text" class="form-input" value="${FundAPI.formatNum(position.costPrice)}" readonly style="background: #f5f7fa;">
+                    </div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">当前净值</label>
+                    <label class="form-label">当前净值（买入价）</label>
                     <input type="text" class="form-input" id="addPosNav" value="获取中..." readonly style="background: #f5f7fa;">
                 </div>
                 <div class="form-group">
@@ -965,7 +995,7 @@
 
         // 获取当前净值作为买入价
         var currentNav = '';
-        FundAPI.getRealtimeEstimate(holding.code).then(function (est) {
+        FundAPI.getRealtimeEstimate(position.code).then(function (est) {
             if (est) {
                 currentNav = est.gsz || est.dwjz || '';
                 var navInput = document.getElementById('addPosNav');
@@ -1002,7 +1032,7 @@
 
             if (!currentNav || parseFloat(currentNav) <= 0) {
                 showToast('正在获取基金净值，请稍后...', 'warning');
-                FundAPI.getRealtimeEstimate(holding.code).then(function (est) {
+                FundAPI.getRealtimeEstimate(position.code).then(function (est) {
                     if (est && (est.gsz || est.dwjz)) {
                         currentNav = est.gsz || est.dwjz;
                         doAddPosition();
@@ -1016,12 +1046,168 @@
 
             function doAddPosition() {
                 var result = Store.addHolding({
-                    code: holding.code,
-                    name: holding.name || holding.code,
-                    type: holding.type || '',
+                    code: position.code,
+                    name: position.name || position.code,
+                    type: position.type || '',
                     amount: amount,
                     buyPrice: parseFloat(currentNav),
                     buyDate: buyDate
+                });
+
+                showToast(result.message, result.success ? 'success' : 'error');
+                if (result.success) {
+                    holdingModal.classList.remove('active');
+                    renderPortfolio();
+                }
+            }
+        });
+    }
+
+    // ========== 减仓表单 ==========
+    function showReducePositionForm(position) {
+        var holdingModal = document.getElementById('holdingModal');
+        var holdingFormContent = document.getElementById('holdingFormContent');
+
+        holdingFormContent.innerHTML = `
+            <div class="form-header">
+                <h3>📉 减仓 · ${position.name || position.code}</h3>
+            </div>
+            <div class="form-body">
+                <div class="form-group">
+                    <label class="form-label">基金代码</label>
+                    <input type="text" class="form-input" value="${position.code}" readonly style="background: #f5f7fa;">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">持有份额</label>
+                        <input type="text" class="form-input" value="${position.currentShares.toFixed(2)} 份" readonly style="background: #f5f7fa;">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">成本价</label>
+                        <input type="text" class="form-input" value="${FundAPI.formatNum(position.costPrice)}" readonly style="background: #f5f7fa;">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">当前净值（赎回价）</label>
+                    <input type="text" class="form-input" id="reducePosNav" value="获取中..." readonly style="background: #f5f7fa;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">赎回份额 <span class="required">*</span></label>
+                    <div style="display:flex; gap:8px;">
+                        <input type="number" class="form-input" id="reducePosShares" value="" step="0.01" placeholder="输入赎回份额" style="flex:1;">
+                        <button class="form-submit" id="reduceAllBtn" style="white-space:nowrap; padding:8px 16px;">全部</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">赎回日期</label>
+                    <input type="date" class="form-input" id="reducePosDate" value="">
+                </div>
+                <div class="form-preview" id="reducePreview" style="display:none;">
+                    <div class="preview-row"><span>预计到账金额</span><span id="previewAmount" class="preview-value">--</span></div>
+                    <div class="preview-row"><span>预计收益</span><span id="previewProfit" class="preview-value">--</span></div>
+                </div>
+                <div class="form-actions">
+                    <button class="form-cancel" id="reducePosCancelBtn">取消</button>
+                    <button class="form-submit" id="reducePosSubmitBtn">确认减仓</button>
+                </div>
+            </div>
+        `;
+
+        holdingModal.classList.add('active');
+
+        // 获取当前净值作为赎回价
+        var currentNav = '';
+        FundAPI.getRealtimeEstimate(position.code).then(function (est) {
+            if (est) {
+                currentNav = est.gsz || est.dwjz || '';
+                var navInput = document.getElementById('reducePosNav');
+                if (navInput) {
+                    navInput.value = currentNav ? FundAPI.formatNum(parseFloat(currentNav)) : '获取失败';
+                }
+                updatePreview();
+            } else {
+                var navInput2 = document.getElementById('reducePosNav');
+                if (navInput2) navInput2.value = '获取失败';
+            }
+        });
+
+        // 设置默认日期为今天
+        var today = new Date();
+        var dateStr = today.getFullYear() + '-' +
+            String(today.getMonth() + 1).padStart(2, '0') + '-' +
+            String(today.getDate()).padStart(2, '0');
+        document.getElementById('reducePosDate').value = dateStr;
+
+        // 更新预览
+        function updatePreview() {
+            var sharesInput = document.getElementById('reducePosShares');
+            var shares = parseFloat(sharesInput.value) || 0;
+            var preview = document.getElementById('reducePreview');
+            if (shares > 0 && currentNav && parseFloat(currentNav) > 0) {
+                var nav = parseFloat(currentNav);
+                var amount = shares * nav;
+                var profit = shares * (nav - position.costPrice);
+                var profitStr = (profit >= 0 ? '+' : '') + profit.toFixed(2);
+                document.getElementById('previewAmount').textContent = '¥' + amount.toFixed(2);
+                document.getElementById('previewProfit').textContent = profitStr;
+                document.getElementById('previewProfit').style.color = profit >= 0 ? '#f5222d' : '#52c41a';
+                preview.style.display = 'block';
+            } else {
+                preview.style.display = 'none';
+            }
+        }
+
+        // 份额输入时更新预览
+        document.getElementById('reducePosShares').addEventListener('input', updatePreview);
+
+        // 全部按钮
+        document.getElementById('reduceAllBtn').addEventListener('click', function () {
+            document.getElementById('reducePosShares').value = position.currentShares.toFixed(2);
+            updatePreview();
+        });
+
+        // 取消按钮
+        document.getElementById('reducePosCancelBtn').addEventListener('click', function () {
+            holdingModal.classList.remove('active');
+        });
+
+        // 提交按钮
+        document.getElementById('reducePosSubmitBtn').addEventListener('click', function () {
+            var shares = parseFloat(document.getElementById('reducePosShares').value);
+            var sellDate = document.getElementById('reducePosDate').value;
+
+            if (!shares || shares <= 0) {
+                showToast('请输入有效的赎回份额', 'warning');
+                return;
+            }
+
+            if (shares > position.currentShares + 0.0001) {
+                showToast('赎回份额不能超过持有份额（' + position.currentShares.toFixed(2) + '份）', 'warning');
+                return;
+            }
+
+            if (!currentNav || parseFloat(currentNav) <= 0) {
+                showToast('正在获取基金净值，请稍后...', 'warning');
+                FundAPI.getRealtimeEstimate(position.code).then(function (est) {
+                    if (est && (est.gsz || est.dwjz)) {
+                        currentNav = est.gsz || est.dwjz;
+                        doReducePosition();
+                    } else {
+                        showToast('无法获取基金净值，请稍后重试', 'error');
+                    }
+                });
+            } else {
+                doReducePosition();
+            }
+
+            function doReducePosition() {
+                var result = Store.addSellTransaction({
+                    code: position.code,
+                    name: position.name || position.code,
+                    type: position.type || '',
+                    shares: shares,
+                    price: parseFloat(currentNav),
+                    date: sellDate
                 });
 
                 showToast(result.message, result.success ? 'success' : 'error');

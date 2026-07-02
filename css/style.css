@@ -840,11 +840,69 @@ ul, ol { list-style: none; }
     box-shadow: 0 2px 8px rgba(22, 119, 255, 0.3);
 }
 
+.action-btn.sell-position {
+    color: var(--success);
+    background: #f0fff0;
+}
+
+.action-btn.sell-position:hover {
+    background: var(--success);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(82, 196, 26, 0.3);
+}
+
 .action-cell {
     white-space: nowrap;
     display: flex;
     gap: 4px;
     justify-content: flex-end;
+}
+
+/* 表单双列布局 */
+.form-row {
+    display: flex;
+    gap: 12px;
+}
+.form-row .form-group {
+    flex: 1;
+}
+
+/* 减仓预览区域 */
+.form-preview {
+    background: #f8f9fb;
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    margin-top: 4px;
+}
+.preview-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+.preview-value {
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text-primary);
+}
+
+/* 5列总览网格 */
+.summary-grid-5 {
+    grid-template-columns: repeat(5, 1fr) !important;
+}
+
+/* 已清仓标签 */
+.cleared-badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: #f0f0f0;
+    color: var(--text-secondary);
+    margin-left: 4px;
+    font-weight: normal;
 }
 
 .add-fav-mini:hover {

@@ -266,6 +266,63 @@ const Store = (function () {
     }
 
     /**
+     * 减仓（赎回）—— 创建卖出交易记录
+     * @param {Object} data - {code, name, type, shares, price, date}
+     *   shares: 赎回份额（正数）
+     *   price: 赎回时的单位净值（当前净值）
+     * @returns {Object} {success: boolean, message: string}
+     */
+    function addSellTransaction(data) {
+        try {
+            if (!data || !data.code) {
+                return { success: false, message: '基金代码不能为空' };
+            }
+            var sellShares = Number(data.shares);
+            if (!sellShares || sellShares <= 0) {
+                return { success: false, message: '赎回份额必须为正数' };
+            }
+            var sellPrice = Number(data.price) || 0;
+            if (sellPrice <= 0) {
+                return { success: false, message: '无法获取基金净值，请稍后重试' };
+            }
+
+            // 检查持有份额是否足够
+            var position = getAggregatedPosition(data.code);
+            if (!position || position.currentShares < sellShares - 0.0001) {
+                return { success: false, message: '赎回份额不能超过持有份额（' + (position ? position.currentShares.toFixed(4) : 0) + '份）' };
+            }
+
+            var holdings = getHoldings();
+            var record = {
+                code: data.code,
+                name: data.name || '',
+                type: data.type || data.category || '',
+                opType: 'sell',
+                amount: sellShares * sellPrice,
+                price: sellPrice,
+                shares: sellShares,
+                date: data.date || '',
+                addTime: Date.now()
+            };
+            holdings.push(record);
+            var saved = saveHoldings(holdings);
+            if (!saved) {
+                return { success: false, message: '减仓失败' };
+            }
+
+            // 计算本次减仓的已实现收益
+            var realized = sellShares * (sellPrice - position.costPrice);
+            return {
+                success: true,
+                message: '减仓成功，本次收益 ' + (realized >= 0 ? '+' : '') + realized.toFixed(2) + ' 元'
+            };
+        } catch (e) {
+            console.error('减仓失败:', e);
+            return { success: false, message: '减仓失败: ' + e.message };
+        }
+    }
+
+    /**
      * 删除指定持仓（通过addTime作为唯一ID）
      * @param {number} id - 持仓的addTime
      * @returns {Object} {success: boolean, message: string}
@@ -285,6 +342,29 @@ const Store = (function () {
         } catch (e) {
             console.error('删除持仓失败:', e);
             return { success: false, message: '删除持仓失败: ' + e.message };
+        }
+    }
+
+    /**
+     * 删除某基金的所有交易记录（聚合视图中的"删除"操作）
+     * @param {string} code - 基金代码
+     * @returns {Object} {success: boolean, message: string}
+     */
+    function removeFundTransactions(code) {
+        try {
+            var holdings = getHoldings();
+            var filtered = holdings.filter(function (h) { return h.code !== code; });
+            if (filtered.length === holdings.length) {
+                return { success: false, message: '未找到该基金记录' };
+            }
+            var saved = saveHoldings(filtered);
+            if (!saved) {
+                return { success: false, message: '删除失败' };
+            }
+            return { success: true, message: '已删除该基金所有记录' };
+        } catch (e) {
+            console.error('删除基金记录失败:', e);
+            return { success: false, message: '删除失败: ' + e.message };
         }
     }
 
@@ -376,6 +456,95 @@ const Store = (function () {
         return holdings.some(function (h) { return h.code === code; });
     }
 
+    // ========== 聚合持仓（按基金代码合并加减仓）==========
+
+    /**
+     * 获取所有基金的聚合持仓（每只基金一条，汇总所有买卖交易）
+     * 兼容旧数据：无 opType 的记录视为买入
+     * @returns {Array} 聚合持仓数组
+     */
+    function getAggregatedPositions() {
+        try {
+            var holdings = getHoldings();
+            var grouped = {};
+            holdings.forEach(function (h) {
+                if (!grouped[h.code]) {
+                    grouped[h.code] = {
+                        code: h.code,
+                        name: h.name || '',
+                        type: h.type || '',
+                        transactions: []
+                    };
+                }
+                grouped[h.code].transactions.push(h);
+                if (!grouped[h.code].name && h.name) grouped[h.code].name = h.name;
+                if (!grouped[h.code].type && h.type) grouped[h.code].type = h.type;
+            });
+
+            var positions = [];
+            Object.keys(grouped).forEach(function (code) {
+                var group = grouped[code];
+                var buys = group.transactions.filter(function (t) { return !t.opType || t.opType === 'buy'; });
+                var sells = group.transactions.filter(function (t) { return t.opType === 'sell'; });
+
+                var totalBuyAmount = buys.reduce(function (s, t) { return s + Number(t.amount || 0); }, 0);
+                var totalBuyShares = buys.reduce(function (s, t) { return s + Number(t.shares || 0); }, 0);
+                var totalSellAmount = sells.reduce(function (s, t) { return s + Number(t.amount || 0); }, 0);
+                var totalSellShares = sells.reduce(function (s, t) { return s + Number(t.shares || 0); }, 0);
+
+                var currentShares = totalBuyShares - totalSellShares;
+                var costPrice = totalBuyShares > 0 ? totalBuyAmount / totalBuyShares : 0;
+                var currentCost = costPrice * currentShares;  // 当前持仓成本
+                var realizedProfit = totalSellShares > 0
+                    ? totalSellAmount - (totalSellShares * costPrice)
+                    : 0;
+
+                positions.push({
+                    code: group.code,
+                    name: group.name,
+                    type: group.type,
+                    totalBuyAmount: totalBuyAmount,
+                    totalBuyShares: totalBuyShares,
+                    totalSellAmount: totalSellAmount,
+                    totalSellShares: totalSellShares,
+                    currentShares: currentShares,
+                    costPrice: costPrice,
+                    currentCost: currentCost,
+                    realizedProfit: realizedProfit,
+                    transactionCount: group.transactions.length,
+                    isCleared: currentShares <= 0.0001
+                });
+            });
+
+            return positions;
+        } catch (e) {
+            console.error('获取聚合持仓失败:', e);
+            return [];
+        }
+    }
+
+    /**
+     * 获取单只基金的聚合持仓
+     */
+    function getAggregatedPosition(code) {
+        var positions = getAggregatedPositions();
+        return positions.find(function (p) { return p.code === code; }) || null;
+    }
+
+    /**
+     * 获取某基金的所有交易记录（按时间倒序）
+     */
+    function getTransactionsByCode(code) {
+        try {
+            var holdings = getHoldings();
+            return holdings.filter(function (h) { return h.code === code; })
+                .sort(function (a, b) { return (b.addTime || 0) - (a.addTime || 0); });
+        } catch (e) {
+            console.error('查询交易记录失败:', e);
+            return [];
+        }
+    }
+
     // ========== 持仓计算辅助函数 ==========
 
     /**
@@ -453,6 +622,85 @@ const Store = (function () {
         }
     }
 
+    // ========== 聚合持仓盈亏计算 ==========
+
+    /**
+     * 计算单只基金聚合持仓的盈亏
+     * @param {Object} position - getAggregatedPositions() 返回的持仓对象
+     * @param {number} currentNav - 当前单位净值
+     * @returns {Object} {cost, currentValue, holdingProfit, holdingProfitRate, realizedProfit, cumulativeProfit}
+     */
+    function calcPositionProfit(position, currentNav) {
+        try {
+            if (!position) {
+                return { cost: 0, currentValue: 0, holdingProfit: 0, holdingProfitRate: 0, realizedProfit: 0, cumulativeProfit: 0 };
+            }
+            var nav = Number(currentNav) || 0;
+            var currentValue = nav * position.currentShares;
+            var holdingProfit = currentValue - position.currentCost;
+            var holdingProfitRate = position.currentCost > 0 ? (holdingProfit / position.currentCost) : 0;
+            var cumulativeProfit = holdingProfit + position.realizedProfit;
+
+            return {
+                cost: position.currentCost,
+                currentValue: currentValue,
+                holdingProfit: holdingProfit,
+                holdingProfitRate: holdingProfitRate,
+                realizedProfit: position.realizedProfit,
+                cumulativeProfit: cumulativeProfit
+            };
+        } catch (e) {
+            console.error('计算聚合持仓盈亏失败:', e);
+            return { cost: 0, currentValue: 0, holdingProfit: 0, holdingProfitRate: 0, realizedProfit: 0, cumulativeProfit: 0 };
+        }
+    }
+
+    /**
+     * 计算所有聚合持仓的总盈亏
+     * @param {Array} positions - getAggregatedPositions() 返回的数组
+     * @param {Object} navMap - {code: 当前净值}
+     * @returns {Object} {totalValue, totalCost, totalHoldingProfit, totalProfitRate, totalRealizedProfit, totalCumulativeProfit, count}
+     */
+    function calcTotalAggregatedProfit(positions, navMap) {
+        try {
+            positions = positions || [];
+            navMap = navMap || {};
+
+            var totalValue = 0;
+            var totalCost = 0;
+            var totalHoldingProfit = 0;
+            var totalRealizedProfit = 0;
+            var count = 0;
+
+            positions.forEach(function (p) {
+                var nav = navMap[p.code];
+                if (nav === undefined || nav === null) return;
+                var calc = calcPositionProfit(p, nav);
+                totalValue += calc.currentValue;
+                totalCost += calc.cost;
+                totalHoldingProfit += calc.holdingProfit;
+                totalRealizedProfit += calc.realizedProfit;
+                count++;
+            });
+
+            var totalProfitRate = totalCost > 0 ? (totalHoldingProfit / totalCost) : 0;
+            var totalCumulativeProfit = totalHoldingProfit + totalRealizedProfit;
+
+            return {
+                totalValue: totalValue,
+                totalCost: totalCost,
+                totalHoldingProfit: totalHoldingProfit,
+                totalProfitRate: totalProfitRate,
+                totalRealizedProfit: totalRealizedProfit,
+                totalCumulativeProfit: totalCumulativeProfit,
+                count: count
+            };
+        } catch (e) {
+            console.error('计算总聚合盈亏失败:', e);
+            return { totalValue: 0, totalCost: 0, totalHoldingProfit: 0, totalProfitRate: 0, totalRealizedProfit: 0, totalCumulativeProfit: 0, count: 0 };
+        }
+    }
+
     return {
         DEFAULT_GROUP: DEFAULT_GROUP,
         // 自选基金
@@ -473,12 +721,20 @@ const Store = (function () {
         // 持仓管理
         getHoldings: getHoldings,
         addHolding: addHolding,
+        addSellTransaction: addSellTransaction,
         removeHolding: removeHolding,
+        removeFundTransactions: removeFundTransactions,
         updateHolding: updateHolding,
         getHoldingByCode: getHoldingByCode,
         isHolding: isHolding,
+        // 聚合持仓
+        getAggregatedPositions: getAggregatedPositions,
+        getAggregatedPosition: getAggregatedPosition,
+        getTransactionsByCode: getTransactionsByCode,
         // 持仓计算辅助
         calcHoldingProfit: calcHoldingProfit,
-        calcTotalProfit: calcTotalProfit
+        calcTotalProfit: calcTotalProfit,
+        calcPositionProfit: calcPositionProfit,
+        calcTotalAggregatedProfit: calcTotalAggregatedProfit
     };
 })();
