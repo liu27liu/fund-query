@@ -1077,6 +1077,19 @@ ul, ol { list-style: none; }
     margin-bottom: 28px;
 }
 
+.market-section-divider {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 8px 0 2px;
+    border-top: 1px dashed var(--border-color);
+    margin-top: 4px;
+}
+
 .market-card {
     background: var(--card-bg);
     border-radius: var(--radius);

@@ -380,12 +380,16 @@
             return;
         }
 
-        container.innerHTML = indices.map(function (idx) {
+        container.innerHTML = indices.map(function (idx, i) {
             var isUp = idx.changePercent >= 0;
             var colorClass = isUp ? 'market-up' : 'market-down';
             var sign = isUp ? '+' : '';
+            // 前8个是A股，第9个开始是美股，加分隔标记
+            var usLabel = (i === 8) ? '<div class="market-section-divider">🇺🇸 美股指数</div>' : '';
+            var usClass = (i >= 8) ? ' market-us' : ' market-cn';
             return `
-                <div class="market-card ${colorClass}" data-code="${idx.code}">
+                ${usLabel}
+                <div class="market-card ${colorClass}${usClass}" data-code="${idx.code}">
                     <div class="market-name">${idx.name}</div>
                     <div class="market-price">${FundAPI.formatNum(idx.price)}</div>
                     <div class="market-change">
@@ -404,6 +408,11 @@
     async function loadNews(page, isLoadMore) {
         var container = document.getElementById('newsFeed');
         if (!container) return;
+
+        // 第一页时重置分页游标
+        if (page === 1) {
+            FundAPI.resetNewsCursor();
+        }
 
         if (!isLoadMore) {
             container.innerHTML = `

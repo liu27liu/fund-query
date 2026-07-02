@@ -573,44 +573,52 @@ def api_ranking():
 
 @app.route('/api/news')
 def api_news():
-    """7x24实时财经资讯 - 对接东方财富快讯接口"""
+    """7x24实时财经资讯 - 对接东方财富7x24快讯接口"""
     page = request.args.get('page', '1')
-    page_size = request.args.get('size', '20')
-    # column=350 为主财经新闻流(7x24快讯)
-    url = 'https://np-listapi.eastmoney.com/comm/web/getNewsByColumns'
+    page_size = request.args.get('size', '15')
+    sort_end = request.args.get('sortEnd', '')
+    # 使用 getFastNewsList 接口，fastColumn=102 为7x24小时全球直播快讯
+    url = 'https://np-listapi.eastmoney.com/comm/web/getFastNewsList'
     params = {
         'client': 'web',
-        'biz': 'web_news_col',
-        'column': '350',
+        'biz': 'web_724',
+        'fastColumn': '102',
         'pageSize': page_size,
-        'page': page,
+        'sortEnd': sort_end,
         'req_trace': str(int(time.time() * 1000))
     }
     try:
         resp = SESSION.get(url, params=params, timeout=10)
         data = resp.json()
-        if data.get('code') == 1 and data.get('data') and data['data'].get('list'):
+        if data.get('code') == 1 and data.get('data') and data['data'].get('fastNewsList'):
             results = []
-            for item in data['data']['list']:
+            for item in data['data']['fastNewsList']:
                 results.append({
                     'title': item.get('title', ''),
-                    'summary': item.get('summary', ''),
-                    'source': item.get('mediaName', ''),
+                    'summary': item.get('summary', '') or item.get('digest', ''),
+                    'source': item.get('mediaName', '') or '东方财富',
                     'time': item.get('showTime', ''),
                     'url': item.get('url_w', '') or item.get('url', '') or item.get('uniqueUrl', '')
                 })
-            return jsonify(results)
-        return jsonify([])
+            # 返回资讯列表和分页用的sortEnd
+            return jsonify({
+                'list': results,
+                'sortEnd': data['data'].get('sortEnd', ''),
+                'total': data['data'].get('total', 0)
+            })
+        print(f'[资讯] 接口返回无数据: code={data.get("code")}, message={data.get("message", "")}')
+        return jsonify({'list': [], 'sortEnd': '', 'total': 0})
     except Exception as e:
         print(f'[资讯异常]: {e}')
-        return jsonify([])
+        return jsonify({'list': [], 'sortEnd': '', 'total': 0})
 
 
 @app.route('/api/market-indices')
 def api_market_indices():
     """大盘指数实时行情 - 对接东方财富push2接口"""
-    # 核心大盘指数: 上证指数, 深证成指, 创业板指, 沪深300, 上证50, 中证500, 科创50, 北证50
-    secids = '1.000001,0.399001,0.399006,1.000300,1.000016,1.000905,1.000688,0.899050'
+    # A股核心指数: 上证指数, 深证成指, 创业板指, 沪深300, 上证50, 中证500, 科创50, 北证50
+    # 美股核心指数: 道琼斯, 标普500, 纳斯达克
+    secids = '1.000001,0.399001,0.399006,1.000300,1.000016,1.000905,1.000688,0.899050,100.DJIA,100.SPX,100.NDX'
     url = 'https://push2.eastmoney.com/api/qt/ulist.np/get'
     params = {
         'fltt': 2,

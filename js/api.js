@@ -379,12 +379,22 @@ const FundAPI = (function () {
     }
 
     // ========== 7x24实时资讯 ==========
+    var newsSortEnd = ''; // 分页游标
+
     async function getNews(page, pageSize) {
-        page = page || 1;
-        pageSize = pageSize || 20;
+        pageSize = pageSize || 15;
+        // 第一页不传sortEnd（获取最新），翻页时传上一页返回的sortEnd
+        var params = 'size=' + pageSize;
+        if (page > 1 && newsSortEnd) {
+            params += '&sortEnd=' + encodeURIComponent(newsSortEnd);
+        }
         try {
-            const data = await fetchJSON('/api/news?page=' + page + '&size=' + pageSize);
-            if (Array.isArray(data)) return data;
+            const data = await fetchJSON('/api/news?' + params);
+            if (data && Array.isArray(data.list)) {
+                // 保存分页游标
+                if (data.sortEnd) newsSortEnd = data.sortEnd;
+                return data.list;
+            }
             return [];
         } catch (e) {
             console.warn('资讯接口异常:', e);
@@ -415,6 +425,7 @@ const FundAPI = (function () {
         getHotFunds: getHotFunds,
         getHotKeywords: getHotKeywords,
         getNews: getNews,
+        resetNewsCursor: function () { newsSortEnd = ''; },
         getMarketIndices: getMarketIndices,
         parseFundType: parseFundType,
         getTypeColor: getTypeColor,
