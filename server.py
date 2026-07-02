@@ -719,19 +719,17 @@ def api_sectors():
     }
 
     def fetch_boards(fs_type, label):
-        # 手动构建URL，避免Python requests对+和:的编码问题
+        # 手动构建URL，requests会自动编码+和:导致东方财富API不识别
         base_url = 'https://push2.eastmoney.com/api/qt/clist/get'
-        query_parts = [
-            'pn=1', 'pz=500', 'po=1', 'np=1',
-            'ut=bd1d9ddb04089700cf9c27f6f7426281',
-            'fltt=2', 'invt=2', 'fid=f3',
-            'fs=' + urllib.parse.quote(fs_type, safe='+:'),
-            'fields=f12,f14,f2,f3,f4,f104,f105',
-            '_=' + str(int(time.time() * 1000))
-        ]
-        full_url = base_url + '?' + '&'.join(query_parts)
+        ts = str(int(time.time() * 1000))
+        full_url = (base_url + '?pn=1&pz=500&po=1&np=1'
+                    '&ut=bd1d9ddb04089700cf9c27f6f7426281'
+                    '&fltt=2&invt=2&fid=f3'
+                    '&fs=' + fs_type +
+                    '&fields=f12,f14,f2,f3,f4,f104,f105'
+                    '&_=' + ts)
         try:
-            resp = SESSION.get(full_url, headers=sector_headers, timeout=10)
+            resp = requests.get(full_url, headers=sector_headers, timeout=10)
             data = resp.json()
             if data.get('data') and data['data'].get('diff'):
                 for item in data['data']['diff']:
@@ -748,6 +746,7 @@ def api_sectors():
                 print(f'[板块-{label}] 返回 {len(data["data"]["diff"])} 个', flush=True)
             else:
                 print(f'[板块-{label}] 无数据: {str(data)[:200]}', flush=True)
+                print(f'[板块-{label}] resp.url={resp.url}', flush=True)
         except Exception as e:
             print(f'[板块异常-{label}]: {e}', flush=True)
 
