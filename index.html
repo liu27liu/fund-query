@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基金净值通 - 实时估值 · 持仓盈亏 · 自选管理</title>
+    <meta name="description" content="轻量级基金净值查询平台，覆盖全市场公募基金，盘中实时估值、持仓盈亏计算、历史净值走势、自选基金管理">
+    <link rel="icon" type="image/jpeg" href="assets/logo.jpg">
+    <link rel="stylesheet" href="css/style.css?v=8">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+</head>
+<body>
+    <!-- 顶部导航 -->
+    <header class="app-header">
+        <div class="header-inner">
+            <a href="#/" class="logo">
+                <img src="assets/logo.jpg" class="logo-img" alt="基金净值通">
+                <span class="logo-text">基金净值通</span>
+            </a>
+            <div class="search-box">
+                <input type="text" id="globalSearch" placeholder="输入基金代码 / 名称 / 拼音首字母" autocomplete="off">
+                <button class="search-btn" id="searchBtn">搜索</button>
+                <div class="search-suggest" id="searchSuggest"></div>
+            </div>
+            <nav class="nav-menu">
+                <a href="#/" class="nav-link" data-route="/">首页</a>
+                <a href="#/portfolio" class="nav-link" data-route="/portfolio">持仓</a>
+                <a href="#/favorites" class="nav-link" data-route="/favorites">自选</a>
+                <a href="#/search" class="nav-link" data-route="/search">搜索</a>
+            </nav>
+            <div class="user-area" id="userArea">
+                <button class="login-btn" id="loginBtn">登录</button>
+            </div>
+            <button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main id="app" class="app-main">
+        <!-- 各视图由JS动态渲染 -->
+        <div class="loading-screen">
+            <div class="loader"></div>
+            <p>正在加载数据...</p>
+        </div>
+    </main>
+
+    <!-- 底部 -->
+    <footer class="app-footer">
+        <div class="footer-inner">
+            <p>基金净值通 · 数据来源：东方财富 / 天天基金 · 仅供参考，不构成投资建议</p>
+            <p class="footer-time" id="footerTime"></p>
+        </div>
+    </footer>
+
+    <!-- 基金详情弹窗 -->
+    <div class="modal-overlay" id="detailModal">
+        <div class="modal-content">
+            <button class="modal-close" id="modalClose">&times;</button>
+            <div id="detailContent"></div>
+        </div>
+    </div>
+
+    <!-- 添加持仓表单弹窗 -->
+    <div class="modal-overlay" id="holdingModal">
+        <div class="modal-content holding-form-modal" style="max-width: 480px;">
+            <button class="modal-close" id="holdingModalClose">&times;</button>
+            <div id="holdingFormContent"></div>
+        </div>
+    </div>
+
+    <!-- 消息提示 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- 登录弹窗 -->
+    <div class="modal-overlay" id="loginModal">
+        <div class="modal-content login-modal" style="max-width: 420px;">
+            <button class="modal-close" id="loginModalClose">&times;</button>
+            <div id="loginFormContent"></div>
+        </div>
+    </div>
+
+    <script src="js/api.js?v=8"></script>
+    <script src="js/store.js?v=8"></script>
+    <script src="js/app.js?v=8"></script>
+</body>
+</html>

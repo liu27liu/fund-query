@@ -1,0 +1,357 @@
+/**
+ * 基金数据API接口层
+ * 通过本地后端代理请求东方财富/天天基金实时数据
+ * 所有数据实时、准确,无任何模拟数据
+ */
+const FundAPI = (function () {
+
+    // ========== 通用请求工具 ==========
+
+    async function fetchJSON(url, timeout = 10000) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeout);
+        // 添加时间戳防止浏览器缓存
+        var separator = url.indexOf('?') !== -1 ? '&' : '?';
+        var noCacheUrl = url + separator + '_t=' + Date.now();
+        try {
+            const resp = await fetch(noCacheUrl, {
+                signal: controller.signal,
+                cache: 'no-cache'
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            return await resp.json();
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    // ========== 基金搜索 ==========
+
+    /**
+     * 基金搜索(支持代码/名称/拼音)
+     */
+    async function searchFunds(keyword) {
+        if (!keyword || keyword.trim().length < 1) return [];
+        try {
+            const resp = await fetch('/api/search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ keyword: keyword.trim() })
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+            if (Array.isArray(data)) return data;
+            return [];
+        } catch (e) {
+            console.warn('搜索接口异常:', e);
+            return [];
+        }
+    }
+
+    // ========== 实时估值 ==========
+
+    /**
+     * 获取基金实时估值
+     */
+    async function getRealtimeEstimate(fundCode) {
+        try {
+            const data = await fetchJSON('/api/estimate?code=' + fundCode, 8000);
+            if (data && data.fundcode) {
+                return {
+                    fundcode: data.fundcode,
+                    name: data.name || '',
+                    jzrq: data.jzrq || '',
+                    dwjz: data.dwjz || 0,
+                    gsz: data.gsz || 0,
+                    gszzl: data.gszzl || 0,
+                    gztime: data.gztime || ''
+                };
+            }
+            return null;
+        } catch (e) {
+            console.warn('实时估值接口异常:', fundCode, e);
+            return null;
+        }
+    }
+
+    /**
+     * 批量获取实时估值
+     */
+    async function batchRealtimeEstimate(fundCodes) {
+        if (!fundCodes || fundCodes.length === 0) return [];
+        try {
+            const data = await fetchJSON('/api/estimate/batch?codes=' + fundCodes.join(','), 15000);
+            if (Array.isArray(data)) return data;
+            return [];
+        } catch (e) {
+            console.warn('批量估值接口异常:', e);
+            // 降级为逐个请求
+            const promises = fundCodes.map(function (code) {
+                return getRealtimeEstimate(code).catch(function () { return null; });
+            });
+            const results = await Promise.all(promises);
+            return results.filter(function (r) { return r !== null; });
+        }
+    }
+
+    // ========== 历史净值数据 ==========
+
+    /**
+     * 获取基金历史净值列表
+     */
+    async function getHistoryNav(fundCode, pageIndex, pageSize, startDate, endDate) {
+        pageIndex = pageIndex || 1;
+        pageSize = pageSize || 20;
+        var url = '/api/history?code=' + fundCode + '&page=' + pageIndex + '&size=' + pageSize;
+        if (startDate) url += '&startDate=' + startDate;
+        if (endDate) url += '&endDate=' + endDate;
+
+        try {
+            const data = await fetchJSON(url);
+            if (data && data.list) {
+                return {
+                    total: data.total || 0,
+                    list: data.list.map(function (item) {
+                        return {
+                            date: item.date || '',
+                            dwjz: item.dwjz || 0,
+                            ljjz: item.ljjz || 0,
+                            change: item.change || 0
+                        };
+                    })
+                };
+            }
+            return { total: 0, list: [] };
+        } catch (e) {
+            console.warn('历史净值接口异常:', fundCode, e);
+            return { total: 0, list: [] };
+        }
+    }
+
+    /**
+     * 获取基金净值走势数据
+     */
+    async function getNavTrend(fundCode) {
+        try {
+            const data = await fetchJSON('/api/trend?code=' + fundCode, 15000);
+            if (!data) return null;
+
+            var result = {
+                name: data.name || '',
+                code: data.code || fundCode,
+                netWorthTrend: [],
+                acWorthTrend: [],
+                currentFundManager: data.currentFundManager || '',
+                syl: data.syl || {}
+            };
+
+            if (data.netWorthTrend && Array.isArray(data.netWorthTrend)) {
+                result.netWorthTrend = data.netWorthTrend.map(function (item) {
+                    return {
+                        date: new Date(item.timestamp || item.date),
+                        timestamp: item.timestamp || item.date,
+                        netValue: item.netValue,
+                        change: item.change || 0
+                    };
+                });
+            }
+
+            if (data.acWorthTrend && Array.isArray(data.acWorthTrend)) {
+                result.acWorthTrend = data.acWorthTrend.map(function (item) {
+                    return {
+                        date: new Date(item.timestamp || item.date),
+                        timestamp: item.timestamp || item.date,
+                        netValue: item.netValue
+                    };
+                });
+            }
+
+            return result;
+        } catch (e) {
+            console.warn('净值走势接口异常:', fundCode, e);
+            return null;
+        }
+    }
+
+    // ========== 基金详情信息 ==========
+
+    /**
+     * 获取基金基础信息
+     */
+    async function getFundDetail(fundCode) {
+        try {
+            const data = await fetchJSON('/api/detail?code=' + fundCode);
+            if (data && data.code) {
+                return {
+                    code: data.code,
+                    name: data.name || '',
+                    type: data.type || '',
+                    typeDesc: data.typeDesc || parseFundType(data.type || ''),
+                    company: data.company || '--',
+                    manager: data.manager || '--',
+                    establishDate: data.establishDate || '--',
+                    scale: data.scale || '--',
+                    netValue: data.netValue || 0,
+                    netValueDate: data.netValueDate || '',
+                    totalNetValue: data.totalNetValue || 0,
+                    change: data.change || 0,
+                    weekChange: data.weekChange || 0,
+                    monthChange: data.monthChange || 0,
+                    seasonChange: data.seasonChange || 0,
+                    yearChange: data.yearChange || 0
+                };
+            }
+            return null;
+        } catch (e) {
+            console.warn('基金详情接口异常:', fundCode, e);
+            return null;
+        }
+    }
+
+    /**
+     * 获取基金涨幅排行
+     */
+    async function getFundRanking(sortType, pageSize) {
+        sortType = sortType || 'RZDF';
+        pageSize = pageSize || 10;
+        try {
+            const data = await fetchJSON('/api/ranking?sort=' + sortType + '&size=' + pageSize);
+            if (Array.isArray(data)) return data;
+            return [];
+        } catch (e) {
+            console.warn('基金排行接口异常:', e);
+            return [];
+        }
+    }
+
+    /**
+     * 获取热门基金列表(预设知名基金代码)
+     */
+    function getHotFunds() {
+        return [
+            { code: '110011', name: '易方达优质精选混合', type: '混合型' },
+            { code: '161725', name: '招商中证白酒指数', type: '指数型' },
+            { code: '005827', name: '易方达蓝筹精选混合', type: '混合型' },
+            { code: '163406', name: '兴全合润混合', type: '混合型' },
+            { code: '260108', name: '景顺长城新兴成长混合', type: '混合型' },
+            { code: '519674', name: '银河创新成长混合', type: '混合型' },
+            { code: '008888', name: '华夏国证半导体芯片ETF联接', type: '指数型' },
+            { code: '161903', name: '万家行业优选混合', type: '混合型' }
+        ];
+    }
+
+    /**
+     * 热门搜索关键词
+     */
+    function getHotKeywords() {
+        return [
+            '白酒', '新能源', '半导体', '医药', '消费',
+            '科技', '军工', '光伏', '创业板', '沪深300',
+            '中证500', '纳指', '债基', '黄金', '红利'
+        ];
+    }
+
+    // ========== 辅助函数 ==========
+
+    function parseFundType(typeCode) {
+        if (!typeCode) return '混合型';
+        var typeStr = String(typeCode);
+        var typeMap = {
+            '001': '股票型', '002': '股票型', '003': '股票型',
+            '025': '股票型', '026': '指数型',
+            '027': '混合型', '028': '混合型', '029': '混合型',
+            '061': '债券型', '062': '债券型', '063': '债券型',
+            '064': '债券型', '065': '债券型',
+            '016': 'LOF', '017': 'LOF',
+            '006': 'QDII', '007': 'QDII',
+            '050': '货币型', '051': '货币型',
+            '052': '货币型', '053': '货币型',
+            '090': 'FOF'
+        };
+        if (typeMap[typeStr]) return typeMap[typeStr];
+        for (var key in typeMap) {
+            if (typeStr.indexOf(key) !== -1) return typeMap[key];
+        }
+        if (typeStr.indexOf('债') !== -1) return '债券型';
+        if (typeStr.indexOf('指数') !== -1 || typeStr.indexOf('ETF') !== -1) return '指数型';
+        if (typeStr.indexOf('货币') !== -1) return '货币型';
+        if (typeStr.indexOf('QDII') !== -1) return 'QDII';
+        if (typeStr.indexOf('股票') !== -1) return '股票型';
+        return '混合型';
+    }
+
+    function getTypeColor(type) {
+        var colorMap = {
+            '股票型': '#ff4d4f',
+            '混合型': '#1677ff',
+            '债券型': '#52c41a',
+            '指数型': '#722ed1',
+            '货币型': '#13c2c2',
+            'QDII': '#fa8c16',
+            'LOF': '#eb2f96',
+            'FOF': '#2f54eb'
+        };
+        return colorMap[type] || '#8c8c8c';
+    }
+
+    function formatNum(num, digits) {
+        digits = digits || 4;
+        if (num === null || num === undefined || isNaN(num)) return '--';
+        return parseFloat(num).toFixed(digits);
+    }
+
+    function formatChange(change) {
+        if (change === null || change === undefined || isNaN(change)) return '--';
+        var val = parseFloat(change).toFixed(2);
+        return (change > 0 ? '+' : '') + val + '%';
+    }
+
+    function getChangeClass(change) {
+        if (change > 0) return 'up';
+        if (change < 0) return 'down';
+        return 'flat';
+    }
+
+    function formatDate(date, format) {
+        format = format || 'YYYY-MM-DD';
+        if (!date) return '--';
+        var d = new Date(date);
+        if (isNaN(d.getTime())) return String(date);
+        // 使用 Asia/Shanghai 时区（UTC+8），避免服务器UTC时区导致时间偏差
+        var tzOffset = 8 * 60; // 上海时区偏移（分钟）
+        var localOffset = d.getTimezoneOffset(); // 当前环境时区偏移（分钟）
+        var offsetDiff = tzOffset + localOffset; // 需要调整的分钟差
+        var adjusted = new Date(d.getTime() + offsetDiff * 60 * 1000);
+        var y = adjusted.getFullYear();
+        var m = String(adjusted.getMonth() + 1).padStart(2, '0');
+        var day = String(adjusted.getDate()).padStart(2, '0');
+        var h = String(adjusted.getHours()).padStart(2, '0');
+        var min = String(adjusted.getMinutes()).padStart(2, '0');
+        var sec = String(adjusted.getSeconds()).padStart(2, '0');
+        return format
+            .replace('YYYY', y)
+            .replace('MM', m)
+            .replace('DD', day)
+            .replace('HH', h)
+            .replace('mm', min)
+            .replace('ss', sec);
+    }
+
+    return {
+        searchFunds: searchFunds,
+        getRealtimeEstimate: getRealtimeEstimate,
+        batchRealtimeEstimate: batchRealtimeEstimate,
+        getHistoryNav: getHistoryNav,
+        getNavTrend: getNavTrend,
+        getFundDetail: getFundDetail,
+        getFundRanking: getFundRanking,
+        getHotFunds: getHotFunds,
+        getHotKeywords: getHotKeywords,
+        parseFundType: parseFundType,
+        getTypeColor: getTypeColor,
+        formatNum: formatNum,
+        formatChange: formatChange,
+        getChangeClass: getChangeClass,
+        formatDate: formatDate
+    };
+})();
