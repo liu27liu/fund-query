@@ -27,12 +27,24 @@ def add_no_cache_headers(resp):
 # ========== 邮箱验证码存储（内存，5分钟过期）==========
 _email_codes = {}  # {email: {code, expire_time, attempts}}
 
-# ========== Resend 邮件 API 配置 ==========
-# 使用 Resend HTTP API (走 443 端口)，每月免费 3000 封
-# 获取 API Key: https://resend.com/api-keys
-RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')               # Resend API Key
-RESEND_FROM_EMAIL = os.environ.get('RESEND_FROM_EMAIL', 'onboarding@resend.dev') # 发件邮箱地址（需在Resend验证）
+# ========== Brevo 邮件 API 配置 ==========
+# 使用 Brevo HTTP API (走 443 端口)，每天免费 300 封，无需域名
+# 获取 API Key: https://app.brevo.com/settings/keys/api
+# 发件邮箱需在 Brevo 后台验证（仅需点击确认邮件，无需域名）
+BREVO_API_KEY = os.environ.get('BREVO_API_KEY', '')                 # Brevo API Key
+BREVO_FROM_EMAIL = os.environ.get('BREVO_FROM_EMAIL', '')           # 发件邮箱（需在Brevo验证）
+BREVO_FROM_NAME = os.environ.get('BREVO_FROM_NAME', '基金净值通')
+
+# ========== 兼容旧 SMTP 配置（已弃用，保留代码避免报错）==========
+SMTP_HOST = os.environ.get('SMTP_HOST', '')
+SMTP_PORT = int(os.environ.get('SMTP_PORT', '465'))
+SMTP_USER = os.environ.get('SMTP_USER', '')
+SMTP_PASS = os.environ.get('SMTP_PASS', '')
 SMTP_FROM_NAME = os.environ.get('SMTP_FROM_NAME', '基金净值通')
+
+# ========== Resend 兼容（已弃用）==========
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
+RESEND_FROM_EMAIL = os.environ.get('RESEND_FROM_EMAIL', '')
 
 # 请求头模拟浏览器
 HEADERS = {
@@ -664,11 +676,11 @@ def _clean_expired_codes():
 
 
 def _send_email_code(to_email, code):
-    """通过Resend HTTP API发送验证码邮件，返回是否成功"""
-    if not RESEND_API_KEY:
-        # 未配置Resend，打印到控制台（开发模式）
-        print(f'[验证码-未配置RESEND_API_KEY] 邮箱: {to_email}, 验证码: {code}', flush=True)
-        print('提示: 配置 RESEND_API_KEY / RESEND_FROM_EMAIL 环境变量后可发送真实邮件', flush=True)
+    """通过Brevo HTTP API发送验证码邮件，返回是否成功"""
+    if not BREVO_API_KEY or not BREVO_FROM_EMAIL:
+        # 未配置Brevo，打印到控制台（开发模式）
+        print(f'[验证码-未配置BREVO_API_KEY] 邮箱: {to_email}, 验证码: {code}', flush=True)
+        print('提示: 配置 BREVO_API_KEY / BREVO_FROM_EMAIL 环境变量后可发送真实邮件', flush=True)
         return False
 
     html_body = f"""\
@@ -686,28 +698,32 @@ def _send_email_code(to_email, code):
     </div>
 </div>"""
 
-    url = 'https://api.resend.com/emails'
+    url = 'https://api.brevo.com/v3/smtp/email'
     headers = {
-        'Authorization': f'Bearer {RESEND_API_KEY}',
-        'Content-Type': 'application/json'
+        'api-key': BREVO_API_KEY,
+        'Content-Type': 'application/json',
+        'accept': 'application/json'
     }
     payload = {
-        'from': f'{SMTP_FROM_NAME} <{RESEND_FROM_EMAIL}>',
-        'to': [to_email],
+        'sender': {
+            'name': BREVO_FROM_NAME,
+            'email': BREVO_FROM_EMAIL
+        },
+        'to': [{'email': to_email}],
         'subject': '【基金净值通】您的登录验证码',
-        'html': html_body
+        'htmlContent': html_body
     }
 
     try:
         resp = requests.post(url, json=payload, headers=headers, timeout=15)
         if resp.status_code in (200, 201):
-            print(f'[邮件已发送] {to_email}')
+            print(f'[邮件已发送] {to_email}', flush=True)
             return True
         else:
-            print(f'[邮件发送失败] {to_email}: {resp.status_code} {resp.text}')
+            print(f'[邮件发送失败] {to_email}: {resp.status_code} {resp.text}', flush=True)
             return False
     except Exception as e:
-        print(f'[邮件发送失败] {to_email}: {e}')
+        print(f'[邮件发送失败] {to_email}: {e}', flush=True)
         return False
 
 
@@ -736,13 +752,13 @@ def api_send_code():
         'attempts': 0
     }
 
-    # 通过Resend API发送验证码邮件
+    # 通过Brevo API发送验证码邮件
     sent = _send_email_code(email, code)
     if not sent:
-        if not RESEND_API_KEY:
+        if not BREVO_API_KEY or not BREVO_FROM_EMAIL:
             return jsonify({
                 'success': True,
-                'message': '验证码已发送（Resend未配置，请查看服务器控制台）'
+                'message': '验证码已发送（邮件服务未配置，请查看服务器日志）'
             })
         else:
             return jsonify({
@@ -813,10 +829,11 @@ if __name__ == '__main__':
     print('基金净值查询后端服务启动')
     print(f'访问地址: http://localhost:{port}')
     print('数据来源: 东方财富/天天基金 (实时数据)')
-    if RESEND_API_KEY:
-        print(f'邮件服务: Resend API (发件人: {RESEND_FROM_EMAIL})')
+    if BREVO_API_KEY and BREVO_FROM_EMAIL:
+        print(f'邮件服务: Brevo API (发件人: {BREVO_FROM_EMAIL})')
     else:
-        print('邮件服务: 未配置Resend (验证码将打印到控制台)')
-        print('  配置方法: 设置环境变量 RESEND_API_KEY / RESEND_FROM_EMAIL')
+        print('邮件服务: 未配置 (验证码将打印到控制台)')
+        print('  配置方法: 设置环境变量 BREVO_API_KEY / BREVO_FROM_EMAIL')
+        print('  获取API Key: https://app.brevo.com/settings/keys/api')
     print('='*50)
     app.run(host='0.0.0.0', port=port, debug=False)
