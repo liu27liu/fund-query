@@ -743,10 +743,16 @@ def api_send_code():
     # 通过SMTP发送验证码邮件
     sent = _send_email_code(email, code)
     if not sent:
-        return jsonify({
-            'success': True,
-            'message': '验证码已发送（SMTP未配置，请查看服务器控制台）'
-        })
+        if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
+            return jsonify({
+                'success': True,
+                'message': '验证码已发送（SMTP未配置，请查看服务器控制台）'
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'message': '验证码已发送，请查看邮箱（若未收到请检查垃圾邮件夹）'
+            })
 
     return jsonify({
         'success': True,
