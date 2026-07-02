@@ -184,18 +184,21 @@
         var codes = positions.map(function (p) { return p.code; });
         var estimates = await FundAPI.batchRealtimeEstimate(codes);
 
-        // 构建净值映射 (优先用估值gsz,没有就用dwjz)
+        // 构建净值映射和日涨跌幅映射
         var navMap = {};
+        var changeRateMap = {};
         positions.forEach(function (p) {
             var est = estimates.find(function (e) { return e.fundcode === p.code; });
             if (est) {
                 navMap[p.code] = est.gsz || est.dwjz || p.costPrice;
+                changeRateMap[p.code] = est.gszzl || 0;
             } else {
                 navMap[p.code] = p.costPrice;
+                changeRateMap[p.code] = 0;
             }
         });
 
-        var totals = Store.calcTotalAggregatedProfit(positions, navMap);
+        var totals = Store.calcTotalAggregatedProfit(positions, navMap, changeRateMap);
         var profitClass = totals.totalHoldingProfit >= 0 ? 'profit-positive' : 'profit-negative';
         var profitSign = totals.totalHoldingProfit >= 0 ? '+' : '';
 
@@ -671,19 +674,22 @@
         var codes = positions.map(function (p) { return p.code; });
         var estimates = await FundAPI.batchRealtimeEstimate(codes);
 
-        // 构建净值映射
+        // 构建净值映射和日涨跌幅映射
         var navMap = {};
+        var changeRateMap = {};
         positions.forEach(function (p) {
             var est = estimates.find(function (e) { return e.fundcode === p.code; });
             if (est) {
                 navMap[p.code] = est.gsz || est.dwjz || p.costPrice;
+                changeRateMap[p.code] = est.gszzl || 0;
             } else {
                 navMap[p.code] = p.costPrice;
+                changeRateMap[p.code] = 0;
             }
         });
 
         // 计算总盈亏
-        var totals = Store.calcTotalAggregatedProfit(positions, navMap);
+        var totals = Store.calcTotalAggregatedProfit(positions, navMap, changeRateMap);
         var profitClass = totals.totalHoldingProfit >= 0 ? 'profit-positive' : 'profit-negative';
         var profitSign = totals.totalHoldingProfit >= 0 ? '+' : '';
         var cumClass = totals.totalCumulativeProfit >= 0 ? 'profit-positive' : 'profit-negative';
@@ -737,7 +743,8 @@
                     <tbody>
                         ${positions.map(function (p) {
                             var currentNav = navMap[p.code] || p.costPrice;
-                            var calc = Store.calcPositionProfit(p, currentNav);
+                            var dailyChange = changeRateMap[p.code] || 0;
+                            var calc = Store.calcPositionProfit(p, currentNav, dailyChange);
                             var pClass = calc.holdingProfit >= 0 ? 'profit-positive' : 'profit-negative';
                             var pSign = calc.holdingProfit >= 0 ? '+' : '';
                             var est = estimates.find(function (e) { return e.fundcode === p.code; });
@@ -900,19 +907,22 @@
             return;
         }
 
-        // 构建净值映射
+        // 构建净值映射和日涨跌幅映射
         var navMap = {};
+        var changeRateMap = {};
         positions.forEach(function (p) {
             var est = estimates.find(function (e) { return e.fundcode === p.code; });
             if (est) {
                 navMap[p.code] = est.gsz || est.dwjz || p.costPrice;
+                changeRateMap[p.code] = est.gszzl || 0;
             } else {
                 navMap[p.code] = p.costPrice;
+                changeRateMap[p.code] = 0;
             }
         });
 
         // 更新总览数据
-        var totals = Store.calcTotalAggregatedProfit(positions, navMap);
+        var totals = Store.calcTotalAggregatedProfit(positions, navMap, changeRateMap);
         updateSummaryCell('totalValue', '¥' + formatMoney(totals.totalValue));
         updateSummaryCell('totalCost', '¥' + formatMoney(totals.totalCost));
 
@@ -928,7 +938,8 @@
         // 更新每行数据
         positions.forEach(function (p) {
             var currentNav = navMap[p.code] || p.costPrice;
-            var calc = Store.calcPositionProfit(p, currentNav);
+            var dailyChange = changeRateMap[p.code] || 0;
+            var calc = Store.calcPositionProfit(p, currentNav, dailyChange);
             var pClass = calc.holdingProfit >= 0 ? 'profit-positive' : 'profit-negative';
             var pSign = calc.holdingProfit >= 0 ? '+' : '';
 

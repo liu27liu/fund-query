@@ -626,20 +626,26 @@ const Store = (function () {
 
     /**
      * 计算单只基金聚合持仓的盈亏
+     * 持仓收益 = 日涨跌幅 × 当前持仓市值（当日收益）
+     * 累计收益 = 当前持仓收益 + 已实现收益
      * @param {Object} position - getAggregatedPositions() 返回的持仓对象
      * @param {number} currentNav - 当前单位净值
+     * @param {number} dailyChangeRate - 日涨跌幅（百分比，如 1.52 表示 1.52%）
      * @returns {Object} {cost, currentValue, holdingProfit, holdingProfitRate, realizedProfit, cumulativeProfit}
      */
-    function calcPositionProfit(position, currentNav) {
+    function calcPositionProfit(position, currentNav, dailyChangeRate) {
         try {
             if (!position) {
                 return { cost: 0, currentValue: 0, holdingProfit: 0, holdingProfitRate: 0, realizedProfit: 0, cumulativeProfit: 0 };
             }
             var nav = Number(currentNav) || 0;
+            var changeRate = Number(dailyChangeRate) || 0;  // 百分比，如 1.52
+            var changeDecimal = changeRate / 100;            // 小数，如 0.0152
+
             var currentValue = nav * position.currentShares;
-            var holdingProfit = currentValue - position.currentCost;
-            var holdingProfitRate = position.currentCost > 0 ? (holdingProfit / position.currentCost) : 0;
-            var cumulativeProfit = holdingProfit + position.realizedProfit;
+            var holdingProfit = changeDecimal * currentValue;        // 持仓收益 = 日涨跌幅 × 当前持仓市值
+            var holdingProfitRate = changeDecimal;                    // 收益率 = 日涨跌幅
+            var cumulativeProfit = holdingProfit + position.realizedProfit;  // 累计收益 = 持仓收益 + 已实现收益
 
             return {
                 cost: position.currentCost,
@@ -659,12 +665,14 @@ const Store = (function () {
      * 计算所有聚合持仓的总盈亏
      * @param {Array} positions - getAggregatedPositions() 返回的数组
      * @param {Object} navMap - {code: 当前净值}
+     * @param {Object} changeRateMap - {code: 日涨跌幅(百分比)}
      * @returns {Object} {totalValue, totalCost, totalHoldingProfit, totalProfitRate, totalRealizedProfit, totalCumulativeProfit, count}
      */
-    function calcTotalAggregatedProfit(positions, navMap) {
+    function calcTotalAggregatedProfit(positions, navMap, changeRateMap) {
         try {
             positions = positions || [];
             navMap = navMap || {};
+            changeRateMap = changeRateMap || {};
 
             var totalValue = 0;
             var totalCost = 0;
@@ -675,7 +683,8 @@ const Store = (function () {
             positions.forEach(function (p) {
                 var nav = navMap[p.code];
                 if (nav === undefined || nav === null) return;
-                var calc = calcPositionProfit(p, nav);
+                var changeRate = changeRateMap[p.code] || 0;
+                var calc = calcPositionProfit(p, nav, changeRate);
                 totalValue += calc.currentValue;
                 totalCost += calc.cost;
                 totalHoldingProfit += calc.holdingProfit;
@@ -683,7 +692,7 @@ const Store = (function () {
                 count++;
             });
 
-            var totalProfitRate = totalCost > 0 ? (totalHoldingProfit / totalCost) : 0;
+            var totalProfitRate = totalValue > 0 ? (totalHoldingProfit / totalValue) : 0;
             var totalCumulativeProfit = totalHoldingProfit + totalRealizedProfit;
 
             return {
