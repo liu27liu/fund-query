@@ -605,7 +605,7 @@ def api_news():
         resp = requests.get(url, params=params, headers=news_headers, timeout=10)
         data = resp.json()
         print(f'[资讯] 主接口 code={data.get("code")}, has_data={data.get("data") is not None}', flush=True)
-        if data.get('code') == 1 and data.get('data') and data['data'].get('fastNewsList'):
+        if str(data.get('code', '')) == '1' and data.get('data') and data['data'].get('fastNewsList'):
             results = []
             for item in data['data']['fastNewsList']:
                 results.append({
@@ -642,7 +642,7 @@ def api_news():
         resp2 = requests.get(url2, params=params2, headers=news_headers, timeout=10)
         data2 = resp2.json()
         print(f'[资讯] 备用接口 code={data2.get("code")}', flush=True)
-        if data2.get('code') == 1 and data2.get('data') and data2['data'].get('list'):
+        if str(data2.get('code', '')) == '1' and data2.get('data') and data2['data'].get('list'):
             results = []
             for item in data2['data']['list']:
                 results.append({
