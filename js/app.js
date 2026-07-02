@@ -722,7 +722,8 @@
                                             ${pSign}${(calc.profitRate * 100).toFixed(2)}%
                                         </span>
                                     </td>
-                                    <td>
+                                    <td class="action-cell">
+                                        <button class="action-btn add-position" data-action="add-position" data-id="${h.addTime}">加仓</button>
                                         <button class="action-btn" data-action="remove-holding" data-id="${h.addTime}">删除</button>
                                     </td>
                                 </tr>
@@ -750,6 +751,18 @@
                 showToast(result.message, result.success ? 'success' : 'error');
                 if (result.success) {
                     renderPortfolio();
+                }
+            });
+        });
+
+        // 绑定加仓按钮
+        container.querySelectorAll('.action-btn[data-action="add-position"]').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var id = parseInt(this.dataset.id);
+                var holding = holdings.find(function (h) { return h.addTime === id; });
+                if (holding) {
+                    showAddPositionForm(holding);
                 }
             });
         });
@@ -910,6 +923,111 @@
                     if (location.hash === '#/' || location.hash === '') {
                         loadPortfolioOverview();
                     }
+                }
+            }
+        });
+    }
+
+    // ========== 加仓表单 ==========
+    function showAddPositionForm(holding) {
+        var holdingModal = document.getElementById('holdingModal');
+        var holdingFormContent = document.getElementById('holdingFormContent');
+
+        holdingFormContent.innerHTML = `
+            <div class="form-header">
+                <h3>📈 加仓 · ${holding.name || holding.code}</h3>
+            </div>
+            <div class="form-body">
+                <div class="form-group">
+                    <label class="form-label">基金代码</label>
+                    <input type="text" class="form-input" value="${holding.code}" readonly style="background: #f5f7fa;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">当前净值</label>
+                    <input type="text" class="form-input" id="addPosNav" value="获取中..." readonly style="background: #f5f7fa;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">加仓金额(元) <span class="required">*</span></label>
+                    <input type="number" class="form-input" id="addPosAmount" value="" step="0.01" placeholder="如 500">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">买入日期</label>
+                    <input type="date" class="form-input" id="addPosDate" value="">
+                </div>
+                <div class="form-actions">
+                    <button class="form-cancel" id="addPosCancelBtn">取消</button>
+                    <button class="form-submit" id="addPosSubmitBtn">确认加仓</button>
+                </div>
+            </div>
+        `;
+
+        holdingModal.classList.add('active');
+
+        // 获取当前净值作为买入价
+        var currentNav = '';
+        FundAPI.getRealtimeEstimate(holding.code).then(function (est) {
+            if (est) {
+                currentNav = est.gsz || est.dwjz || '';
+                var navInput = document.getElementById('addPosNav');
+                if (navInput) {
+                    navInput.value = currentNav ? FundAPI.formatNum(parseFloat(currentNav)) : '获取失败';
+                }
+            } else {
+                var navInput2 = document.getElementById('addPosNav');
+                if (navInput2) navInput2.value = '获取失败';
+            }
+        });
+
+        // 设置默认日期为今天
+        var today = new Date();
+        var dateStr = today.getFullYear() + '-' +
+            String(today.getMonth() + 1).padStart(2, '0') + '-' +
+            String(today.getDate()).padStart(2, '0');
+        document.getElementById('addPosDate').value = dateStr;
+
+        // 取消按钮
+        document.getElementById('addPosCancelBtn').addEventListener('click', function () {
+            holdingModal.classList.remove('active');
+        });
+
+        // 提交按钮
+        document.getElementById('addPosSubmitBtn').addEventListener('click', function () {
+            var amount = parseFloat(document.getElementById('addPosAmount').value);
+            var buyDate = document.getElementById('addPosDate').value;
+
+            if (!amount || amount <= 0) {
+                showToast('请输入有效的加仓金额', 'warning');
+                return;
+            }
+
+            if (!currentNav || parseFloat(currentNav) <= 0) {
+                showToast('正在获取基金净值，请稍后...', 'warning');
+                FundAPI.getRealtimeEstimate(holding.code).then(function (est) {
+                    if (est && (est.gsz || est.dwjz)) {
+                        currentNav = est.gsz || est.dwjz;
+                        doAddPosition();
+                    } else {
+                        showToast('无法获取基金净值，请稍后重试', 'error');
+                    }
+                });
+            } else {
+                doAddPosition();
+            }
+
+            function doAddPosition() {
+                var result = Store.addHolding({
+                    code: holding.code,
+                    name: holding.name || holding.code,
+                    type: holding.type || '',
+                    amount: amount,
+                    buyPrice: parseFloat(currentNav),
+                    buyDate: buyDate
+                });
+
+                showToast(result.message, result.success ? 'success' : 'error');
+                if (result.success) {
+                    holdingModal.classList.remove('active');
+                    renderPortfolio();
                 }
             }
         });

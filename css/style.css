@@ -828,6 +828,25 @@ ul, ol { list-style: none; }
     box-shadow: 0 2px 8px rgba(245, 34, 45, 0.3);
 }
 
+.action-btn.add-position {
+    color: var(--primary);
+    background: #e6f0ff;
+    margin-right: 4px;
+}
+
+.action-btn.add-position:hover {
+    background: var(--primary);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(22, 119, 255, 0.3);
+}
+
+.action-cell {
+    white-space: nowrap;
+    display: flex;
+    gap: 4px;
+    justify-content: flex-end;
+}
+
 .add-fav-mini:hover {
     background: var(--primary);
     box-shadow: 0 2px 8px rgba(22, 119, 255, 0.3);
