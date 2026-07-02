@@ -27,6 +27,7 @@ def add_no_cache_headers(resp):
 
 # ========== 邮箱验证码存储（内存，5分钟过期）==========
 _email_codes = {}  # {email: {code, expire_time, attempts}}
+_sector_cache = {}  # {key: {data, time}} - 板块数据缓存，60秒过期
 
 # ========== Brevo 邮件 API 配置 ==========
 # 使用 Brevo HTTP API (走 443 端口)，每天免费 300 封，无需域名
@@ -710,6 +711,13 @@ def api_market_indices():
 def api_sectors():
     """行业板块+概念板块实时行情 - 对接东方财富push2接口"""
     board_type = request.args.get('type', 'all')  # all/industry/concept
+
+    # 内存缓存：60秒内复用上次结果，避免频繁请求被东方财富限流
+    cache_key = 'sectors_' + board_type
+    cached = _sector_cache.get(cache_key)
+    if cached and time.time() - cached['time'] < 60:
+        return jsonify(cached['data'])
+
     results = []
 
     sector_headers = {
@@ -721,34 +729,37 @@ def api_sectors():
     def fetch_boards(fs_type, label):
         # 手动构建URL，requests会自动编码+和:导致东方财富API不识别
         base_url = 'https://push2.eastmoney.com/api/qt/clist/get'
-        ts = str(int(time.time() * 1000))
-        full_url = (base_url + '?pn=1&pz=500&po=1&np=1'
-                    '&ut=bd1d9ddb04089700cf9c27f6f7426281'
-                    '&fltt=2&invt=2&fid=f3'
-                    '&fs=' + fs_type +
-                    '&fields=f12,f14,f2,f3,f4,f104,f105'
-                    '&_=' + ts)
-        try:
-            resp = SESSION.get(full_url, headers=sector_headers, timeout=10)
-            data = resp.json()
-            if data.get('data') and data['data'].get('diff'):
-                for item in data['data']['diff']:
-                    results.append({
-                        'code': item.get('f12', ''),
-                        'name': item.get('f14', ''),
-                        'price': safe_float(item.get('f2')),
-                        'changePercent': safe_float(item.get('f3')),
-                        'change': safe_float(item.get('f4')),
-                        'upCount': safe_float(item.get('f104', 0)),
-                        'downCount': safe_float(item.get('f105', 0)),
-                        'type': label
-                    })
-                print(f'[板块-{label}] 返回 {len(data["data"]["diff"])} 个', flush=True)
-            else:
-                print(f'[板块-{label}] 无数据: {str(data)[:200]}', flush=True)
-                print(f'[板块-{label}] resp.url={resp.url}', flush=True)
-        except Exception as e:
-            print(f'[板块异常-{label}]: {e}', flush=True)
+        for attempt in range(3):
+            ts = str(int(time.time() * 1000))
+            full_url = (base_url + '?pn=1&pz=500&po=1&np=1'
+                        '&ut=bd1d9ddb04089700cf9c27f6f7426281'
+                        '&fltt=2&invt=2&fid=f3'
+                        '&fs=' + fs_type +
+                        '&fields=f12,f14,f2,f3,f4,f104,f105'
+                        '&_=' + ts)
+            try:
+                resp = SESSION.get(full_url, headers=sector_headers, timeout=10)
+                data = resp.json()
+                if data.get('data') and data['data'].get('diff'):
+                    for item in data['data']['diff']:
+                        results.append({
+                            'code': item.get('f12', ''),
+                            'name': item.get('f14', ''),
+                            'price': safe_float(item.get('f2')),
+                            'changePercent': safe_float(item.get('f3')),
+                            'change': safe_float(item.get('f4')),
+                            'upCount': safe_float(item.get('f104', 0)),
+                            'downCount': safe_float(item.get('f105', 0)),
+                            'type': label
+                        })
+                    print(f'[板块-{label}] 返回 {len(data["data"]["diff"])} 个', flush=True)
+                    return
+                else:
+                    print(f'[板块-{label}] 尝试{attempt+1}无数据: {str(data)[:150]}', flush=True)
+            except Exception as e:
+                print(f'[板块异常-{label}] 尝试{attempt+1}: {e}', flush=True)
+            if attempt < 2:
+                time.sleep(1)
 
     if board_type in ('all', 'industry'):
         fetch_boards('m:90+t:2', 'industry')
@@ -757,6 +768,11 @@ def api_sectors():
 
     # 按涨跌幅降序排序
     results.sort(key=lambda x: x.get('changePercent', 0), reverse=True)
+
+    # 缓存结果
+    if results:
+        _sector_cache[cache_key] = {'data': results, 'time': time.time()}
+
     return jsonify(results)
 
 
