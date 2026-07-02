@@ -571,6 +571,74 @@ def api_ranking():
         return jsonify([])
 
 
+@app.route('/api/news')
+def api_news():
+    """7x24实时财经资讯 - 对接东方财富快讯接口"""
+    page = request.args.get('page', '1')
+    page_size = request.args.get('size', '20')
+    # column=350 为主财经新闻流(7x24快讯)
+    url = 'https://np-listapi.eastmoney.com/comm/web/getNewsByColumns'
+    params = {
+        'client': 'web',
+        'biz': 'web_news_col',
+        'column': '350',
+        'pageSize': page_size,
+        'page': page,
+        'req_trace': str(int(time.time() * 1000))
+    }
+    try:
+        resp = SESSION.get(url, params=params, timeout=10)
+        data = resp.json()
+        if data.get('code') == 1 and data.get('data') and data['data'].get('list'):
+            results = []
+            for item in data['data']['list']:
+                results.append({
+                    'title': item.get('title', ''),
+                    'summary': item.get('summary', ''),
+                    'source': item.get('mediaName', ''),
+                    'time': item.get('showTime', ''),
+                    'url': item.get('url_w', '') or item.get('url', '') or item.get('uniqueUrl', '')
+                })
+            return jsonify(results)
+        return jsonify([])
+    except Exception as e:
+        print(f'[资讯异常]: {e}')
+        return jsonify([])
+
+
+@app.route('/api/market-indices')
+def api_market_indices():
+    """大盘指数实时行情 - 对接东方财富push2接口"""
+    # 核心大盘指数: 上证指数, 深证成指, 创业板指, 沪深300, 上证50, 中证500, 科创50, 北证50
+    secids = '1.000001,0.399001,0.399006,1.000300,1.000016,1.000905,1.000688,0.899050'
+    url = 'https://push2.eastmoney.com/api/qt/ulist.np/get'
+    params = {
+        'fltt': 2,
+        'np': 3,
+        'invt': 2,
+        'secids': secids,
+        '_': str(int(time.time() * 1000))
+    }
+    try:
+        resp = SESSION.get(url, params=params, timeout=8)
+        data = resp.json()
+        if data.get('data') and data['data'].get('diff'):
+            results = []
+            for item in data['data']['diff']:
+                results.append({
+                    'code': item.get('f12', ''),
+                    'name': item.get('f14', ''),
+                    'price': safe_float(item.get('f2')),
+                    'change': safe_float(item.get('f4')),
+                    'changePercent': safe_float(item.get('f3')),
+                })
+            return jsonify(results)
+        return jsonify([])
+    except Exception as e:
+        print(f'[大盘指数异常]: {e}')
+        return jsonify([])
+
+
 @app.route('/api/fund/detail')
 def api_fund_detail_page():
     """基金详情页信息 - 对接东方财富fundf10"""

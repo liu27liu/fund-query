@@ -378,6 +378,32 @@ const FundAPI = (function () {
             .replace('ss', sec);
     }
 
+    // ========== 7x24实时资讯 ==========
+    async function getNews(page, pageSize) {
+        page = page || 1;
+        pageSize = pageSize || 20;
+        try {
+            const data = await fetchJSON('/api/news?page=' + page + '&size=' + pageSize);
+            if (Array.isArray(data)) return data;
+            return [];
+        } catch (e) {
+            console.warn('资讯接口异常:', e);
+            return [];
+        }
+    }
+
+    // ========== 大盘指数实时行情 ==========
+    async function getMarketIndices() {
+        try {
+            const data = await fetchJSON('/api/market-indices');
+            if (Array.isArray(data)) return data;
+            return [];
+        } catch (e) {
+            console.warn('大盘指数接口异常:', e);
+            return [];
+        }
+    }
+
     return {
         searchFunds: searchFunds,
         getRealtimeEstimate: getRealtimeEstimate,
@@ -388,6 +414,8 @@ const FundAPI = (function () {
         getFundRanking: getFundRanking,
         getHotFunds: getHotFunds,
         getHotKeywords: getHotKeywords,
+        getNews: getNews,
+        getMarketIndices: getMarketIndices,
         parseFundType: parseFundType,
         getTypeColor: getTypeColor,
         formatNum: formatNum,

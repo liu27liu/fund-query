@@ -128,6 +128,17 @@
 
             <div class="section-title">
                 <span class="pulse-dot"></span>
+                大盘指数实时看板
+            </div>
+            <div class="market-dashboard" id="marketDashboard">
+                <div class="market-card skeleton" style="height: 90px;"></div>
+                <div class="market-card skeleton" style="height: 90px;"></div>
+                <div class="market-card skeleton" style="height: 90px;"></div>
+                <div class="market-card skeleton" style="height: 90px;"></div>
+            </div>
+
+            <div class="section-title">
+                <span class="pulse-dot"></span>
                 热门基金实时估值
             </div>
             <div class="fund-grid" id="hotFundGrid">
@@ -163,6 +174,24 @@
                     正在加载涨跌排行...
                 </div>
             </div>
+
+            <div class="section-title">
+                <span class="pulse-dot"></span>
+                7×24 实时财经资讯
+                <span class="news-refresh-info">
+                    <span class="refresh-dot"></span>
+                    <span id="newsRefreshStatus">加载中...</span>
+                </span>
+            </div>
+            <div class="news-feed" id="newsFeed">
+                <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
+                    <div class="loader" style="margin: 0 auto 12px;"></div>
+                    正在加载实时资讯...
+                </div>
+            </div>
+            <div class="news-load-more-wrap">
+                <button class="news-load-more-btn" id="newsLoadMoreBtn" style="display:none;">加载更多资讯</button>
+            </div>
         `;
 
         // 渲染热门关键词
@@ -192,12 +221,24 @@
             });
         });
 
+        // 加载大盘指数
+        loadMarketIndices();
         // 加载热门基金实时估值
         loadHotFunds();
         // 加载涨跌榜
         loadRanking(currentRankingType, currentRankingOrder);
         // 加载持仓概览
         loadPortfolioOverview();
+        // 加载实时资讯
+        loadNews(1);
+        // 加载更多资讯按钮
+        var newsMoreBtn = document.getElementById('newsLoadMoreBtn');
+        if (newsMoreBtn) {
+            newsMoreBtn.addEventListener('click', function () {
+                newsCurrentPage++;
+                loadNews(newsCurrentPage, true);
+            });
+        }
 
         // 启动首页自动刷新
         startHomeAutoRefresh();
@@ -325,6 +366,114 @@
                 openDetail(this.dataset.code);
             });
         });
+    }
+
+    // ========== 大盘指数看板 ==========
+    async function loadMarketIndices() {
+        var container = document.getElementById('marketDashboard');
+        if (!container) return;
+
+        var indices = await FundAPI.getMarketIndices();
+
+        if (indices.length === 0) {
+            container.innerHTML = '<div style="grid-column: 1/-1; padding: 20px; text-align: center; color: var(--text-secondary);">暂无大盘数据</div>';
+            return;
+        }
+
+        container.innerHTML = indices.map(function (idx) {
+            var isUp = idx.changePercent >= 0;
+            var colorClass = isUp ? 'market-up' : 'market-down';
+            var sign = isUp ? '+' : '';
+            return `
+                <div class="market-card ${colorClass}" data-code="${idx.code}">
+                    <div class="market-name">${idx.name}</div>
+                    <div class="market-price">${FundAPI.formatNum(idx.price)}</div>
+                    <div class="market-change">
+                        <span class="market-change-val">${sign}${FundAPI.formatNum(idx.change)}</span>
+                        <span class="market-change-pct">${sign}${idx.changePercent.toFixed(2)}%</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // ========== 7x24实时资讯 ==========
+    var newsCurrentPage = 1;
+    var newsPageSize = 15;
+
+    async function loadNews(page, isLoadMore) {
+        var container = document.getElementById('newsFeed');
+        if (!container) return;
+
+        if (!isLoadMore) {
+            container.innerHTML = `
+                <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
+                    <div class="loader" style="margin: 0 auto 12px;"></div>
+                    正在加载实时资讯...
+                </div>
+            `;
+        }
+
+        var news = await FundAPI.getNews(page, newsPageSize);
+
+        if (news.length === 0) {
+            if (!isLoadMore) {
+                container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">暂无资讯</div>';
+            }
+            var moreBtn = document.getElementById('newsLoadMoreBtn');
+            if (moreBtn) moreBtn.style.display = 'none';
+            updateNewsRefreshStatus(true);
+            return;
+        }
+
+        var newsHtml = news.map(function (item) {
+            var time = item.time || '';
+            // 提取时分
+            var timeShort = time;
+            if (time.length > 5) {
+                var match = time.match(/(\d{2}:\d{2})/);
+                if (match) timeShort = match[1];
+            }
+            return `
+                <div class="news-item">
+                    <div class="news-time">${timeShort}</div>
+                    <div class="news-content">
+                        <div class="news-title">${item.title}</div>
+                        <div class="news-summary">${item.summary || ''}</div>
+                        <div class="news-meta">
+                            ${item.source ? '<span class="news-source">' + item.source + '</span>' : ''}
+                            <span class="news-full-time">${time}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        if (isLoadMore) {
+            container.insertAdjacentHTML('beforeend', newsHtml);
+        } else {
+            container.innerHTML = newsHtml;
+        }
+
+        // 显示加载更多按钮
+        var moreBtn = document.getElementById('newsLoadMoreBtn');
+        if (moreBtn && news.length >= newsPageSize) {
+            moreBtn.style.display = 'inline-block';
+        } else if (moreBtn) {
+            moreBtn.style.display = 'none';
+        }
+
+        updateNewsRefreshStatus(true);
+    }
+
+    function updateNewsRefreshStatus(isSuccess) {
+        var statusEl = document.getElementById('newsRefreshStatus');
+        if (!statusEl) return;
+        var now = new Date();
+        var timeStr = String(now.getHours()).padStart(2, '0') + ':' +
+            String(now.getMinutes()).padStart(2, '0') + ':' +
+            String(now.getSeconds()).padStart(2, '0');
+        statusEl.textContent = (isSuccess ? '已更新 ' : '更新失败 ') + timeStr;
     }
 
     async function loadRanking(sortType, order) {
@@ -1068,14 +1217,18 @@
         statusEl.textContent = (isSuccess ? '已更新 ' : '更新失败 ') + timeStr;
     }
 
-    // 刷新首页数据：热门基金估值 + 涨跌榜 + 持仓概览（不重新渲染框架）
+    // 刷新首页数据：大盘指数 + 热门基金估值 + 涨跌榜 + 持仓概览 + 资讯
     async function refreshHomeData() {
-        // 1. 刷新热门基金
+        // 1. 刷新大盘指数
+        await loadMarketIndices();
+        // 2. 刷新热门基金
         await loadHotFunds();
-        // 2. 刷新涨跌榜
+        // 3. 刷新涨跌榜
         await loadRanking(currentRankingType, currentRankingOrder);
-        // 3. 刷新持仓概览
+        // 4. 刷新持仓概览
         await loadPortfolioOverview();
+        // 5. 刷新资讯（只刷新第一页，保留用户已加载的更多内容会被覆盖）
+        await loadNews(1);
     }
 
     // ========== 添加持仓表单 ==========
