@@ -23,6 +23,8 @@
     var searchTimer = null;          // 搜索防抖定时器
     var realtimeTimer = null;        // 实时更新定时器
     var currentDetailCode = null;    // 当前查看的基金代码
+    var portfolioTimer = null;       // 持仓页自动刷新定时器
+    var portfolioRefreshCountdown = null; // 倒计时定时器
 
     // ========== Toast 消息提示 ==========
     function showToast(message, type = 'default') {
@@ -44,6 +46,11 @@
         var parts = hash.split('?');
         var path = parts[0];
         var query = parts[1] || '';
+
+        // 离开持仓页时清除自动刷新
+        if (path !== '/portfolio') {
+            stopPortfolioAutoRefresh();
+        }
 
         // 更新导航高亮
         document.querySelectorAll('.nav-link').forEach(function (link) {
@@ -591,6 +598,21 @@
         app.innerHTML = `
             <div class="favorites-header">
                 <h2 style="font-size: 20px;">💼 我的持仓</h2>
+                <div class="portfolio-toolbar">
+                    <span class="refresh-info" id="refreshInfo">
+                        <span class="refresh-dot"></span>
+                        <span id="refreshStatus">加载中...</span>
+                    </span>
+                    <button class="refresh-btn" id="manualRefreshBtn" title="手动刷新">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+                        刷新
+                    </button>
+                    <label class="auto-refresh-toggle">
+                        <input type="checkbox" id="autoRefreshCheckbox" checked>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">自动刷新</span>
+                    </label>
+                </div>
                 <button class="add-holding-btn" id="addHoldingBtn">+ 添加持仓</button>
             </div>
             <div id="portfolioContent">
@@ -604,6 +626,20 @@
         // 绑定添加持仓按钮
         document.getElementById('addHoldingBtn').addEventListener('click', function () {
             showHoldingForm({});
+        });
+
+        // 绑定手动刷新
+        document.getElementById('manualRefreshBtn').addEventListener('click', function () {
+            refreshPortfolioData();
+        });
+
+        // 绑定自动刷新开关
+        document.getElementById('autoRefreshCheckbox').addEventListener('change', function () {
+            if (this.checked) {
+                startPortfolioAutoRefresh();
+            } else {
+                stopPortfolioAutoRefresh();
+            }
         });
 
         loadPortfolioData(positions);
@@ -663,23 +699,23 @@
                 <div class="summary-grid summary-grid-5">
                     <div class="summary-item">
                         <div class="summary-label">持仓市值</div>
-                        <div class="summary-value">¥${formatMoney(totals.totalValue)}</div>
+                        <div class="summary-value" data-summary="totalValue">¥${formatMoney(totals.totalValue)}</div>
                     </div>
                     <div class="summary-item">
                         <div class="summary-label">持仓成本</div>
-                        <div class="summary-value">¥${formatMoney(totals.totalCost)}</div>
+                        <div class="summary-value" data-summary="totalCost">¥${formatMoney(totals.totalCost)}</div>
                     </div>
                     <div class="summary-item">
                         <div class="summary-label">持仓收益</div>
-                        <div class="summary-value ${profitClass}">${profitSign}${formatMoney(totals.totalHoldingProfit)}</div>
+                        <div class="summary-value ${profitClass}" data-summary="holdingProfit">${profitSign}${formatMoney(totals.totalHoldingProfit)}</div>
                     </div>
                     <div class="summary-item">
                         <div class="summary-label">收益率</div>
-                        <div class="summary-value ${profitClass}">${profitSign}${(totals.totalProfitRate * 100).toFixed(2)}%</div>
+                        <div class="summary-value ${profitClass}" data-summary="profitRate">${profitSign}${(totals.totalProfitRate * 100).toFixed(2)}%</div>
                     </div>
                     <div class="summary-item">
                         <div class="summary-label">累计收益</div>
-                        <div class="summary-value ${cumClass}">${cumSign}${formatMoney(totals.totalCumulativeProfit)}</div>
+                        <div class="summary-value ${cumClass}" data-summary="cumulativeProfit">${cumSign}${formatMoney(totals.totalCumulativeProfit)}</div>
                     </div>
                 </div>
             </div>
@@ -717,10 +753,10 @@
                                     </td>
                                     <td class="num-cell">${p.currentShares.toFixed(2)}</td>
                                     <td class="num-cell">${FundAPI.formatNum(p.costPrice)}</td>
-                                    <td class="num-cell">${FundAPI.formatNum(currentNav)}</td>
-                                    <td class="num-cell">¥${formatMoney(calc.currentValue)}</td>
-                                    <td class="num-cell ${pClass}">${pSign}${formatMoney(calc.holdingProfit)}</td>
-                                    <td class="num-cell">
+                                    <td class="num-cell" data-cell="nav" data-code="${p.code}">${FundAPI.formatNum(currentNav)}</td>
+                                    <td class="num-cell" data-cell="value" data-code="${p.code}">¥${formatMoney(calc.currentValue)}</td>
+                                    <td class="num-cell ${pClass}" data-cell="profit" data-code="${p.code}">${pSign}${formatMoney(calc.holdingProfit)}</td>
+                                    <td class="num-cell" data-cell="rate" data-code="${p.code}">
                                         <span class="change-badge ${pClass === 'profit-positive' ? 'bg-up' : 'bg-down'}">
                                             ${pSign}${(calc.holdingProfitRate * 100).toFixed(2)}%
                                         </span>
@@ -786,6 +822,151 @@
                 }
             });
         });
+
+        // 首次加载完成，启动自动刷新
+        updateRefreshStatus(true);
+        startPortfolioAutoRefresh();
+    }
+
+    // ========== 持仓实时刷新 ==========
+    var REFRESH_INTERVAL = 30; // 自动刷新间隔（秒）
+    var countdownLeft = REFRESH_INTERVAL;
+
+    function startPortfolioAutoRefresh() {
+        stopPortfolioAutoRefresh();
+        var checkbox = document.getElementById('autoRefreshCheckbox');
+        if (!checkbox || !checkbox.checked) return;
+
+        countdownLeft = REFRESH_INTERVAL;
+        // 倒计时定时器（每秒更新）
+        portfolioRefreshCountdown = setInterval(function () {
+            countdownLeft--;
+            if (countdownLeft <= 0) {
+                countdownLeft = REFRESH_INTERVAL;
+                refreshPortfolioData();
+            }
+            updateCountdownDisplay();
+        }, 1000);
+        updateCountdownDisplay();
+    }
+
+    function stopPortfolioAutoRefresh() {
+        if (portfolioTimer) { clearInterval(portfolioTimer); portfolioTimer = null; }
+        if (portfolioRefreshCountdown) { clearInterval(portfolioRefreshCountdown); portfolioRefreshCountdown = null; }
+    }
+
+    function updateCountdownDisplay() {
+        var statusEl = document.getElementById('refreshStatus');
+        if (!statusEl) return;
+        var checkbox = document.getElementById('autoRefreshCheckbox');
+        if (checkbox && !checkbox.checked) {
+            statusEl.textContent = '已暂停';
+            return;
+        }
+        statusEl.textContent = countdownLeft + 's 后刷新';
+    }
+
+    function updateRefreshStatus(isSuccess) {
+        var statusEl = document.getElementById('refreshStatus');
+        if (!statusEl) return;
+        var now = new Date();
+        var timeStr = String(now.getHours()).padStart(2, '0') + ':' +
+            String(now.getMinutes()).padStart(2, '0') + ':' +
+            String(now.getSeconds()).padStart(2, '0');
+        statusEl.textContent = (isSuccess ? '已更新 ' : '更新失败 ') + timeStr;
+    }
+
+    // 仅刷新数据，不重新渲染整个表格（避免闪烁、保留滚动位置）
+    async function refreshPortfolioData() {
+        var container = document.getElementById('portfolioContent');
+        if (!container) return;
+
+        var positions = Store.getAggregatedPositions();
+        if (positions.length === 0) return;
+
+        var codes = positions.map(function (p) { return p.code; });
+
+        // 显示刷新动画
+        var refreshBtn = document.getElementById('manualRefreshBtn');
+        if (refreshBtn) refreshBtn.classList.add('spinning');
+
+        var estimates = await FundAPI.batchRealtimeEstimate(codes);
+
+        if (refreshBtn) refreshBtn.classList.remove('spinning');
+
+        if (!estimates || estimates.length === 0) {
+            updateRefreshStatus(false);
+            countdownLeft = REFRESH_INTERVAL;
+            return;
+        }
+
+        // 构建净值映射
+        var navMap = {};
+        positions.forEach(function (p) {
+            var est = estimates.find(function (e) { return e.fundcode === p.code; });
+            if (est) {
+                navMap[p.code] = est.gsz || est.dwjz || p.costPrice;
+            } else {
+                navMap[p.code] = p.costPrice;
+            }
+        });
+
+        // 更新总览数据
+        var totals = Store.calcTotalAggregatedProfit(positions, navMap);
+        updateSummaryCell('totalValue', '¥' + formatMoney(totals.totalValue));
+        updateSummaryCell('totalCost', '¥' + formatMoney(totals.totalCost));
+
+        var profitClass = totals.totalHoldingProfit >= 0 ? 'profit-positive' : 'profit-negative';
+        var profitSign = totals.totalHoldingProfit >= 0 ? '+' : '';
+        updateSummaryCell('holdingProfit', profitSign + formatMoney(totals.totalHoldingProfit), profitClass);
+        updateSummaryCell('profitRate', profitSign + (totals.totalProfitRate * 100).toFixed(2) + '%', profitClass);
+
+        var cumClass = totals.totalCumulativeProfit >= 0 ? 'profit-positive' : 'profit-negative';
+        var cumSign = totals.totalCumulativeProfit >= 0 ? '+' : '';
+        updateSummaryCell('cumulativeProfit', cumSign + formatMoney(totals.totalCumulativeProfit), cumClass);
+
+        // 更新每行数据
+        positions.forEach(function (p) {
+            var currentNav = navMap[p.code] || p.costPrice;
+            var calc = Store.calcPositionProfit(p, currentNav);
+            var pClass = calc.holdingProfit >= 0 ? 'profit-positive' : 'profit-negative';
+            var pSign = calc.holdingProfit >= 0 ? '+' : '';
+
+            updateTableCell('nav', p.code, FundAPI.formatNum(currentNav));
+            updateTableCell('value', p.code, '¥' + formatMoney(calc.currentValue));
+            updateTableCell('profit', p.code, pSign + formatMoney(calc.holdingProfit), pClass);
+            updateTableCell('rate', p.code,
+                '<span class="change-badge ' + (pClass === 'profit-positive' ? 'bg-up' : 'bg-down') + '">' +
+                pSign + (calc.holdingProfitRate * 100).toFixed(2) + '%</span>');
+        });
+
+        updateRefreshStatus(true);
+        countdownLeft = REFRESH_INTERVAL;
+    }
+
+    function updateSummaryCell(key, text, className) {
+        var el = document.querySelector('[data-summary="' + key + '"]');
+        if (!el) return;
+        el.textContent = text;
+        if (className !== undefined) {
+            el.className = 'summary-value ' + className;
+        }
+        // 闪烁高亮
+        el.classList.add('flash-update');
+        setTimeout(function () { el.classList.remove('flash-update'); }, 600);
+    }
+
+    function updateTableCell(cellType, code, html, className) {
+        var el = document.querySelector('[data-cell="' + cellType + '"][data-code="' + code + '"]');
+        if (!el) return;
+        el.innerHTML = html;
+        if (className !== undefined) {
+            el.className = 'num-cell ' + className;
+        } else {
+            el.className = 'num-cell';
+        }
+        el.classList.add('flash-update');
+        setTimeout(function () { el.classList.remove('flash-update'); }, 600);
     }
 
     // ========== 添加持仓表单 ==========

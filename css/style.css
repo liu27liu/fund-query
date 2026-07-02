@@ -905,6 +905,124 @@ ul, ol { list-style: none; }
     font-weight: normal;
 }
 
+/* ========== 持仓实时刷新工具栏 ========== */
+.portfolio-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+    margin-right: 12px;
+}
+
+.refresh-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.refresh-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--success);
+    animation: pulse-dot 2s infinite;
+}
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.refresh-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 12px;
+    border-radius: var(--radius-xs);
+    font-size: 12px;
+    font-weight: 500;
+    background: #f3f6fa;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s var(--ease);
+    border: none;
+}
+
+.refresh-btn:hover {
+    background: var(--primary);
+    color: #fff;
+}
+
+.refresh-btn svg {
+    transition: transform 0.3s var(--ease);
+}
+
+.refresh-btn.spinning svg {
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* 自动刷新开关 */
+.auto-refresh-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-secondary);
+    user-select: none;
+}
+
+.auto-refresh-toggle input {
+    display: none;
+}
+
+.toggle-slider {
+    width: 32px;
+    height: 18px;
+    background: #d9d9d9;
+    border-radius: 9px;
+    position: relative;
+    transition: background 0.2s var(--ease);
+}
+
+.toggle-slider::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s var(--ease);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.auto-refresh-toggle input:checked + .toggle-slider {
+    background: var(--primary);
+}
+
+.auto-refresh-toggle input:checked + .toggle-slider::after {
+    transform: translateX(14px);
+}
+
+/* 数据更新闪烁高亮 */
+.flash-update {
+    animation: flash-highlight 0.6s ease;
+}
+
+@keyframes flash-highlight {
+    0% { background-color: rgba(22, 119, 255, 0.15); }
+    100% { background-color: transparent; }
+}
+
 .add-fav-mini:hover {
     background: var(--primary);
     box-shadow: 0 2px 8px rgba(22, 119, 255, 0.3);
