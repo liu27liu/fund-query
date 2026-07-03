@@ -2,11 +2,24 @@
   "lzp": {
     "password": "b93bc2297cca5e6576707d06fd86e78fba4b8fb99d9e7be7ef2598fc0224bfab",
     "salt": "457471",
-    "favorites": [],
-    "groups": [
-      "全部"
+    "favorites": [
+      {
+        "code": "110022",
+        "name": "易方达消费",
+        "type": "股票型"
+      }
     ],
-    "holdings": [],
+    "groups": [
+      "全部",
+      "消费"
+    ],
+    "holdings": [
+      {
+        "code": "110022",
+        "name": "易方达消费",
+        "amount": 10000
+      }
+    ],
     "createTime": 1783055840.0759306
   }
 }
