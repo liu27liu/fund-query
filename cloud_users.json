@@ -19,16 +19,6 @@
     "createTime": 1783055840.0759306,
     "recreated": false
   },
-  "testlzp": {
-    "password": "0f6f6bcfc2e51ba03b670987da0966bd3d53bb450f010494fc21ca8b90536f7a",
-    "salt": "289051",
-    "favorites": [],
-    "groups": [
-      "全部"
-    ],
-    "holdings": [],
-    "createTime": 1783055985.9264724
-  },
   "testuser2": {
     "password": "",
     "salt": "",
@@ -37,7 +27,7 @@
       "全部"
     ],
     "holdings": [],
-    "createTime": 1783069321.610354,
+    "createTime": 1783072196.7195215,
     "recreated": true
   }
 }
