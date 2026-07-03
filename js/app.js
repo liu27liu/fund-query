@@ -946,20 +946,35 @@
                     } catch (e) { /* 忽略检查失败 */ }
                 }
 
-                // 合并数据：实际净值已公布时用榜单API的change和netValue，否则用实时估值
+                // 合并数据：逐基金判断当日实际净值是否已公布
+                // 判断依据：比较估值API的dwjz（最近实际净值）和榜单API的netValue
+                //   - 两者相同 → 该基金当日实际净值还没公布，用估值
+                //   - 两者不同 → 该基金当日实际净值已公布，用榜单API的实际值
+                //   - 无估值   → 用榜单API的值（可能是上一日的，如QDII基金）
                 var dailyRanking = dailyCandidates.map(function (f) {
                     var est = dailyEstimates.find(function (e) { return e.fundcode === f.code; });
-                    if (actualNavPublished) {
-                        // 当日实际净值已公布，用榜单API返回的实际涨跌幅和净值
-                        f.realtimeChange = f.change;
-                        f.netValue = f.netValue;
-                        f.hasRealtime = false;
+                    if (est && actualNavPublished) {
+                        // 比较估值API的dwjz和榜单API的netValue
+                        var estDwjz = Number(est.dwjz) || 0;
+                        var rankNav = Number(f.netValue) || 0;
+                        if (Math.abs(estDwjz - rankNav) < 0.0001) {
+                            // 两者相同，说明榜单API的netValue还是上一日的，当日实际净值未公布 → 用估值
+                            f.realtimeChange = est.gszzl;
+                            f.netValue = est.gsz;
+                            f.hasRealtime = true;
+                        } else {
+                            // 两者不同，说明榜单API的netValue已更新为当日实际净值 → 用实际值
+                            f.realtimeChange = f.change;
+                            f.netValue = f.netValue;
+                            f.hasRealtime = false;
+                        }
                     } else if (est) {
-                        // 盘中，用实时估值
+                        // 盘中（全局未检测到实际净值公布），用实时估值
                         f.realtimeChange = est.gszzl;
                         f.netValue = est.gsz;
                         f.hasRealtime = true;
                     } else {
+                        // 无估值数据，用榜单API的值
                         f.realtimeChange = f.change;
                         f.hasRealtime = false;
                     }
