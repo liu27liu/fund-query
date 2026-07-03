@@ -1592,4 +1592,26 @@ if __name__ == '__main__':
     else:
         print('云端无数据或同步失败，使用本地数据')
     print('='*50)
+
+    # 启动后台线程预热板块缓存（避免首次请求超时）
+    import threading
+    def prewarm_sector_cache():
+        """后台预热板块缓存，每5分钟刷新一次"""
+        while True:
+            try:
+                print('[板块预热] 开始获取板块数据...', flush=True)
+                test_client = app.test_client()
+                resp = test_client.get('/api/sectors?type=all')
+                data = resp.get_json()
+                if data and len(data) > 0:
+                    print(f'[板块预热] 成功缓存 {len(data)} 个板块', flush=True)
+                else:
+                    print('[板块预热] 获取到0个板块，将在下个周期重试', flush=True)
+            except Exception as e:
+                print(f'[板块预热] 异常: {e}', flush=True)
+            time.sleep(300)  # 5分钟刷新一次
+
+    thread = threading.Thread(target=prewarm_sector_cache, daemon=True)
+    thread.start()
+
     app.run(host='0.0.0.0', port=port, debug=False)
