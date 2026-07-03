@@ -32,7 +32,15 @@
   "testuser2": {
     "password": "",
     "salt": "",
-    "favorites": [],
+    "favorites": [
+      {
+        "code": "161725",
+        "name": "招商中证白酒指数(LOF)A",
+        "type": "指数型",
+        "group": "全部",
+        "addTime": 1783069369022
+      }
+    ],
     "groups": [
       "全部"
     ],
