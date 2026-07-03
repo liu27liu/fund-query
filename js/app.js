@@ -727,7 +727,13 @@
             </div>
         `;
 
-        var ranking = await FundAPI.getFundRanking(sortType, 20, order, fundType);
+        // 日涨幅榜/日跌幅榜：拉取更大池子，用实时估值重新排序
+        if (sortType === 'RZDF') {
+            var poolSize = order === 'desc' ? 100 : 100; // 拉取100只，用实时估值重排
+            ranking = await FundAPI.getFundRanking(sortType, poolSize, order, fundType);
+        } else {
+            ranking = await FundAPI.getFundRanking(sortType, 20, order, fundType);
+        }
 
         if (ranking.length === 0) {
             container.innerHTML = `
@@ -741,9 +747,23 @@
             return;
         }
 
-        // 获取实时估值补充
+        // 获取实时估值
         var codes = ranking.map(function (f) { return f.code; });
         var estimates = await FundAPI.batchRealtimeEstimate(codes);
+
+        // 日涨幅榜：用实时估值涨幅重新排序，取前20
+        if (sortType === 'RZDF') {
+            ranking = ranking.map(function (f) {
+                var est = estimates.find(function (e) { return e.fundcode === f.code; });
+                f.realtimeChange = est ? est.gszzl : f.change;
+                return f;
+            });
+            ranking.sort(function (a, b) {
+                if (order === 'desc') return (b.realtimeChange || 0) - (a.realtimeChange || 0);
+                return (a.realtimeChange || 0) - (b.realtimeChange || 0);
+            });
+            ranking = ranking.slice(0, 20);
+        }
 
         // 根据排行类型确定涨跌幅列标题
         var changeColTitle = '日涨跌幅';
@@ -764,10 +784,10 @@
                 <tbody>
                     ${ranking.map(function (f, i) {
                         var est = estimates.find(function (e) { return e.fundcode === f.code; });
-                        // 使用API返回的实际涨跌幅作为排名依据，不被实时估值覆盖
+                        // 日涨幅榜使用实时估值涨幅，其他用API返回值
                         var change;
                         if (sortType === 'RZDF') {
-                            change = f.change;
+                            change = f.realtimeChange !== undefined ? f.realtimeChange : f.change;
                         } else if (sortType === 'ZZF') {
                             change = f.weekChange;
                         } else if (sortType === '1NZF') {
@@ -775,7 +795,6 @@
                         } else {
                             change = f.change;
                         }
-                        var estChange = est ? est.gszzl : null; // 实时估值涨幅（仅作参考显示）
                         var changeClass = FundAPI.getChangeClass(change);
                         var isFav = Store.isFavorite(f.code);
                         return `
@@ -789,7 +808,6 @@
                                 <td class="num-cell">${FundAPI.formatNum(est ? est.dwjz : f.netValue)}</td>
                                 <td class="num-cell">
                                     ${est ? FundAPI.formatNum(est.gsz) : '--'}
-                                    ${estChange !== null ? '<br><span style="font-size:11px;color:var(--text-tertiary)">估' + FundAPI.formatChange(estChange) + '</span>' : ''}
                                 </td>
                                 <td class="num-cell">
                                     <span class="change-badge ${changeClass === 'up' ? 'bg-up' : changeClass === 'down' ? 'bg-down' : 'bg-flat'}">

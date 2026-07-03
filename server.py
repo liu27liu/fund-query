@@ -34,7 +34,8 @@ _sector_cache = {}  # {key: {data, time}} - 板块数据缓存，60秒过期
 # 优先使用 /data (Railway volume)，否则使用项目目录
 _DB_DIR = '/data' if os.path.isdir('/data') else os.path.dirname(os.path.abspath(__file__))
 _USERS_FILE = os.path.join(_DB_DIR, 'users.json')
-_TOKENS = {}  # {token: {username, expire_time}} - 登录令牌（内存）
+_TOKENS = {}  # {token: {username, expire_time}} - 兼容旧令牌（内存）
+_TOKEN_SECRET = 'fund_query_secret_2026_v1'
 
 def _load_users():
     """加载用户数据库"""
@@ -59,28 +60,30 @@ def _hash_password(password, salt=''):
     return hashlib.sha256((salt + password + 'fund_salt_2026').encode()).hexdigest()
 
 def _gen_token(username):
-    """生成登录令牌"""
-    token = hashlib.sha256(f'{username}{time.time()}{random.random()}'.encode()).hexdigest()
-    _TOKENS[token] = {'username': username, 'expire_time': time.time() + 7 * 86400}
-    return token
+    """生成无状态登录令牌（token=username:hash，无需服务端存储）"""
+    sign = hashlib.sha256((username + _TOKEN_SECRET).encode()).hexdigest()[:32]
+    return username + ':' + sign
 
 def _get_user_from_token(req):
-    """从请求中提取用户名（验证token）"""
+    """从请求中提取用户名（验证无状态token）"""
     token = req.headers.get('Authorization', '').replace('Bearer ', '')
-    record = _TOKENS.get(token)
-    if not record:
+    if not token or ':' not in token:
         return None
-    if time.time() > record['expire_time']:
-        del _TOKENS[token]
+    parts = token.split(':', 1)
+    username = parts[0]
+    sign = parts[1]
+    expected_sign = hashlib.sha256((username + _TOKEN_SECRET).encode()).hexdigest()[:32]
+    if sign != expected_sign:
         return None
-    return record['username']
+    # 验证用户是否存在
+    users = _load_users()
+    if username not in users:
+        return None
+    return username
 
 def _clean_expired_tokens():
-    """清理过期令牌"""
-    now = time.time()
-    expired = [t for t, v in _TOKENS.items() if now > v['expire_time']]
-    for t in expired:
-        del _TOKENS[t]
+    """兼容空函数"""
+    pass
 
 # ========== Brevo 邮件 API 配置 ==========
 # 使用 Brevo HTTP API (走 443 端口)，每天免费 300 封，无需域名
