@@ -642,17 +642,25 @@ def task_run(tid):
         detail = ''
         task_code = task['code']
         if task_code == 'full_fund_crawl':
-            # 采集基金排行前500作为全量采集演示
+            # 全量基金采集：分页采集全市场基金
             try:
                 import requests as req
                 import re
                 url = 'https://fund.eastmoney.com/data/rankhandler.aspx'
-                params = {'op': 'ph', 'dt': 'kf', 'ft': 'all', 'rs': '', 'gs': 0, 'sc': 'rzdf', 'st': 'desc', 'pi': 1, 'pn': 500, 'dx': 1}
                 headers = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://fund.eastmoney.com/data/fundranking.html'}
-                resp = req.get(url, params=params, headers=headers, timeout=15)
-                match = re.search(r'datas:\[(.+?)\]', resp.text, re.DOTALL)
-                if match:
+                page_size = 500
+                max_total = 10000
+                page_num = 1
+                while records < max_total:
+                    params = {'op': 'ph', 'dt': 'kf', 'ft': 'all', 'rs': '', 'gs': 0, 'sc': 'rzdf', 'st': 'desc', 'pi': page_num, 'pn': page_size, 'dx': 1}
+                    resp = req.get(url, params=params, headers=headers, timeout=20)
+                    match = re.search(r'datas:\[(.+?)\]', resp.text, re.DOTALL)
+                    if not match:
+                        break
                     raw_items = match.group(1).split('","')
+                    if len(raw_items) == 0:
+                        break
+                    page_count = 0
                     for raw in raw_items:
                         raw = raw.strip('"').strip()
                         if not raw:
@@ -666,7 +674,11 @@ def task_run(tid):
                                 change=float(parts[6]) if len(parts) > 6 else 0,
                             )
                             records += 1
-                    detail = f'采集到{records}只基金'
+                            page_count += 1
+                    if page_count == 0:
+                        break
+                    page_num += 1
+                detail = f'采集到{records}只基金'
             except Exception as e:
                 detail = f'采集异常: {e}'
         elif task_code == 'intraday_nav':

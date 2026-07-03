@@ -331,7 +331,7 @@ def init_db():
     task_count = c.execute('SELECT COUNT(*) FROM collection_tasks').fetchone()[0]
     if task_count == 0:
         default_tasks = [
-            ('全量基金采集', 'full_fund_crawl', 'batch', '采集全市场基金基础数据(代码/名称/类型/公司/经理)', '0 2 * * *', '{"enabled": false}', 0),
+            ('全量基金采集', 'full_fund_crawl', 'batch', '采集全市场基金基础数据(代码/名称/类型/公司/经理)，上限10000只', '0 2 * * *', '{"enabled": false}', 0),
             ('新发基金监控', 'new_fund_monitor', 'monitor', '自动巡检新发基金并入库', '0 9 * * *', '{"enabled": false}', 0),
             ('盘中净值采集', 'intraday_nav', 'intraday', '交易日高频采集实时估值数据', '*/15 9-15 * * 1-5', '{"enabled": false, "interval": 120}', 0),
             ('盘后净值更新', 'postclose_nav', 'postclose', '每日收盘后同步官方净值', '0 16 * * 1-5', '{"enabled": false}', 0),
@@ -340,6 +340,10 @@ def init_db():
         for name, code, typ, desc, cron, config, status in default_tasks:
             c.execute('''INSERT INTO collection_tasks (name, code, type, description, cron, config, status, create_time)
                          VALUES (?,?,?,?,?,?,?,?)''', (name, code, typ, desc, cron, config, status, time.time()))
+
+    # 迁移：更新全量基金采集任务描述
+    c.execute("UPDATE collection_tasks SET description=? WHERE code='full_fund_crawl'",
+              ('采集全市场基金基础数据(代码/名称/类型/公司/经理)，上限10000只',))
 
     # ========== 初始化默认公告 ==========
     ann_count = c.execute('SELECT COUNT(*) FROM announcements').fetchone()[0]
