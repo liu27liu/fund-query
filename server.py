@@ -747,15 +747,23 @@ def api_market_indices():
         resp = SESSION.get(url, params=params, timeout=8)
         data = resp.json()
         if data.get('data') and data['data'].get('diff'):
-            # 建立code到region的映射
+            # 建立code到region的映射（同时映射完整secid和去掉前缀的code）
             code_region = {}
             for region_name, codes in regions:
                 for c in codes.split(','):
-                    code_region[c.strip()] = region_name
+                    c = c.strip()
+                    code_region[c] = region_name
+                    # 也映射去掉前缀的code (如 "1.000001" -> "000001")
+                    if '.' in c:
+                        code_region[c.split('.', 1)[1]] = region_name
 
             results = []
+            # 按区域顺序排列
+            region_order = {name: i for i, (name, _) in enumerate(regions)}
+            sorted_items = sorted(data['data']['diff'], key=lambda x: region_order.get(code_region.get(x.get('f12', ''), '其他'), 99))
+            
             current_region = None
-            for item in data['data']['diff']:
+            for item in sorted_items:
                 price = safe_float(item.get('f2'))
                 if price <= 0:
                     continue
