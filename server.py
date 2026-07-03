@@ -1029,7 +1029,7 @@ def api_sectors():
     board_type = request.args.get('type', 'all')  # all/industry/concept/category名称
     category_filter = request.args.get('category', '')  # 主题大类过滤
 
-    # 内存缓存：120秒内复用上次结果
+    # 内存缓存：300秒内复用上次结果
     cache_key = 'sectors_' + board_type + '_' + category_filter
     cached = _sector_cache.get(cache_key)
     if cached and time.time() - cached['time'] < 300:
@@ -1043,7 +1043,7 @@ def api_sectors():
 
     def fetch_boards(fs_type, label):
         results = []
-        base_url = 'https://push2.eastmoney.com/api/qt/clist/get'
+        base_url = 'http://push2.eastmoney.com/api/qt/clist/get'
         sector_headers = {
             'User-Agent': HEADERS['User-Agent'],
             'Referer': 'https://quote.eastmoney.com/center/boardlist.html',
@@ -1099,11 +1099,12 @@ def api_sectors():
     # 按涨跌幅降序排序
     all_results.sort(key=lambda x: x.get('changePercent', 0), reverse=True)
 
-    # 缓存结果
+    # 缓存结果（即使数据少也缓存，避免频繁请求）
     if all_results:
         _sector_cache[cache_key] = {'data': all_results, 'time': time.time()}
     elif cached:
-        print(f'[板块] 所有重试失败，返回过期缓存数据', flush=True)
+        # 所有重试都失败时，返回过期缓存数据（有总比没有好）
+        print(f'[板块] 获取失败，返回过期缓存数据', flush=True)
         return jsonify(cached['data'])
 
     return jsonify(all_results)
@@ -1590,26 +1591,4 @@ if __name__ == '__main__':
     else:
         print('云端无数据或同步失败，使用本地数据')
     print('='*50)
-
-    # 启动后台线程预热板块缓存（避免首次请求超时）
-    import threading
-    def prewarm_sector_cache():
-        """后台预热板块缓存，每5分钟刷新一次"""
-        while True:
-            try:
-                print('[板块预热] 开始获取板块数据...', flush=True)
-                test_client = app.test_client()
-                resp = test_client.get('/api/sectors?type=all')
-                data = resp.get_json()
-                if data and len(data) > 0:
-                    print(f'[板块预热] 成功缓存 {len(data)} 个板块', flush=True)
-                else:
-                    print('[板块预热] 获取到0个板块，将在下个周期重试', flush=True)
-            except Exception as e:
-                print(f'[板块预热] 异常: {e}', flush=True)
-            time.sleep(300)  # 5分钟刷新一次
-
-    thread = threading.Thread(target=prewarm_sector_cache, daemon=True)
-    thread.start()
-
     app.run(host='0.0.0.0', port=port, debug=False)
