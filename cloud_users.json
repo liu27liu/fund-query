@@ -1,7 +1,7 @@
 {
   "lzp": {
-    "password": "b93bc2297cca5e6576707d06fd86e78fba4b8fb99d9e7be7ef2598fc0224bfab",
-    "salt": "457471",
+    "password": "f286404683e958e0007f3d0e854db3409e9fc1def47ac1861f248eca83c1b4c2",
+    "salt": "350326",
     "favorites": [
       {
         "code": "110022",
@@ -13,8 +13,20 @@
       "全部",
       "消费"
     ],
-    "holdings": [],
-    "createTime": 1783055840.0759306
+    "holdings": [
+      {
+        "code": "017114",
+        "name": "浦银安盛景气优选混合A",
+        "type": "混合型",
+        "amount": 1,
+        "buyPrice": 0.972,
+        "shares": 1.02880658436214,
+        "buyDate": "2026-07-03",
+        "addTime": 1783063031948
+      }
+    ],
+    "createTime": 1783055840.0759306,
+    "recreated": false
   },
   "testlzp": {
     "password": "0f6f6bcfc2e51ba03b670987da0966bd3d53bb450f010494fc21ca8b90536f7a",
