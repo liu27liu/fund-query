@@ -920,44 +920,14 @@
             return;
         }
 
-        // 日涨幅榜需要获取实时估值
-        var estimates = [];
-        if (sortType === 'RZDF') {
-            var codes = candidates.map(function (f) { return f.code; });
-            estimates = await Promise.race([
-                FundAPI.batchRealtimeEstimate(codes),
-                new Promise(function (resolve) { setTimeout(function () { resolve([]); }, 15000); })
-            ]);
-        }
-
-        if (myRequestId !== rankingRequestId) return;
-
-        // 合并实时估值数据
+        // 统一使用API返回的排序和涨幅值，不再用实时估值重排序
         var ranking = candidates.map(function (f) {
-            var est = estimates.find(function (e) { return e.fundcode === f.code; });
-            f.realtimeChange = est ? est.gszzl : null;
-            if (sortType === 'RZDF' && est) {
-                f.netValue = est.gsz;
-            }
-            f.hasRealtime = !!est;
+            f.realtimeChange = null;
+            f.hasRealtime = false;
             return f;
         });
 
-        // 日涨幅榜用实时估值重新排序；其他保持API排序
-        if (sortType === 'RZDF') {
-            var withRealtime = ranking.filter(function (f) { return f.hasRealtime; });
-            if (withRealtime.length >= rankingPageSize) {
-                ranking = withRealtime;
-            }
-            ranking.sort(function (a, b) {
-                var aChange = a.realtimeChange !== null ? a.realtimeChange : a.change;
-                var bChange = b.realtimeChange !== null ? b.realtimeChange : b.change;
-                if (order === 'desc') return bChange - aChange;
-                return aChange - bChange;
-            });
-        }
-
-        var changeColTitle = sortType === 'RZDF' ? '今日实时涨跌幅' : (sortType === 'ZZF' ? '周涨幅' : (sortType === '1YZF' ? '近1月涨幅' : (sortType === '1NZF' ? '近1年涨幅' : '日涨跌幅')));
+        var changeColTitle = sortType === 'RZDF' ? '日涨跌幅' : (sortType === 'ZZF' ? '周涨幅' : (sortType === '1YZF' ? '近1月涨幅' : (sortType === '1NZF' ? '近1年涨幅' : '日涨跌幅')));
 
         // 计算分页信息
         var totalPages = Math.ceil(totalCount / rankingPageSize);
@@ -966,23 +936,21 @@
         // 渲染表格
         container.innerHTML = `
             <div class="ranking-info-bar">
-                <span>全市场共 <strong>${totalCount}</strong> 只基金，第 ${page}/${totalPages} 页${sortType === 'RZDF' ? '（实时估值排序）' : '（' + changeColTitle + '排序）'}</span>
+                <span>全市场共 <strong>${totalCount}</strong> 只基金，第 ${page}/${totalPages} 页（${changeColTitle}排序）</span>
             </div>
             <div class="ranking-table-fixed">
                 <table class="fund-table">
                     <thead>
                         <tr>
                             <th>基金名称</th>
-                            <th class="text-right">${sortType === 'RZDF' ? '今日实时估值' : '最新净值'}</th>
+                            <th class="text-right">最新净值</th>
                             <th class="text-right">${changeColTitle}</th>
                             <th class="text-right">操作</th>
                         </tr>
                     </thead>
                     <tbody id="rankingTbody">
                         ${ranking.map(function (f, i) {
-                            var change = sortType === 'RZDF'
-                                ? (f.realtimeChange !== null ? f.realtimeChange : f.change)
-                                : f.change;
+                            var change = f.change;
                             var changeClass = FundAPI.getChangeClass(change);
                             var isFav = Store.isFavorite(f.code);
                             return `
