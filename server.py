@@ -1184,6 +1184,74 @@ def api_fund_detail_page():
         return jsonify(None)
 
 
+@app.route('/api/fund-holdings')
+def api_fund_holdings():
+    """基金股票持仓（重仓股）- 采集东方财富fundf10重仓股数据"""
+    code = request.args.get('code', '').strip()
+    if not code:
+        return jsonify({'list': [], 'reportDate': '', 'stockRatio': 0})
+
+    url = f'https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code={code}&topline=10&year=&month='
+    try:
+        resp = SESSION.get(url, timeout=10)
+        resp.encoding = 'utf-8'
+        text = resp.text
+
+        # 解析var apidata={ content:"...",arryear:[...],...};
+        content_match = re.search(r'content:"(.*?)"', text, re.DOTALL)
+        if not content_match:
+            return jsonify({'list': [], 'reportDate': '', 'stockRatio': 0})
+
+        html_content = content_match.group(1)
+        # 反转义
+        html_content = html_content.replace('\\/', '/').replace('\\\'', '\'').replace('\\"', '"')
+
+        # 提取报告日期
+        report_date = ''
+        date_match = re.search(r'截至(\d{4}-\d{2}-\d{2})', html_content)
+        if date_match:
+            report_date = date_match.group(1)
+
+        # 提取股票占净比
+        stock_ratio = 0
+        ratio_match = re.search(r'股票占净比[：:]*([\d.]+)%', html_content)
+        if ratio_match:
+            stock_ratio = safe_float(ratio_match.group(1))
+
+        # 解析重仓股表格行
+        stocks = []
+        rows = re.findall(r'<tr[^>]*>(.*?)</tr>', html_content, re.DOTALL)
+        for row in rows:
+            cells = re.findall(r'<td[^>]*>(.*?)</td>', row, re.DOTALL)
+            if len(cells) < 7:
+                continue
+            # 清理HTML标签
+            clean_cells = [re.sub(r'<[^>]+>', '', c).strip() for c in cells]
+
+            # 序号|股票代码|股票名称|占净值(%)|持股数|持仓市值|季度涨跌幅
+            stock_code = clean_cells[1] if len(clean_cells) > 1 else ''
+            if not stock_code or stock_code == '--':
+                continue
+
+            stocks.append({
+                'code': stock_code,
+                'name': clean_cells[2] if len(clean_cells) > 2 else '',
+                'ratio': safe_float(clean_cells[3]) if len(clean_cells) > 3 else 0,
+                'shares': clean_cells[4] if len(clean_cells) > 4 else '--',
+                'value': clean_cells[5] if len(clean_cells) > 5 else '--',
+                'quarterChange': clean_cells[6] if len(clean_cells) > 6 else '--'
+            })
+
+        return jsonify({
+            'list': stocks,
+            'reportDate': report_date,
+            'stockRatio': stock_ratio
+        })
+    except Exception as e:
+        print(f'[重仓股异常] {code}: {e}')
+        return jsonify({'list': [], 'reportDate': '', 'stockRatio': 0})
+
+
 def parse_fund_type(type_code):
     """解析基金类型"""
     if not type_code:

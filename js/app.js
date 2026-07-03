@@ -3100,6 +3100,17 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- 重仓股持仓 -->
+                <div class="detail-section">
+                    <div class="detail-section-title"><span>🏭</span> 股票持仓（重仓股）</div>
+                    <div class="holdings-wrap" id="holdingsWrap">
+                        <div style="padding: 40px; text-align: center;">
+                            <div class="loader" style="margin: 0 auto 12px;"></div>
+                            <span style="color: var(--text-secondary);">加载重仓股数据...</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
 
@@ -3149,6 +3160,9 @@
 
         // 加载历史净值表
         loadHistoryTable(fundCode);
+
+        // 加载重仓股
+        loadFundHoldings(fundCode);
 
         // 启动实时更新
         startRealtimeUpdate(fundCode);
@@ -3317,6 +3331,74 @@
                             </tr>
                         `;
                     }).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    // 加载基金重仓股
+    async function loadFundHoldings(fundCode) {
+        var wrap = document.getElementById('holdingsWrap');
+        if (!wrap) return;
+
+        var result = await FundAPI.getFundHoldings(fundCode);
+
+        if (!result || !result.list || result.list.length === 0) {
+            wrap.innerHTML = `
+                <div class="empty-state" style="padding: 40px;">
+                    <p>暂无重仓股数据</p>
+                </div>
+            `;
+            return;
+        }
+
+        var reportDate = result.reportDate || '';
+        var stockRatio = result.stockRatio || 0;
+
+        var stockListHtml = result.list.map(function (stock, idx) {
+            var ratioBar = stock.ratio > 0
+                ? '<div class="ratio-bar"><div class="ratio-fill" style="width:' + Math.min(stock.ratio * 3, 100) + '%"></div></div>'
+                : '';
+            var changeClass = '';
+            var changeText = stock.quarterChange || '--';
+            if (changeText.indexOf('-') === 0) changeClass = 'down';
+            else if (changeText !== '--' && changeText.indexOf('+') === 0) changeClass = 'up';
+
+            return `
+                <tr>
+                    <td class="holdings-rank">${idx + 1}</td>
+                    <td>
+                        <div class="holdings-stock">
+                            <span class="stock-name">${stock.name || '--'}</span>
+                            <span class="stock-code">${stock.code}</span>
+                        </div>
+                    </td>
+                    <td class="num-cell">
+                        <div class="ratio-cell">
+                            <span class="ratio-text">${stock.ratio.toFixed(2)}%</span>
+                            ${ratioBar}
+                        </div>
+                    </td>
+                    <td class="num-cell">${stock.value || '--'}</td>
+                    <td class="num-cell ${changeClass}">${changeText}</td>
+                </tr>
+            `;
+        }).join('');
+
+        wrap.innerHTML = `
+            ${reportDate ? '<div class="holdings-meta">截至 <strong>' + reportDate + '</strong>' + (stockRatio > 0 ? ' · 股票占净比 <strong>' + stockRatio.toFixed(2) + '%</strong>' : '') + '</div>' : ''}
+            <table class="fund-table holdings-table">
+                <thead>
+                    <tr>
+                        <th style="width:36px;">#</th>
+                        <th>股票名称</th>
+                        <th class="text-right">占净值</th>
+                        <th class="text-right">持仓市值</th>
+                        <th class="text-right">季度涨跌</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${stockListHtml}
                 </tbody>
             </table>
         `;

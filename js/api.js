@@ -461,6 +461,17 @@ const FundAPI = (function () {
         }
     }
 
+    // ========== 基金重仓股 ==========
+    async function getFundHoldings(fundCode) {
+        try {
+            var resp = await fetch('/api/fund-holdings?code=' + encodeURIComponent(fundCode));
+            return await resp.json();
+        } catch (e) {
+            console.error('getFundHoldings error:', e);
+            return { list: [], reportDate: '', stockRatio: 0 };
+        }
+    }
+
     return {
         searchFunds: searchFunds,
         getRealtimeEstimate: getRealtimeEstimate,
@@ -477,6 +488,7 @@ const FundAPI = (function () {
         getMarketIndices: getMarketIndices,
         getSectors: getSectors,
         getFundManagers: getFundManagers,
+        getFundHoldings: getFundHoldings,
         parseFundType: parseFundType,
         getTypeColor: getTypeColor,
         formatNum: formatNum,

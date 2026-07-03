@@ -335,6 +335,7 @@ def init_db():
             ('新发基金监控', 'new_fund_monitor', 'monitor', '自动巡检新发基金并入库', '0 9 * * *', '{"enabled": false}', 0),
             ('盘中净值采集', 'intraday_nav', 'intraday', '交易日高频采集实时估值数据', '*/15 9-15 * * 1-5', '{"enabled": false, "interval": 120}', 0),
             ('盘后净值更新', 'postclose_nav', 'postclose', '每日收盘后同步官方净值', '0 16 * * 1-5', '{"enabled": false}', 0),
+            ('基金重仓股采集', 'fund_holdings_crawl', 'batch', '采集基金前十大重仓股及股票持仓比例', '0 3 * * 1-5', '{"enabled": false}', 0),
         ]
         for name, code, typ, desc, cron, config, status in default_tasks:
             c.execute('''INSERT INTO collection_tasks (name, code, type, description, cron, config, status, create_time)

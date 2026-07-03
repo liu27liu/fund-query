@@ -2508,6 +2508,83 @@ select.form-input {
     border-radius: var(--radius-sm);
 }
 
+/* ========== 重仓股列表 ========== */
+.holdings-wrap {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.holdings-meta {
+    padding: 10px 16px;
+    background: var(--primary-light);
+    font-size: 13px;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+}
+
+.holdings-meta strong {
+    color: var(--primary);
+    font-weight: 700;
+}
+
+.holdings-table {
+    min-width: auto !important;
+}
+
+.holdings-table .holdings-rank {
+    text-align: center;
+    color: var(--text-tertiary);
+    font-weight: 600;
+    width: 36px;
+}
+
+.holdings-stock {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.holdings-stock .stock-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text);
+}
+
+.holdings-stock .stock-code {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    font-family: var(--font-num);
+}
+
+.ratio-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-end;
+}
+
+.ratio-text {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--primary);
+}
+
+.ratio-bar {
+    width: 80px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.ratio-fill {
+    height: 100%;
+    background: var(--primary-gradient);
+    border-radius: 2px;
+    transition: width 0.3s var(--ease);
+}
+
 /* 添加自选按钮 */
 .add-fav-btn {
     padding: 9px 22px;

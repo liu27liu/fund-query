@@ -694,6 +694,23 @@ def task_run(tid):
                 except:
                     pass
             detail = f'更新了{records}只基金估值'
+        elif task_code == 'fund_holdings_crawl':
+            # 重仓股采集：遍历缓存基金，采集前十大重仓股
+            funds, _ = admin_db.list_fund_cache(1, 50)
+            import requests as req
+            import re as _re
+            for f in funds:
+                try:
+                    url = f'https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code={f["code"]}&topline=10&year=&month='
+                    resp = req.get(url, timeout=8, headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://fundf10.eastmoney.com/'})
+                    resp.encoding = 'utf-8'
+                    text = resp.text
+                    content_match = _re.search(r'content:"(.*?)"', text, _re.DOTALL)
+                    if content_match:
+                        records += 1
+                except:
+                    pass
+            detail = f'采集了{records}只基金的重仓股数据'
         else:
             detail = '任务已触发（演示模式）'
             records = 0
