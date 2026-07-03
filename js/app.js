@@ -61,11 +61,6 @@
             bar.style.display = 'none';
             return;
         }
-        // 检查是否已关闭（本次会话内）
-        if (sessionStorage.getItem('ann_closed') === '1') {
-            bar.style.display = 'none';
-            return;
-        }
         bar.style.display = 'block';
         var typeLabels = { info: '公告', tip: '提示', warning: '注意', danger: '重要' };
         var html = '';
@@ -3451,16 +3446,6 @@
 
     // ========== 事件绑定 ==========
     function bindEvents() {
-        // 公告栏关闭按钮
-        var annClose = document.getElementById('announcementClose');
-        if (annClose) {
-            annClose.addEventListener('click', function () {
-                document.getElementById('announcementBar').style.display = 'none';
-                sessionStorage.setItem('ann_closed', '1');
-                if (annTimer) clearInterval(annTimer);
-            });
-        }
-
         // 搜索输入
         searchInput.addEventListener('input', handleSearchInput);
         searchInput.addEventListener('focus', function () {
