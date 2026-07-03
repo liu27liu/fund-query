@@ -15,7 +15,19 @@
       "全部",
       "消费"
     ],
-    "holdings": [],
+    "holdings": [
+      {
+        "code": "010524",
+        "name": "银华中证5G通信主题ETF联接C",
+        "type": "指数型",
+        "amount": 4274.33,
+        "buyPrice": 2.6679,
+        "shares": 1602.1327635968364,
+        "buyDate": "2026-07-02",
+        "group": "",
+        "addTime": 1783075915966
+      }
+    ],
     "createTime": 1783055840.0759306,
     "recreated": false
   },
