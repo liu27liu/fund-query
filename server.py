@@ -766,6 +766,24 @@ def api_sectors():
             if attempt < 4:
                 time.sleep(2)
 
+    # 调试模式：返回API原始板块名称列表
+    if request.args.get('debug') == 'names':
+        all_names = []
+        for fs_type, label in [('m:90+t:2', 'industry'), ('m:90+t:3', 'concept')]:
+            ts = str(int(time.time() * 1000))
+            full_url = ('https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=500&po=1&np=1'
+                        '&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fid=f3&fs=' + fs_type +
+                        '&fields=f12,f14&_=' + ts)
+            try:
+                resp = SESSION.get(full_url, headers=sector_headers, timeout=15)
+                data = resp.json()
+                if data.get('data') and data['data'].get('diff'):
+                    for item in data['data']['diff']:
+                        all_names.append({'name': item.get('f14',''), 'type': label})
+            except:
+                pass
+        return jsonify(all_names)
+
     if board_type in ('all', 'industry'):
         fetch_boards('m:90+t:2', 'industry')
     if board_type in ('all', 'concept'):
