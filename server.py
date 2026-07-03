@@ -1180,23 +1180,6 @@ def api_sector_categories():
     return jsonify(SECTOR_TOP_CATEGORIES)
 
 
-@app.route('/api/debug-cache')
-def api_debug_cache():
-    """调试: 检查缓存状态"""
-    now = time.time()
-    sector_keys = {k: {'age': round(now - v['time'], 1), 'items': len(v['data']) if isinstance(v.get('data'), list) else 'n/a'} for k, v in _sector_cache.items()}
-    hot_keys = {k: {'age': round(now - v['time'], 1)} for k, v in _hot_cache.items()}
-    return jsonify({
-        'prewarm_started': _prewarm_started,
-        'sector_cache': sector_keys,
-        'hot_cache': hot_keys,
-        'fund_count_cache': {
-            'age': round(now - _sector_fund_count_cache['time'], 1) if _sector_fund_count_cache['time'] > 0 else 'empty',
-            'count': len(_sector_fund_count_cache.get('data', {}))
-        }
-    })
-
-
 @app.route('/api/sector-funds')
 def api_sector_funds():
     """获取板块对应的基金列表 - 天天基金网主题基金API
