@@ -1044,6 +1044,14 @@ def api_sectors():
     def fetch_boards(fs_type, label):
         results = []
         base_url = 'https://push2.eastmoney.com/api/qt/clist/get'
+        # 每个线程用独立的session，避免线程安全问题
+        local_session = requests.Session()
+        local_session.headers.update(HEADERS)
+        sector_headers = {
+            'User-Agent': HEADERS['User-Agent'],
+            'Referer': 'https://quote.eastmoney.com/center/boardlist.html',
+            'Accept': '*/*',
+        }
         for attempt in range(3):
             ts = str(int(time.time() * 1000))
             full_url = (base_url + '?pn=1&pz=500&po=1&np=1'
@@ -1053,7 +1061,7 @@ def api_sectors():
                         '&fields=f12,f14,f2,f3,f4,f104,f105'
                         '&_=' + ts)
             try:
-                resp = SESSION.get(full_url, headers=sector_headers, timeout=10)
+                resp = local_session.get(full_url, headers=sector_headers, timeout=10)
                 data = resp.json()
                 if data.get('data') and data['data'].get('diff'):
                     for item in data['data']['diff']:
