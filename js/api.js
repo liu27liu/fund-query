@@ -214,13 +214,14 @@ const FundAPI = (function () {
      * @param {number} pageSize - 数量
      * @param {string} order - desc=降序(涨幅榜), asc=升序(跌幅榜)
      */
-    async function getFundRanking(sortType, pageSize, order, fundType) {
+    async function getFundRanking(sortType, pageSize, order, fundType, page) {
         sortType = sortType || 'RZDF';
         pageSize = pageSize || 10;
         order = order || 'desc';
         fundType = fundType || 'all';
+        page = page || 1;
         try {
-            const data = await fetchJSON('/api/ranking?sort=' + sortType + '&size=' + pageSize + '&order=' + order + '&type=' + fundType);
+            const data = await fetchJSON('/api/ranking?sort=' + sortType + '&size=' + pageSize + '&order=' + order + '&type=' + fundType + '&page=' + page);
             // 兼容新旧格式：新格式{funds:[], total:N}，旧格式[]
             if (data && data.funds) return data.funds;
             if (Array.isArray(data)) return data;
@@ -231,13 +232,14 @@ const FundAPI = (function () {
         }
     }
 
-    async function getFundRankingWithTotal(sortType, pageSize, order, fundType) {
+    async function getFundRankingWithTotal(sortType, pageSize, order, fundType, page) {
         sortType = sortType || 'RZDF';
         pageSize = pageSize || 10;
         order = order || 'desc';
         fundType = fundType || 'all';
+        page = page || 1;
         try {
-            const data = await fetchJSON('/api/ranking?sort=' + sortType + '&size=' + pageSize + '&order=' + order + '&type=' + fundType);
+            const data = await fetchJSON('/api/ranking?sort=' + sortType + '&size=' + pageSize + '&order=' + order + '&type=' + fundType + '&page=' + page);
             if (data && data.funds) return { funds: data.funds, total: data.total || 0 };
             if (Array.isArray(data)) return { funds: data, total: data.length };
             return { funds: [], total: 0 };

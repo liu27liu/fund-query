@@ -995,6 +995,49 @@ ul, ol { list-style: none; }
     background: var(--bg-secondary);
 }
 
+/* ========== 排行榜分页 ========== */
+.ranking-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px 0;
+    flex-wrap: wrap;
+}
+
+.ranking-pagination .page-btn {
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s var(--ease);
+}
+
+.ranking-pagination .page-btn:hover:not(:disabled) {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: var(--primary-light);
+}
+
+.ranking-pagination .page-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.ranking-pagination .page-info {
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding: 0 8px;
+}
+
+.ranking-pagination .page-info strong {
+    color: var(--primary);
+    font-weight: 700;
+}
+
 .fund-table {
     width: 100%;
     border-collapse: collapse;
