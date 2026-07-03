@@ -793,6 +793,10 @@
             var sign = isUp ? '+' : '';
             var yearStr = f.year != null ? (f.year >= 0 ? '+' : '') + f.year.toFixed(2) + '%' : '--';
             var yearClass = f.year != null ? (f.year >= 0 ? 'fund-up' : 'fund-down') : '';
+            var isFav = Store.isFavorite(f.code);
+            var favAction = isFav ? 'remove' : 'add';
+            var favText = isFav ? '✓' : '+';
+            var favClass = isFav ? 'sf-fav-active' : 'sf-fav-add';
             html += '<div class="sector-fund-item" data-code="' + f.code + '">';
             html += '<div class="sector-fund-main">';
             html += '<span class="sector-fund-name">' + f.name + '</span>';
@@ -803,6 +807,7 @@
             html += '<span class="sector-fund-change ' + colorClass + '">' + sign + f.changePercent.toFixed(2) + '%</span>';
             html += '<span class="sector-fund-year ' + yearClass + '">近1年 ' + yearStr + '</span>';
             html += '</div>';
+            html += '<button class="sf-fav-btn ' + favClass + '" data-action="' + favAction + '" data-code="' + f.code + '" data-name="' + f.name + '" data-type="' + (f.type || '') + '" title="' + (isFav ? '移除自选' : '添加自选') + '">' + favText + '</button>';
             html += '</div>';
         });
         html += '</div>';
@@ -825,9 +830,42 @@
 
         // 点击基金跳转详情
         body.querySelectorAll('.sector-fund-item').forEach(function (item) {
-            item.addEventListener('click', function () {
+            item.addEventListener('click', function (e) {
+                if (e.target.classList.contains('sf-fav-btn')) return;
                 var code = this.dataset.code;
                 if (code) navigate('/fund/' + code);
+            });
+        });
+
+        // 自选按钮
+        body.querySelectorAll('.sf-fav-btn').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var code = this.dataset.code;
+                var name = this.dataset.name;
+                var type = this.dataset.type;
+                var action = this.dataset.action;
+                if (action === 'add') {
+                    var result = Store.addFavorite({ code: code, name: name, type: type });
+                    showToast(result.message, result.success ? 'success' : 'warning');
+                    if (result.success) {
+                        syncToServer('favorites');
+                        this.dataset.action = 'remove';
+                        this.textContent = '✓';
+                        this.classList.remove('sf-fav-add');
+                        this.classList.add('sf-fav-active');
+                        this.title = '移除自选';
+                    }
+                } else {
+                    Store.removeFavorite(code);
+                    showToast('已移除自选', 'success');
+                    syncToServer('favorites');
+                    this.dataset.action = 'add';
+                    this.textContent = '+';
+                    this.classList.remove('sf-fav-active');
+                    this.classList.add('sf-fav-add');
+                    this.title = '添加自选';
+                }
             });
         });
     }

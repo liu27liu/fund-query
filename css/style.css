@@ -1602,9 +1602,46 @@ ul, ol { list-style: none; }
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: background 0.15s var(--ease);
+    gap: 8px;
 }
 .sector-fund-item:hover {
     background: var(--bg-secondary);
+}
+.sf-fav-btn {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: none;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s var(--ease);
+    line-height: 1;
+}
+.sf-fav-add {
+    background: var(--bg-secondary);
+    color: var(--text-tertiary, #999);
+    border: 1px solid var(--border);
+}
+.sf-fav-add:hover {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+    transform: scale(1.1);
+}
+.sf-fav-active {
+    background: var(--primary);
+    color: #fff;
+    border: 1px solid var(--primary);
+}
+.sf-fav-active:hover {
+    background: var(--down, #e74c3c);
+    border-color: var(--down, #e74c3c);
+    transform: scale(1.1);
 }
 .sector-fund-main {
     display: flex;
