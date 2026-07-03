@@ -927,7 +927,8 @@
 
                 if (myRequestId !== rankingRequestId) return;
 
-                // 检查当日实际净值是否已公布（检查第1只基金的历史净值表首行日期）
+                // 检查当日实际净值是否已公布（检查前3只基金的历史净值表首行日期）
+                // 只要有一只基金的当日实际净值已公布，就认为市场已进入盘后阶段
                 var actualNavPublished = false;
                 if (dailyCandidates.length > 0) {
                     var todayStr = '';
@@ -938,12 +939,16 @@
                         var now = new Date();
                         todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
                     }
-                    try {
-                        var firstHist = await FundAPI.getHistoryNav(dailyCandidates[0].code, 1, 1);
-                        if (firstHist && firstHist.list && firstHist.list.length > 0 && firstHist.list[0].date === todayStr) {
-                            actualNavPublished = true;
-                        }
-                    } catch (e) { /* 忽略检查失败 */ }
+                    // 检查前3只基金（避免第1只是QDII等延迟公布净值的基金）
+                    var checkCount = Math.min(3, dailyCandidates.length);
+                    for (var ci = 0; ci < checkCount && !actualNavPublished; ci++) {
+                        try {
+                            var histResult = await FundAPI.getHistoryNav(dailyCandidates[ci].code, 1, 1);
+                            if (histResult && histResult.list && histResult.list.length > 0 && histResult.list[0].date === todayStr) {
+                                actualNavPublished = true;
+                            }
+                        } catch (e) { /* 忽略检查失败 */ }
+                    }
                 }
 
                 // 合并数据：逐基金判断当日实际净值是否已公布
