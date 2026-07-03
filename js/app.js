@@ -927,10 +927,35 @@
 
                 if (myRequestId !== rankingRequestId) return;
 
-                // 合并实时估值，用gszzl(今日实时涨跌幅)作为排序和显示值
+                // 检查当日实际净值是否已公布（检查第1只基金的历史净值表首行日期）
+                var actualNavPublished = false;
+                if (dailyCandidates.length > 0) {
+                    var todayStr = '';
+                    if (dailyEstimates.length > 0 && dailyEstimates[0].gztime) {
+                        todayStr = dailyEstimates[0].gztime.substring(0, 10);
+                    }
+                    if (!todayStr) {
+                        var now = new Date();
+                        todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+                    }
+                    try {
+                        var firstHist = await FundAPI.getHistoryNav(dailyCandidates[0].code, 1, 1);
+                        if (firstHist && firstHist.list && firstHist.list.length > 0 && firstHist.list[0].date === todayStr) {
+                            actualNavPublished = true;
+                        }
+                    } catch (e) { /* 忽略检查失败 */ }
+                }
+
+                // 合并数据：实际净值已公布时用榜单API的change和netValue，否则用实时估值
                 var dailyRanking = dailyCandidates.map(function (f) {
                     var est = dailyEstimates.find(function (e) { return e.fundcode === f.code; });
-                    if (est) {
+                    if (actualNavPublished) {
+                        // 当日实际净值已公布，用榜单API返回的实际涨跌幅和净值
+                        f.realtimeChange = f.change;
+                        f.netValue = f.netValue;
+                        f.hasRealtime = false;
+                    } else if (est) {
+                        // 盘中，用实时估值
                         f.realtimeChange = est.gszzl;
                         f.netValue = est.gsz;
                         f.hasRealtime = true;
@@ -941,7 +966,7 @@
                     return f;
                 });
 
-                // 按今日实时涨跌幅重新排序
+                // 按涨跌幅重新排序
                 dailyRanking.sort(function (a, b) {
                     var aVal = a.realtimeChange !== null ? a.realtimeChange : a.change;
                     var bVal = b.realtimeChange !== null ? b.realtimeChange : b.change;
@@ -953,7 +978,8 @@
                     sortType: sortType, order: order, fundType: fundType,
                     ranking: dailyRanking,
                     totalCount: dailyTotal,
-                    totalPages: Math.ceil(dailyRanking.length / rankingPageSize)
+                    totalPages: Math.ceil(dailyRanking.length / rankingPageSize),
+                    actualNavPublished: actualNavPublished
                 };
             }
 
@@ -968,7 +994,7 @@
                 return;
             }
 
-            var changeColTitle = '今日实时涨跌幅';
+            var changeColTitle = cached.actualNavPublished ? '今日涨跌幅' : '今日实时涨跌幅';
             var totalPages = cached.totalPages;
             var totalCount = cached.totalCount;
             var startRank = startIdx;
@@ -982,7 +1008,7 @@
                         <thead>
                             <tr>
                                 <th>基金名称</th>
-                                <th class="text-right">今日实时估值</th>
+                                <th class="text-right">${cached.actualNavPublished ? '最新净值' : '今日实时估值'}</th>
                                 <th class="text-right">${changeColTitle}</th>
                                 <th class="text-right">操作</th>
                             </tr>
