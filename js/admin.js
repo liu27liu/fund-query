@@ -891,7 +891,7 @@ var CONFIG_CATEGORIES = [
     { title: '网站基础设置', keys: ['site_name', 'site_logo', 'text_page_title'] },
     { title: '页眉 & 导航', keys: ['text_header_logo', 'text_nav_home', 'text_nav_portfolio', 'text_nav_favorites', 'text_nav_search', 'text_search_placeholder', 'text_login_btn'] },
     { title: '页脚', keys: ['text_footer_main', 'text_footer_time_prefix'] },
-    { title: '首页 Hero 区域', keys: ['text_hero_title', 'text_hero_subtitle', 'text_hero_stat1_num', 'text_hero_stat1_label', 'text_hero_stat2_num', 'text_hero_stat2_label', 'text_hero_stat3_num', 'text_hero_stat3_label', 'text_hero_stat4_num', 'text_hero_stat4_label'] },
+    { title: '首页 Hero 区域', keys: ['text_hero_title', 'text_hero_subtitle', 'text_hero_stat1_num', 'text_hero_stat1_label', 'text_hero_stat2_num', 'text_hero_stat2_label', 'text_hero_stat3_num', 'text_hero_stat3_label'] },
     { title: '门户卡片', keys: ['text_portal_market_title', 'text_portal_market_desc', 'text_portal_sector_title', 'text_portal_sector_desc', 'text_portal_ranking_title', 'text_portal_ranking_desc', 'text_portal_news_title', 'text_portal_news_desc'] },
     { title: '版块标题', keys: ['text_section_market', 'text_section_sector', 'text_section_ranking', 'text_section_news'] },
     { title: '加载提示', keys: ['text_loading_data', 'text_loading_ranking', 'text_loading_news', 'text_load_more_news'] },

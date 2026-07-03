@@ -278,7 +278,7 @@
         app.innerHTML = `
             <div class="home-hero">
                 <h1>${T('text_hero_title', '基金净值通 · 实时估值查询平台')}</h1>
-                <p>${T('text_hero_subtitle', '覆盖全市场公募基金 · 盘中实时估值 · 历史净值走势 · 自选基金管理')}</p>
+                <p>${T('text_hero_subtitle', '覆盖全市场基金 · 盘中实时估值 · 历史净值走势 · 自选基金管理')}</p>
                 <div class="hero-stats">
                     <div class="hero-stat">
                         <div class="num">${T('text_hero_stat1_num', '10000+')}</div>
@@ -291,10 +291,6 @@
                     <div class="hero-stat">
                         <div class="num">${T('text_hero_stat3_num', '24h')}</div>
                         <div class="label">${T('text_hero_stat3_label', '数据采集')}</div>
-                    </div>
-                    <div class="hero-stat">
-                        <div class="num">${T('text_hero_stat4_num', '0')}</div>
-                        <div class="label">${T('text_hero_stat4_label', '使用成本')}</div>
                     </div>
                 </div>
             </div>

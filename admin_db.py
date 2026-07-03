@@ -239,7 +239,7 @@ def init_db():
             ('site_name', '基金净值通', '网站名称'),
             ('site_logo', '/assets/logo.jpg', '网站LOGO路径'),
             ('site_seo_keywords', '基金净值,实时估值,基金排名,持仓盈亏', 'SEO关键词'),
-            ('site_seo_description', '轻量级基金净值查询平台，覆盖全市场公募基金', 'SEO描述'),
+            ('site_seo_description', '轻量级基金净值查询平台，覆盖全市场基金', 'SEO描述'),
             ('trading_start_time', '09:30', '交易开始时间'),
             ('trading_end_time', '15:00', '交易结束时间'),
             ('nav_deviation_threshold', '5', '估值偏差告警阈值(%)'),
@@ -266,15 +266,13 @@ def init_db():
         ('text_footer_time_prefix', '当前时间: ', '页脚时间前缀'),
         # --- 首页 Hero ---
         ('text_hero_title', '基金净值通 · 实时估值查询平台', '首页大标题'),
-        ('text_hero_subtitle', '覆盖全市场公募基金 · 盘中实时估值 · 历史净值走势 · 自选基金管理', '首页副标题'),
+        ('text_hero_subtitle', '覆盖全市场基金 · 盘中实时估值 · 历史净值走势 · 自选基金管理', '首页副标题'),
         ('text_hero_stat1_num', '10000+', '首页统计1-数值'),
         ('text_hero_stat1_label', '覆盖基金', '首页统计1-标签'),
         ('text_hero_stat2_num', '3s', '首页统计2-数值'),
         ('text_hero_stat2_label', '估值更新', '首页统计2-标签'),
         ('text_hero_stat3_num', '24h', '首页统计3-数值'),
         ('text_hero_stat3_label', '数据采集', '首页统计3-标签'),
-        ('text_hero_stat4_num', '0', '首页统计4-数值'),
-        ('text_hero_stat4_label', '使用成本', '首页统计4-标签'),
         # --- 门户卡片 ---
         ('text_portal_market_title', '大盘指数', '门户卡片-大盘指数标题'),
         ('text_portal_market_desc', 'A股 · 美股 · 全球实时行情', '门户卡片-大盘指数描述'),
@@ -337,7 +335,7 @@ def init_db():
     ann_count = c.execute('SELECT COUNT(*) FROM announcements').fetchone()[0]
     if ann_count == 0:
         default_anns = [
-            ('欢迎使用基金净值通', '本平台提供全市场公募基金实时估值查询、持仓盈亏计算、自选基金管理等功能，数据仅供参考，不构成投资建议。', 'info', '', 0, 1, None, None),
+            ('欢迎使用基金净值通', '本平台提供全市场基金实时估值查询、持仓盈亏计算、自选基金管理等功能，数据仅供参考，不构成投资建议。', 'info', '', 0, 1, None, None),
             ('盘中实时估值', '交易日内盘中实时估值数据每3秒更新一次，盘后数据以基金公司公布的官方净值为准。', 'tip', '', 1, 1, None, None),
         ]
         for title, content, typ, link, sort, status, start, end in default_anns:
