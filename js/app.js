@@ -351,25 +351,18 @@
                 </div>
             </div>
 
-            <!-- 行业板块 -->
+            <!-- 养基宝标准板块 (6大一级分类) -->
             <div class="portal-section" id="sectorSection" data-loaded="false">
                 <div class="section-title collapsible-header" data-target="sectorDashboard">
                     <span class="pulse-dot"></span>
-                    ${T('text_section_sector', '赛道行业板块实时行情')}
+                    ${T('text_section_sector', '赛道板块实时行情')}
                     <div class="sector-filter-bar">
-                        <span class="sector-tab active" data-board="all">全部</span>
-                        <span class="sector-tab" data-category="科技">科技</span>
-                        <span class="sector-tab" data-category="消费">消费</span>
-                        <span class="sector-tab" data-category="医药健康">医药</span>
-                        <span class="sector-tab" data-category="新能源">新能源</span>
-                        <span class="sector-tab" data-category="金融">金融</span>
-                        <span class="sector-tab" data-category="军工">军工</span>
-                        <span class="sector-tab" data-category="高端制造">制造</span>
-                        <span class="sector-tab" data-category="周期">周期</span>
-                        <span class="sector-tab" data-category="基建交通">基建</span>
-                        <span class="sector-tab" data-category="农业食品">农业</span>
-                        <span class="sector-tab" data-category="文体娱乐">文体</span>
-                        <span class="sector-tab" data-category="综合">综合</span>
+                        <span class="sector-tab active" data-category="行业板块">行业板块</span>
+                        <span class="sector-tab" data-category="概念题材">概念题材</span>
+                        <span class="sector-tab" data-category="宽基指数">宽基指数</span>
+                        <span class="sector-tab" data-category="债券板块">债券板块</span>
+                        <span class="sector-tab" data-category="海外QDII">海外QDII</span>
+                        <span class="sector-tab" data-category="货币理财">货币理财</span>
                     </div>
                     <span class="collapse-icon">▾</span>
                 </div>
@@ -464,7 +457,7 @@
                 if (target.dataset.loaded === 'false') {
                     target.dataset.loaded = 'true';
                     if (targetId === 'marketSection') loadMarketIndices();
-                    else if (targetId === 'sectorSection') loadSectors('all');
+                    else if (targetId === 'sectorSection') loadSectors('行业板块');
                     else if (targetId === 'rankingSection') loadRanking(currentRankingType, currentRankingOrder, currentFundType);
                     else if (targetId === 'newsSection') loadNews(1);
                 }
@@ -488,15 +481,14 @@
             });
         });
 
-        // 板块Tab切换
+        // 板块Tab切换 (养基宝6大一级分类)
         document.querySelectorAll('.sector-tab').forEach(function (tab) {
             tab.addEventListener('click', function (e) {
                 e.stopPropagation();
                 document.querySelectorAll('.sector-tab').forEach(function (t) { t.classList.remove('active'); });
                 this.classList.add('active');
-                var board = this.dataset.board || 'all';
-                var category = this.dataset.category || '';
-                loadSectors(board, category);
+                var category = this.dataset.category || '行业板块';
+                loadSectors(category);
             });
         });
 
@@ -694,14 +686,16 @@
     // ========== 赛道行业板块看板 ==========
     var allSectorsCache = []; // 缓存全部板块数据
 
-    async function loadSectors(boardType, category) {
+    async function loadSectors(category) {
         var container = document.getElementById('sectorDashboard');
         if (!container) return;
 
-        boardType = boardType || 'all';
-        category = category || '';
+        category = category || '行业板块';
 
-        var sectors = await FundAPI.getSectors(boardType, category);
+        // 显示加载骨架
+        container.innerHTML = '<div style="grid-column: 1/-1; padding: 20px; text-align: center; color: var(--text-secondary);">加载中...</div>';
+
+        var sectors = await FundAPI.getSectors(category);
         allSectorsCache = sectors;
 
         if (sectors.length === 0) {
@@ -714,46 +708,12 @@
             return (b.changePercent || 0) - (a.changePercent || 0);
         });
 
-        var html = '';
-        if (category) {
-            // 按分类筛选：直接展示该分类下的板块
-            html += '<div class="sector-normal-section">';
-            html += sorted.map(function (s) {
-                return renderSectorCard(s, false);
-            }).join('');
-            html += '</div>';
-        } else {
-            // 全部板块：按主题大类分组展示
-            var grouped = {};
-            sorted.forEach(function (s) {
-                var cat = s.category || '综合';
-                if (!grouped[cat]) grouped[cat] = [];
-                grouped[cat].push(s);
-            });
-
-            // 按预设顺序展示各分类
-            var categoryOrder = ['科技', '消费', '医药健康', '新能源', '金融', '军工', '高端制造', '周期', '基建交通', '农业食品', '文体娱乐', '综合'];
-            categoryOrder.forEach(function (cat) {
-                if (grouped[cat] && grouped[cat].length > 0) {
-                    var catChange = 0;
-                    grouped[cat].forEach(function (s) { catChange += (s.changePercent || 0); });
-                    var avgChange = (catChange / grouped[cat].length).toFixed(2);
-                    var catClass = avgChange >= 0 ? 'sector-up' : 'sector-down';
-                    html += '<div class="sector-group-section">';
-                    html += '<div class="sector-group-header ' + catClass + '">';
-                    html += '<span class="sector-group-title">' + cat + '</span>';
-                    html += '<span class="sector-group-count">' + grouped[cat].length + '个板块</span>';
-                    html += '<span class="sector-group-avg">' + (avgChange >= 0 ? '+' : '') + avgChange + '%</span>';
-                    html += '</div>';
-                    html += '<div class="sector-normal-section">';
-                    html += grouped[cat].map(function (s) {
-                        return renderSectorCard(s, false);
-                    }).join('');
-                    html += '</div>';
-                    html += '</div>';
-                }
-            });
-        }
+        // 直接展示当前分类下的板块（扁平列表，不再分组）
+        var html = '<div class="sector-normal-section">';
+        html += sorted.map(function (s) {
+            return renderSectorCard(s, false, category);
+        }).join('');
+        html += '</div>';
 
         container.innerHTML = html;
 
@@ -767,21 +727,26 @@
         });
     }
 
-    function renderSectorCard(s, isHot) {
-        var isUp = s.changePercent >= 0;
+    function renderSectorCard(s, isHot, category) {
+        var isUp = (s.changePercent || 0) >= 0;
         var colorClass = isUp ? 'sector-up' : 'sector-down';
         var sign = isUp ? '+' : '';
-        var typeBadge = s.category || (s.type === 'industry' ? '行业' : '概念');
         var hotClass = isHot ? ' sector-hot' : '';
+        // 基金类板块显示基金数量, 股票类板块显示涨跌家数
+        var upDownText = '';
+        if (s.fundCount !== undefined && s.fundCount > 0) {
+            upDownText = s.fundCount + '只基金';
+        } else if (s.upCount !== undefined && s.downCount !== undefined && (s.upCount > 0 || s.downCount > 0)) {
+            upDownText = s.upCount + '/' + s.downCount;
+        }
         return `
-            <div class="sector-card ${colorClass}${hotClass}" data-code="${s.code}" data-name="${s.name}">
+            <div class="sector-card ${colorClass}${hotClass}" data-code="${s.code || ''}" data-name="${s.name}">
                 <div class="sector-info">
                     <span class="sector-name">${s.name}</span>
-                    <span class="sector-type-badge">${typeBadge}</span>
                 </div>
                 <div class="sector-data">
-                    <span class="sector-pct">${sign}${s.changePercent.toFixed(2)}%</span>
-                    <span class="sector-updown">${s.upCount}/${s.downCount}</span>
+                    <span class="sector-pct">${sign}${(s.changePercent || 0).toFixed(2)}%</span>
+                    ${upDownText ? '<span class="sector-updown">' + upDownText + '</span>' : ''}
                 </div>
             </div>
         `;
@@ -2126,9 +2091,8 @@
         // 2. 刷新赛道板块
         var activeSectorTab = document.querySelector('.sector-tab.active');
         if (activeSectorTab) {
-            var sBoard = activeSectorTab.dataset.board || 'all';
-            var sCat = activeSectorTab.dataset.category || '';
-            await loadSectors(sBoard, sCat);
+            var sCat = activeSectorTab.dataset.category || '行业板块';
+            await loadSectors(sCat);
         }
         // 3. 刷新涨跌榜
         await loadRanking(currentRankingType, currentRankingOrder, currentFundType);

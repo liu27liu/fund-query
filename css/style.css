@@ -1554,10 +1554,11 @@ ul, ol { list-style: none; }
     font-size: 12px;
     font-weight: normal;
     overflow-x: auto;
-    max-width: 70%;
+    max-width: 75%;
     scrollbar-width: thin;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 2px;
+    flex-shrink: 1;
 }
 .sector-filter-bar::-webkit-scrollbar { height: 3px; }
 
@@ -1568,6 +1569,8 @@ ul, ol { list-style: none; }
     color: var(--text-secondary);
     transition: all 0.2s var(--ease);
     background: var(--bg-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .sector-tab:hover { color: var(--primary); }

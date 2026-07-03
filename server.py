@@ -17,6 +17,15 @@ import requests
 from flask import Flask, request, jsonify, send_from_directory, Response
 from allowed_sectors import ALLOWED_SECTORS
 from sector_categories import get_sector_category, SECTOR_CATEGORY_MAP
+from yangjibao_sectors import (
+    SECTOR_TOP_CATEGORIES, INDUSTRY_SECTORS, CONCEPT_SECTORS,
+    BROAD_INDEX_SECTORS, BOND_SECTORS, QDII_SECTORS, MONEY_SECTORS,
+    INDUSTRY_NAME_MAP, CONCEPT_NAME_MAP,
+    get_industry_standard_name, get_concept_standard_name,
+    get_all_whitelist_names, is_valid_sector_name,
+    get_index_secids, get_index_etf_codes,
+    get_index_name_by_secid, get_index_secid_by_name
+)
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 
@@ -1023,119 +1032,317 @@ def api_market_indices():
 
 @app.route('/api/sectors')
 def api_sectors():
-    """行业板块+概念板块实时行情 - 对接东方财富dataapi接口
-    优化: 使用data.eastmoney.com/dataapi替代被封锁的push2, 并行采集, 主题分类
+    """养基宝标准板块行情 - 6大一级分类
+    行业板块/概念题材: data.eastmoney.com/dataapi (可从Railway访问)
+    宽基指数: push2指数API + ETF估值fallback
+    债券板块/海外QDII/货币理财: 基金排行API按类型分组统计
     """
-    board_type = request.args.get('type', 'all')  # all/industry/concept
-    category_filter = request.args.get('category', '')  # 主题大类过滤
+    category = request.args.get('type', '行业板块')  # 一级分类名称
+    if not category:
+        category = '行业板块'
 
-    # 内存缓存：300秒内复用上次结果
-    cache_key = 'sectors_' + board_type + '_' + category_filter
+    # 内存缓存：300秒内复用
+    cache_key = 'sectors_' + category
     cached = _sector_cache.get(cache_key)
     if cached and time.time() - cached['time'] < 300:
         return jsonify(cached['data'])
 
-    def fetch_boards(fs_code, label):
-        """从data.eastmoney.com/dataapi采集板块数据
-        该API可从Railway正常访问, 返回f2(指数),f3(涨跌幅*100),f104(涨数),f105(跌数)
-        """
+    # 根据分类选择数据采集方式
+    if category == '行业板块':
+        results = _fetch_industry_sectors()
+    elif category == '概念题材':
+        results = _fetch_concept_sectors()
+    elif category == '宽基指数':
+        results = _fetch_index_sectors()
+    elif category == '债券板块':
+        results = _fetch_fund_type_sectors('zq', BOND_SECTORS)
+    elif category == '海外QDII':
+        results = _fetch_fund_type_sectors('qdii', QDII_SECTORS)
+    elif category == '货币理财':
+        results = _fetch_fund_type_sectors('hh', MONEY_SECTORS)
+    else:
         results = []
-        url = 'https://data.eastmoney.com/dataapi/bkzj/getbkzj'
+
+    # 按涨跌幅降序排序
+    results.sort(key=lambda x: x.get('changePercent', 0), reverse=True)
+
+    # 缓存
+    if results:
+        _sector_cache[cache_key] = {'data': results, 'time': time.time()}
+    elif cached:
+        print(f'[板块-{category}] 获取失败，返回过期缓存', flush=True)
+        return jsonify(cached['data'])
+
+    return jsonify(results)
+
+
+@app.route('/api/sector-categories')
+def api_sector_categories():
+    """返回养基宝6大一级分类列表"""
+    return jsonify(SECTOR_TOP_CATEGORIES)
+
+
+def _fetch_industry_sectors():
+    """采集行业板块 - 东方财富行业板块, 映射为养基宝标准名"""
+    raw_list = _fetch_dataapi_boards('m:90+t:2')
+    # 映射为标准名, 同名板块合并
+    merged = {}
+    for item in raw_list:
+        std_name = get_industry_standard_name(item['name'])
+        if std_name:
+            if std_name in merged:
+                # 合并: 取涨跌幅均值, 涨跌家数累加
+                old = merged[std_name]
+                old['changePercent'] = round((old['changePercent'] + item['changePercent']) / 2, 2)
+                old['upCount'] += item['upCount']
+                old['downCount'] += item['downCount']
+            else:
+                merged[std_name] = {
+                    'code': item['code'],
+                    'name': std_name,
+                    'price': item['price'],
+                    'changePercent': item['changePercent'],
+                    'change': item['change'],
+                    'upCount': item['upCount'],
+                    'downCount': item['downCount'],
+                    'type': '行业板块',
+                    'category': '行业板块'
+                }
+    # 确保白名单中的板块都有返回(缺失的补0)
+    for name in INDUSTRY_SECTORS:
+        if name not in merged:
+            merged[name] = {
+                'code': '', 'name': name, 'price': 0,
+                'changePercent': 0, 'change': 0,
+                'upCount': 0, 'downCount': 0,
+                'type': '行业板块', 'category': '行业板块'
+            }
+    return list(merged.values())
+
+
+def _fetch_concept_sectors():
+    """采集概念题材 - 东方财富概念板块, 映射为养基宝标准名"""
+    raw_list = _fetch_dataapi_boards('m:90+t:3')
+    merged = {}
+    for item in raw_list:
+        std_name = get_concept_standard_name(item['name'])
+        if std_name:
+            if std_name in merged:
+                old = merged[std_name]
+                old['changePercent'] = round((old['changePercent'] + item['changePercent']) / 2, 2)
+                old['upCount'] += item['upCount']
+                old['downCount'] += item['downCount']
+            else:
+                merged[std_name] = {
+                    'code': item['code'],
+                    'name': std_name,
+                    'price': item['price'],
+                    'changePercent': item['changePercent'],
+                    'change': item['change'],
+                    'upCount': item['upCount'],
+                    'downCount': item['downCount'],
+                    'type': '概念题材',
+                    'category': '概念题材'
+                }
+    # 补全白名单
+    for name in CONCEPT_SECTORS:
+        if name not in merged:
+            merged[name] = {
+                'code': '', 'name': name, 'price': 0,
+                'changePercent': 0, 'change': 0,
+                'upCount': 0, 'downCount': 0,
+                'type': '概念题材', 'category': '概念题材'
+            }
+    return list(merged.values())
+
+
+def _fetch_dataapi_boards(fs_code):
+    """从data.eastmoney.com/dataapi采集板块原始数据
+    该API可从Railway正常访问, 返回f3(涨跌幅*100),f2(指数*100),f104(涨数),f105(跌数)
+    """
+    results = []
+    url = 'https://data.eastmoney.com/dataapi/bkzj/getbkzj'
+    params = {'key': 'f3,f2,f104,f105', 'code': fs_code}
+    headers = {
+        'User-Agent': HEADERS['User-Agent'],
+        'Referer': 'https://data.eastmoney.com/bkzj/gn.html',
+        'Accept': 'application/json, text/plain, */*',
+    }
+    for attempt in range(3):
+        try:
+            resp = SESSION.get(url, params=params, headers=headers, timeout=10)
+            data = resp.json()
+            if data.get('rc') == 0 and data.get('data') and data['data'].get('diff'):
+                for item in data['data']['diff']:
+                    change_pct = safe_float(item.get('f3', 0)) / 100.0
+                    price = safe_float(item.get('f2', 0)) / 100.0
+                    results.append({
+                        'code': item.get('f12', ''),
+                        'name': item.get('f14', ''),
+                        'price': round(price, 2),
+                        'changePercent': round(change_pct, 2),
+                        'change': round(price * change_pct / 100, 2),
+                        'upCount': int(safe_float(item.get('f104', 0))),
+                        'downCount': int(safe_float(item.get('f105', 0))),
+                    })
+                print(f'[板块dataapi-{fs_code}] 采集到 {len(results)} 个', flush=True)
+                return results
+            else:
+                print(f'[板块dataapi-{fs_code}] 尝试{attempt+1}无数据: {str(data)[:150]}', flush=True)
+        except Exception as e:
+            print(f'[板块dataapi-{fs_code}] 异常尝试{attempt+1}: {e}', flush=True)
+        if attempt < 2:
+            time.sleep(0.5)
+    return results
+
+
+def _fetch_index_sectors():
+    """采集宽基指数 - 先尝试push2指数API, 失败则用ETF估值fallback"""
+    results = []
+    secids = get_index_secids()
+    secid_str = ','.join(secids)
+
+    # 方案1: push2指数实时行情
+    try:
+        url = 'https://push2.eastmoney.com/api/qt/ulist.np/get'
         params = {
-            'key': 'f3,f2,f104,f105',
-            'code': fs_code,
+            'fltt': '2',
+            'secids': secid_str,
+            'fields': 'f12,f14,f2,f3,f4,f104,f105',
         }
         headers = {
             'User-Agent': HEADERS['User-Agent'],
-            'Referer': 'https://data.eastmoney.com/bkzj/gn.html',
-            'Accept': 'application/json, text/plain, */*',
+            'Referer': 'https://quote.eastmoney.com/center/boardlist.html',
         }
-        for attempt in range(3):
-            try:
-                resp = SESSION.get(url, params=params, headers=headers, timeout=10)
-                data = resp.json()
-                if data.get('rc') == 0 and data.get('data') and data['data'].get('diff'):
-                    for item in data['data']['diff']:
-                        name = item.get('f14', '')
-                        # f3是涨跌幅*100的整数(753=7.53%), f2是指数*100
-                        change_pct = safe_float(item.get('f3', 0)) / 100.0
-                        price = safe_float(item.get('f2', 0)) / 100.0
-                        results.append({
-                            'code': item.get('f12', ''),
-                            'name': name,
-                            'price': round(price, 2),
-                            'changePercent': round(change_pct, 2),
-                            'change': round(price * change_pct / 100, 2),
-                            'upCount': safe_float(item.get('f104', 0)),
-                            'downCount': safe_float(item.get('f105', 0)),
-                            'type': label,
-                            'category': get_sector_category(name)
-                        })
-                    print(f'[板块-{label}] 采集到 {len(results)} 个板块', flush=True)
-                    return results
-                else:
-                    print(f'[板块-{label}] 尝试{attempt+1}无数据: {str(data)[:150]}', flush=True)
-            except Exception as e:
-                print(f'[板块异常-{label}] 尝试{attempt+1}: {e}', flush=True)
-            if attempt < 2:
-                time.sleep(0.5)
-        return results
+        resp = SESSION.get(url, params=params, headers=headers, timeout=10)
+        data = resp.json()
+        if data.get('data') and data['data'].get('diff'):
+            for item in data['data']['diff']:
+                secid = item.get('f12', '')
+                name = get_index_name_by_secid(secid + '') or item.get('f14', '')
+                # secid匹配可能需要带市场前缀, 用名称匹配更可靠
+                std_name = None
+                for idx_item in BROAD_INDEX_SECTORS:
+                    if idx_item['secid'].endswith(secid) or secid in idx_item['secid']:
+                        std_name = idx_item['name']
+                        break
+                if not std_name:
+                    std_name = name
+                results.append({
+                    'code': secid,
+                    'name': std_name,
+                    'price': safe_float(item.get('f2', 0)),
+                    'changePercent': safe_float(item.get('f3', 0)),
+                    'change': safe_float(item.get('f4', 0)),
+                    'upCount': int(safe_float(item.get('f104', 0))),
+                    'downCount': int(safe_float(item.get('f105', 0))),
+                    'type': '宽基指数',
+                    'category': '宽基指数'
+                })
+            if results:
+                print(f'[宽基指数-push2] 采集到 {len(results)} 个指数', flush=True)
+                return results
+    except Exception as e:
+        print(f'[宽基指数-push2] 失败: {e}', flush=True)
 
-    # 并行请求行业+概念板块
-    all_results = []
-    threads = []
-    thread_results = {}
+    # 方案2: ETF估值fallback (fundgz API)
+    print('[宽基指数] push2不可用, 使用ETF估值fallback', flush=True)
+    etf_list = get_index_etf_codes()
+    for std_name, etf_code in etf_list:
+        try:
+            url = f'https://fundgz.1234567.com.cn/js/{etf_code}.js'
+            resp = SESSION.get(url, params={'rt': int(time.time() * 1000)}, timeout=8)
+            text = resp.text.strip()
+            match = re.search(r'jsonpgz\((.+)\)', text)
+            if match:
+                data = json.loads(match.group(1))
+                results.append({
+                    'code': etf_code,
+                    'name': std_name,
+                    'price': safe_float(data.get('gsz', 0)),
+                    'changePercent': safe_float(data.get('gszzl', 0)),
+                    'change': 0,
+                    'upCount': 0,
+                    'downCount': 0,
+                    'type': '宽基指数',
+                    'category': '宽基指数'
+                })
+        except Exception as e:
+            print(f'[宽基指数-ETF-{etf_code}] 失败: {e}', flush=True)
+            results.append({
+                'code': etf_code, 'name': std_name, 'price': 0,
+                'changePercent': 0, 'change': 0,
+                'upCount': 0, 'downCount': 0,
+                'type': '宽基指数', 'category': '宽基指数'
+            })
+    return results
 
-    def worker(fs_code, label, key):
-        thread_results[key] = fetch_boards(fs_code, label)
 
-    if board_type in ('all', 'industry'):
-        t1 = threading.Thread(target=worker, args=('m:90+t:2', 'industry', 'industry'))
-        threads.append(t1)
-        t1.start()
-    if board_type in ('all', 'concept'):
-        t2 = threading.Thread(target=worker, args=('m:90+t:3', 'concept', 'concept'))
-        threads.append(t2)
-        t2.start()
+def _fetch_fund_type_sectors(fund_type, sector_defs):
+    """采集基金分类板块(债券/QDII/货币) - 按基金类型查询排行, 按关键词分组统计
+    fund_type: zq(债券) / qdii / hh(货币)
+    sector_defs: 板块定义列表 [{name, keywords}, ...]
+    """
+    # 查询基金排行(按日涨幅排序, 取前500只)
+    url = 'https://fund.eastmoney.com/data/rankhandler.aspx'
+    params = {
+        'op': 'ph', 'dt': 'kf', 'ft': fund_type,
+        'rs': '', 'gs': 0, 'sc': 'rzdf', 'st': 'desc',
+        'pi': 1, 'pn': 500, 'dx': 1
+    }
+    rank_headers = {
+        'User-Agent': HEADERS['User-Agent'],
+        'Referer': 'https://fund.eastmoney.com/data/fundranking.html'
+    }
+    funds = []
+    try:
+        resp = SESSION.get(url, params=params, headers=rank_headers, timeout=15)
+        text = resp.text
+        # 解析 var rankData = {datas:[...]}
+        match = re.search(r'datas:\[(.+?)\]', text, re.DOTALL)
+        if match:
+            raw_items = match.group(1).split('","')
+            for raw in raw_items:
+                raw = raw.strip('"').strip()
+                if not raw:
+                    continue
+                parts = raw.split(',')
+                if len(parts) >= 7:
+                    funds.append({
+                        'name': parts[1],
+                        'change': safe_float(parts[6]) if len(parts) > 6 else 0,
+                    })
+        print(f'[基金分类-{fund_type}] 获取到 {len(funds)} 只基金', flush=True)
+    except Exception as e:
+        print(f'[基金分类-{fund_type}] 异常: {e}', flush=True)
 
-    for t in threads:
-        t.join(timeout=15)
-
-    for key in ['industry', 'concept']:
-        if key in thread_results:
-            all_results.extend(thread_results[key])
-
-    # 去重：同名板块保留概念版（概念板块信息更丰富）
-    seen_names = {}
-    deduped = []
-    for s in all_results:
-        name = s['name']
-        if name not in seen_names:
-            seen_names[name] = True
-            deduped.append(s)
-        elif s['type'] == 'concept':
-            # 概念板块优先，替换已存在的行业板块
-            for i, d in enumerate(deduped):
-                if d['name'] == name:
-                    deduped[i] = s
-                    break
-    all_results = deduped
-
-    # 按主题大类过滤
-    if category_filter:
-        all_results = [s for s in all_results if s.get('category') == category_filter]
-
-    # 按涨跌幅降序排序
-    all_results.sort(key=lambda x: x.get('changePercent', 0), reverse=True)
-
-    # 缓存结果
-    if all_results:
-        _sector_cache[cache_key] = {'data': all_results, 'time': time.time()}
-    elif cached:
-        print(f'[板块] 获取失败，返回过期缓存数据', flush=True)
-        return jsonify(cached['data'])
-
-    return jsonify(all_results)
+    # 按关键词分组统计
+    results = []
+    for sec_def in sector_defs:
+        sec_name = sec_def['name']
+        keywords = sec_def['keywords']
+        matched = [f for f in funds if any(kw in f['name'] for kw in keywords)]
+        if matched:
+            avg_change = sum(f['change'] for f in matched) / len(matched)
+            up_count = sum(1 for f in matched if f['change'] > 0)
+            down_count = sum(1 for f in matched if f['change'] < 0)
+        else:
+            avg_change = 0
+            up_count = 0
+            down_count = 0
+        results.append({
+            'code': '',
+            'name': sec_name,
+            'price': 0,
+            'changePercent': round(avg_change, 2),
+            'change': 0,
+            'upCount': up_count,
+            'downCount': down_count,
+            'fundCount': len(matched),
+            'type': '债券板块' if fund_type == 'zq' else ('海外QDII' if fund_type == 'qdii' else '货币理财'),
+            'category': '债券板块' if fund_type == 'zq' else ('海外QDII' if fund_type == 'qdii' else '货币理财')
+        })
+    return results
 
 
 @app.route('/api/fund-managers')
