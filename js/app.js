@@ -814,16 +814,27 @@
         // 3. 用实时估值涨幅重新排序
         var ranking = candidates.map(function (f) {
             var est = estimates.find(function (e) { return e.fundcode === f.code; });
-            f.realtimeChange = est ? est.gszzl : f.change;
+            f.realtimeChange = est ? est.gszzl : null;  // null表示无实时估值
             // 显示今日实时估值净值（gsz），而非昨天的净值（dwjz）
             f.netValue = est ? est.gsz : f.netValue;
+            f.hasRealtime = !!est;
             return f;
         });
 
+        // 过滤掉没有实时估值的基金（避免显示昨天的旧数据）
+        var withRealtime = ranking.filter(function (f) { return f.hasRealtime; });
+
+        // 如果实时估值数据太少（不足20只），保留所有基金用原始涨跌幅
+        if (withRealtime.length >= 20) {
+            ranking = withRealtime;
+        }
+
         // 按实时估值涨跌幅排序
         ranking.sort(function (a, b) {
-            if (order === 'desc') return (b.realtimeChange || 0) - (a.realtimeChange || 0);
-            return (a.realtimeChange || 0) - (b.realtimeChange || 0);
+            var aChange = a.realtimeChange !== null ? a.realtimeChange : a.change;
+            var bChange = b.realtimeChange !== null ? b.realtimeChange : b.change;
+            if (order === 'desc') return bChange - aChange;
+            return aChange - bChange;
         });
 
         // 取前20
