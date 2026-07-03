@@ -838,7 +838,7 @@
                 var code = this.dataset.code;
                 if (code) {
                     document.getElementById('sectorFundsModal').style.display = 'none';
-                    navigate('/fund/' + code);
+                    openDetail(code);
                 }
             });
         });
