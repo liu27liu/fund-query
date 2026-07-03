@@ -34,7 +34,18 @@
     "groups": [
       "全部"
     ],
-    "holdings": [],
+    "holdings": [
+      {
+        "code": "161725",
+        "name": "招商中证白酒指数(LOF)A",
+        "type": "指数型",
+        "amount": 1000,
+        "buyPrice": 0.5118,
+        "shares": 1953.8882375928097,
+        "buyDate": "2026-07-03",
+        "addTime": 1783063559567
+      }
+    ],
     "createTime": 1783063517.4455147
   }
 }
