@@ -1050,7 +1050,7 @@ ul, ol { list-style: none; }
 }
 
 .fund-table .action-cell {
-    width: 200px;
+    width: 175px;
     text-align: right;
     white-space: nowrap;
 }
@@ -1093,7 +1093,7 @@ ul, ol { list-style: none; }
 }
 
 .action-btn {
-    padding: 5px 10px;
+    padding: 4px 8px;
     border-radius: var(--radius-xs);
     font-size: 12px;
     font-weight: 500;
@@ -1101,6 +1101,7 @@ ul, ol { list-style: none; }
     color: var(--text-secondary);
     transition: all 0.2s var(--ease);
     white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .action-btn:hover {
@@ -1112,7 +1113,6 @@ ul, ol { list-style: none; }
 .action-btn.add-position {
     color: var(--primary);
     background: #e6f0ff;
-    margin-right: 4px;
 }
 
 .action-btn.add-position:hover {
@@ -1720,8 +1720,10 @@ ul, ol { list-style: none; }
     -webkit-backdrop-filter: blur(8px);
     border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: var(--radius-sm);
-    padding: 20px 18px;
+    padding: 16px 14px;
     transition: transform 0.25s var(--ease-out), background 0.25s var(--ease);
+    min-width: 0;
+    overflow: hidden;
 }
 
 .summary-item:hover {
@@ -1737,12 +1739,15 @@ ul, ol { list-style: none; }
 }
 
 .summary-value {
-    font-size: 26px;
+    font-size: 22px;
     font-weight: 800;
     font-family: var(--font-num);
     letter-spacing: 0.5px;
     line-height: 1.2;
     transition: color 0.3s var(--ease);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .summary-item .summary-sub {
@@ -2779,16 +2784,16 @@ select.form-input {
 
     /* 持仓卡片移动端单列 */
     .summary-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
         gap: 12px;
     }
 
     .summary-value {
-        font-size: 22px;
+        font-size: 18px;
     }
 
     .portfolio-summary {
-        padding: 24px 20px;
+        padding: 20px 16px;
     }
 
     .detail-header {
