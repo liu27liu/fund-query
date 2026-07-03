@@ -1083,8 +1083,16 @@ def api_sector_categories():
 
 
 def _fetch_industry_sectors():
-    """采集行业板块 - 东方财富行业板块, 映射为养基宝标准名"""
-    raw_list = _fetch_dataapi_boards('m:90+t:2')
+    """采集行业板块 - 同花顺行业板块HTML页面解析, 映射为养基宝标准名
+    同花顺页面: http://q.10jqka.com.cn/thshy/
+    表格结构: 序号|板块|涨跌幅|总成交量|总成交额|净流入|上涨家数|下跌家数|均价|领涨股|最新价|涨跌幅
+    """
+    raw_list = _fetch_ths_industry_boards()
+    if not raw_list:
+        # 同花顺获取失败, fallback到东方财富
+        print('[行业板块] 同花顺获取失败, fallback到东方财富', flush=True)
+        raw_list = _fetch_dataapi_boards('m:90+t:2')
+
     # 映射为标准名, 同名板块合并
     merged = {}
     for item in raw_list:
@@ -1118,6 +1126,55 @@ def _fetch_industry_sectors():
                 'type': '行业板块', 'category': '行业板块'
             }
     return list(merged.values())
+
+
+def _fetch_ths_industry_boards():
+    """从同花顺行业板块页面解析板块涨跌数据
+    页面URL: http://q.10jqka.com.cn/thshy/
+    返回格式与_fetch_dataapi_boards一致
+    """
+    results = []
+    url = 'http://q.10jqka.com.cn/thshy/'
+    headers = {
+        'User-Agent': HEADERS['User-Agent'],
+        'Referer': 'http://q.10jqka.com.cn/',
+        'Accept': 'text/html,application/xhtml+xml',
+    }
+    for attempt in range(3):
+        try:
+            resp = SESSION.get(url, headers=headers, timeout=10)
+            # 同花顺页面使用GBK编码
+            text = resp.content.decode('gbk', errors='replace')
+            # 解析HTML表格行
+            rows = re.findall(r'<tr[^>]*>(.*?)</tr>', text, re.DOTALL)
+            for row in rows[1:]:  # 跳过表头
+                cells = re.findall(r'<td[^>]*>(.*?)</td>', row, re.DOTALL)
+                if cells and len(cells) >= 8:
+                    clean = [re.sub(r'<[^>]+>', '', c).strip() for c in cells]
+                    # 列: [0]序号 [1]板块名 [2]涨跌幅 [3]成交量 [4]成交额 [5]净流入 [6]上涨家数 [7]下跌家数
+                    name = clean[1]
+                    change_pct = safe_float(clean[2]) if clean[2] else 0
+                    up_count = int(safe_float(clean[6])) if len(clean) > 6 else 0
+                    down_count = int(safe_float(clean[7])) if len(clean) > 7 else 0
+                    results.append({
+                        'code': '',
+                        'name': name,
+                        'price': 0,
+                        'changePercent': round(change_pct, 2),
+                        'change': 0,
+                        'upCount': up_count,
+                        'downCount': down_count,
+                    })
+            if results:
+                print(f'[同花顺-行业板块] 采集到 {len(results)} 个板块', flush=True)
+                return results
+            else:
+                print(f'[同花顺-行业板块] 尝试{attempt+1}无数据', flush=True)
+        except Exception as e:
+            print(f'[同花顺-行业板块] 异常尝试{attempt+1}: {e}', flush=True)
+        if attempt < 2:
+            time.sleep(0.5)
+    return results
 
 
 def _fetch_concept_sectors():
