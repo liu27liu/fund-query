@@ -1021,8 +1021,8 @@ def _fetch_news():
 @app.route('/api/market-indices')
 def api_market_indices():
     """大盘指数实时行情 - 对接东方财富push2接口，采集全部国内外指数"""
-    # 缓存8秒（盘中近实时，盘后也快速返回）
-    cached = _get_cache('market_indices', 8)
+    # 缓存15秒（盘中近实时，盘后也快速返回）
+    cached = _get_cache('market_indices', 15)
     if cached is not None:
         return jsonify(cached)
 
@@ -2370,25 +2370,35 @@ if __name__ == '__main__':
         import time as _time
         _time.sleep(2)  # 等待服务就绪
         print('[预热] 开始预热热点数据...', flush=True)
+        _refresh_hot_cache()
+        print('[预热] 热点数据预热完成', flush=True)
+
+        # 周期性刷新缓存，保持热点数据常驻
+        while True:
+            _time.sleep(10)  # 每10秒刷新一次
+            try:
+                _refresh_hot_cache()
+            except Exception as e:
+                print(f'[预热] 周期刷新异常: {e}', flush=True)
+
+    def _refresh_hot_cache():
+        """刷新所有热点缓存"""
         try:
-            _set_cache('market_indices', _fetch_market_indices())
-            print('[预热] 大盘指数完成', flush=True)
+            data = _fetch_market_indices()
+            if data:
+                _set_cache('market_indices', data)
         except Exception as e:
             print(f'[预热] 大盘指数失败: {e}', flush=True)
         try:
-            # 预热行业板块
             results = _fetch_industry_sectors()
             _sector_cache['sectors_行业板块'] = {'data': results, 'time': time.time()}
-            print(f'[预热] 行业板块完成: {len(results)}个', flush=True)
         except Exception as e:
             print(f'[预热] 行业板块失败: {e}', flush=True)
         try:
             results = _fetch_concept_sectors()
             _sector_cache['sectors_概念题材'] = {'data': results, 'time': time.time()}
-            print(f'[预热] 概念题材完成: {len(results)}个', flush=True)
         except Exception as e:
             print(f'[预热] 概念题材失败: {e}', flush=True)
-        print('[预热] 热点数据预热完成', flush=True)
 
     prewarm_thread = threading.Thread(target=_prewarm_cache, daemon=True)
     prewarm_thread.start()
