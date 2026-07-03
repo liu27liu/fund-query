@@ -846,7 +846,6 @@
         container.innerHTML = `
             <div class="ranking-info-bar">
                 <span>全市场共 <strong>${totalCount}</strong> 只基金，展示${order === 'desc' ? '涨幅' : '跌幅'}前 <strong>20</strong> 只（实时估值排序）</span>
-                <span class="ranking-scroll-hint">⏱ 每15分钟自动更新</span>
             </div>
             <div class="ranking-table-fixed">
                 <table class="fund-table">
@@ -1153,11 +1152,6 @@
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
                         刷新
                     </button>
-                    <label class="auto-refresh-toggle">
-                        <input type="checkbox" id="autoRefreshCheckbox" checked>
-                        <span class="toggle-slider"></span>
-                        <span class="toggle-label">自动刷新</span>
-                    </label>
                 </div>
                 <button class="add-holding-btn" id="addHoldingBtn">+ 添加持仓</button>
             </div>
@@ -1177,15 +1171,6 @@
         // 绑定手动刷新
         document.getElementById('manualRefreshBtn').addEventListener('click', function () {
             refreshPortfolioData();
-        });
-
-        // 绑定自动刷新开关
-        document.getElementById('autoRefreshCheckbox').addEventListener('change', function () {
-            if (this.checked) {
-                startPortfolioAutoRefresh();
-            } else {
-                stopPortfolioAutoRefresh();
-            }
         });
 
         loadPortfolioData(positions);
@@ -1385,8 +1370,6 @@
 
     function startPortfolioAutoRefresh() {
         stopPortfolioAutoRefresh();
-        var checkbox = document.getElementById('autoRefreshCheckbox');
-        if (!checkbox || !checkbox.checked) return;
 
         countdownLeft = REFRESH_INTERVAL;
         // 倒计时定时器（每秒更新）
@@ -1409,11 +1392,6 @@
     function updateCountdownDisplay() {
         var statusEl = document.getElementById('refreshStatus');
         if (!statusEl) return;
-        var checkbox = document.getElementById('autoRefreshCheckbox');
-        if (checkbox && !checkbox.checked) {
-            statusEl.textContent = '已暂停';
-            return;
-        }
         statusEl.textContent = countdownLeft + 's 后刷新';
     }
 
