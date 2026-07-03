@@ -2814,8 +2814,9 @@ select.form-input {
 }
 
 /* ========== 工具类 ========== */
-.text-center { text-align: center; }
-.text-right { text-align: right; }
+/* 注：th 选择器提升优先级，确保覆盖 .fund-table th / .portfolio-table th 的 text-align:left */
+.text-center, th.text-center { text-align: center; }
+.text-right, th.text-right { text-align: right; }
 .hidden { display: none !important; }
 
 .skeleton {
