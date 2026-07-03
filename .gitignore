@@ -27,3 +27,7 @@ Thumbs.db
 # Environment
 .env
 .env.local
+
+# User data (stored in GitHub cloud, not in repo)
+cloud_users.json
+users.json
