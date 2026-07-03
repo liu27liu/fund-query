@@ -13,30 +13,7 @@
       "全部",
       "消费"
     ],
-    "holdings": [
-      {
-        "addTime": 1783063766350,
-        "amount": 1,
-        "buyDate": "2026-07-03",
-        "buyPrice": 3.9567,
-        "code": "110011",
-        "group": "",
-        "name": "易方达优质精选混合(QDII)",
-        "shares": 0.2527358657467081,
-        "type": "QDII"
-      },
-      {
-        "code": "110011",
-        "name": "易方达优质精选混合(QDII)",
-        "type": "QDII",
-        "amount": 1222,
-        "buyPrice": 3.9541,
-        "shares": 309.04630636554464,
-        "buyDate": "2026-07-03",
-        "group": "",
-        "addTime": 1783064452807
-      }
-    ],
+    "holdings": [],
     "createTime": 1783055840.0759306,
     "recreated": false
   },
