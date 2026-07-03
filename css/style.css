@@ -2079,6 +2079,79 @@ select.form-input {
     margin-top: 16px;
 }
 
+/* 登录/注册 Tab */
+.login-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 20px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.login-tab {
+    flex: 1;
+    text-align: center;
+    padding: 10px 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    position: relative;
+    transition: color 0.2s var(--ease);
+}
+
+.login-tab.active {
+    color: var(--primary);
+}
+
+.login-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 20%;
+    right: 20%;
+    height: 2px;
+    background: var(--primary);
+    border-radius: 2px;
+}
+
+/* 登录拦截页面 */
+.login-required-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    padding: 40px 20px;
+}
+
+.login-required-card {
+    text-align: center;
+    max-width: 360px;
+}
+
+.login-required-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+}
+
+.login-required-card h2 {
+    font-size: 22px;
+    margin-bottom: 8px;
+    color: var(--text);
+}
+
+.login-required-card p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+    line-height: 1.6;
+}
+
+.login-required-card .form-submit,
+.login-required-card .form-cancel {
+    margin: 0 6px;
+    min-width: 120px;
+}
+
 .form-cancel {
     flex: 1;
     height: 46px;

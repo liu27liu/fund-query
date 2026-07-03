@@ -30,6 +30,58 @@ def add_no_cache_headers(resp):
 _email_codes = {}  # {email: {code, expire_time, attempts}}
 _sector_cache = {}  # {key: {data, time}} - 板块数据缓存，60秒过期
 
+# ========== 用户数据持久化存储 ==========
+# 优先使用 /data (Railway volume)，否则使用项目目录
+_DB_DIR = '/data' if os.path.isdir('/data') else os.path.dirname(os.path.abspath(__file__))
+_USERS_FILE = os.path.join(_DB_DIR, 'users.json')
+_TOKENS = {}  # {token: {username, expire_time}} - 登录令牌（内存）
+
+def _load_users():
+    """加载用户数据库"""
+    try:
+        with open(_USERS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+def _save_users(users):
+    """保存用户数据库"""
+    try:
+        with open(_USERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(users, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f'[用户数据保存失败]: {e}', flush=True)
+        return False
+
+def _hash_password(password, salt=''):
+    """密码哈希（SHA256 + 随机盐）"""
+    return hashlib.sha256((salt + password + 'fund_salt_2026').encode()).hexdigest()
+
+def _gen_token(username):
+    """生成登录令牌"""
+    token = hashlib.sha256(f'{username}{time.time()}{random.random()}'.encode()).hexdigest()
+    _TOKENS[token] = {'username': username, 'expire_time': time.time() + 7 * 86400}
+    return token
+
+def _get_user_from_token(req):
+    """从请求中提取用户名（验证token）"""
+    token = req.headers.get('Authorization', '').replace('Bearer ', '')
+    record = _TOKENS.get(token)
+    if not record:
+        return None
+    if time.time() > record['expire_time']:
+        del _TOKENS[token]
+        return None
+    return record['username']
+
+def _clean_expired_tokens():
+    """清理过期令牌"""
+    now = time.time()
+    expired = [t for t, v in _TOKENS.items() if now > v['expire_time']]
+    for t in expired:
+        del _TOKENS[t]
+
 # ========== Brevo 邮件 API 配置 ==========
 # 使用 Brevo HTTP API (走 443 端口)，每天免费 300 封，无需域名
 # 获取 API Key: https://app.brevo.com/settings/keys/api
@@ -1005,100 +1057,139 @@ def _send_email_code(to_email, code):
         return False
 
 
-@app.route('/api/auth/send-code', methods=['POST'])
-def api_send_code():
-    """发送邮箱验证码"""
-    _clean_expired_codes()
-    email = (request.json.get('email', '') if request.json else '').strip().lower()
-    if not email:
-        return jsonify({'success': False, 'message': '请输入邮箱地址'})
-    if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
-        return jsonify({'success': False, 'message': '邮箱格式不正确'})
+@app.route('/api/auth/register', methods=['POST'])
+def api_register():
+    """账号注册（用户名 + 密码）"""
+    _clean_expired_tokens()
+    username = (request.json.get('username', '') if request.json else '').strip()
+    password = (request.json.get('password', '') if request.json else '').strip()
 
-    # 频率限制：60秒内不能重复发送
-    if email in _email_codes:
-        elapsed = time.time() - (_email_codes[email]['expire_time'] - 300)
-        if elapsed < 60:
-            wait = int(60 - elapsed)
-            return jsonify({'success': False, 'message': f'请{wait}秒后再试'})
+    if not username:
+        return jsonify({'success': False, 'message': '请输入用户名'})
+    if len(username) < 3 or len(username) > 20:
+        return jsonify({'success': False, 'message': '用户名长度需3-20个字符'})
+    if not re.match(r'^[a-zA-Z0-9_\u4e00-\u9fa5]+$', username):
+        return jsonify({'success': False, 'message': '用户名只能包含字母、数字、下划线、中文'})
+    if not password:
+        return jsonify({'success': False, 'message': '请输入密码'})
+    if len(password) < 6:
+        return jsonify({'success': False, 'message': '密码长度至少6位'})
 
-    # 生成6位验证码
-    code = str(random.randint(100000, 999999))
-    _email_codes[email] = {
-        'code': code,
-        'expire_time': time.time() + 300,  # 5分钟有效
-        'attempts': 0
+    users = _load_users()
+    if username in users:
+        return jsonify({'success': False, 'message': '该用户名已被注册'})
+
+    salt = str(random.randint(100000, 999999))
+    users[username] = {
+        'password': _hash_password(password, salt),
+        'salt': salt,
+        'favorites': [],
+        'groups': ['全部'],
+        'holdings': [],
+        'createTime': time.time()
     }
+    if not _save_users(users):
+        return jsonify({'success': False, 'message': '注册失败，请稍后重试'})
 
-    # 通过Brevo API发送验证码邮件
-    sent = _send_email_code(email, code)
-    if not sent:
-        if not BREVO_API_KEY or not BREVO_FROM_EMAIL:
-            return jsonify({
-                'success': True,
-                'message': '验证码已发送（邮件服务未配置，请查看服务器日志）'
-            })
-        else:
-            return jsonify({
-                'success': True,
-                'message': '验证码已发送，请查看邮箱（若未收到请检查垃圾邮件夹）'
-            })
-
+    token = _gen_token(username)
     return jsonify({
         'success': True,
-        'message': f'验证码已发送至 {email}'
+        'message': '注册成功',
+        'token': token,
+        'username': username
     })
 
 
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
-    """邮箱验证码登录"""
-    _clean_expired_codes()
-    email = (request.json.get('email', '') if request.json else '').strip().lower()
-    code = (request.json.get('code', '') if request.json else '').strip()
+    """账号密码登录"""
+    _clean_expired_tokens()
+    username = (request.json.get('username', '') if request.json else '').strip()
+    password = (request.json.get('password', '') if request.json else '').strip()
 
-    if not email or not code:
-        return jsonify({'success': False, 'message': '请输入邮箱和验证码'})
-    if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
-        return jsonify({'success': False, 'message': '邮箱格式不正确'})
+    if not username or not password:
+        return jsonify({'success': False, 'message': '请输入用户名和密码'})
 
-    if email not in _email_codes:
-        return jsonify({'success': False, 'message': '请先获取验证码'})
+    users = _load_users()
+    user = users.get(username)
+    if not user:
+        return jsonify({'success': False, 'message': '用户名或密码错误'})
 
-    record = _email_codes[email]
-    if time.time() > record['expire_time']:
-        del _email_codes[email]
-        return jsonify({'success': False, 'message': '验证码已过期，请重新获取'})
+    salt = user.get('salt', '')
+    if _hash_password(password, salt) != user.get('password'):
+        return jsonify({'success': False, 'message': '用户名或密码错误'})
 
-    # 防暴力破解：最多5次尝试
-    record['attempts'] += 1
-    if record['attempts'] > 5:
-        del _email_codes[email]
-        return jsonify({'success': False, 'message': '尝试次数过多，请重新获取验证码'})
-
-    if record['code'] != code:
-        remaining = 5 - record['attempts']
-        return jsonify({'success': False, 'message': f'验证码错误，还可尝试{remaining}次'})
-
-    # 验证成功，删除验证码
-    del _email_codes[email]
-
-    # 生成登录令牌
-    token = hashlib.sha256(f'{email}{time.time()}{random.random()}'.encode()).hexdigest()
-
-    # 邮箱脱敏显示：前2位 + *** + @域名
-    at_idx = email.index('@')
-    if at_idx <= 2:
-        masked = email[0] + '***' + email[at_idx:]
-    else:
-        masked = email[:2] + '***' + email[at_idx:]
-
+    token = _gen_token(username)
     return jsonify({
         'success': True,
         'message': '登录成功',
         'token': token,
-        'email': masked
+        'username': username
     })
+
+
+@app.route('/api/auth/verify', methods=['POST'])
+def api_verify_token():
+    """验证令牌是否有效"""
+    username = _get_user_from_token(request)
+    if username:
+        return jsonify({'success': True, 'username': username})
+    return jsonify({'success': False})
+
+
+@app.route('/api/user/favorites', methods=['GET', 'POST', 'DELETE'])
+def api_user_favorites():
+    """用户自选基金 - 服务端存储"""
+    username = _get_user_from_token(request)
+    if not username:
+        return jsonify({'success': False, 'message': '请先登录'}), 401
+
+    users = _load_users()
+    user = users.get(username)
+    if not user:
+        return jsonify({'success': False, 'message': '用户不存在'}), 404
+
+    if request.method == 'GET':
+        return jsonify({'success': True, 'favorites': user.get('favorites', []), 'groups': user.get('groups', ['全部'])})
+
+    if request.method == 'POST':
+        data = request.json or {}
+        user['favorites'] = data.get('favorites', [])
+        user['groups'] = data.get('groups', ['全部'])
+        _save_users(users)
+        return jsonify({'success': True, 'message': '自选已同步'})
+
+    if request.method == 'DELETE':
+        user['favorites'] = []
+        _save_users(users)
+        return jsonify({'success': True, 'message': '已清空自选'})
+
+
+@app.route('/api/user/holdings', methods=['GET', 'POST', 'DELETE'])
+def api_user_holdings():
+    """用户持仓 - 服务端存储"""
+    username = _get_user_from_token(request)
+    if not username:
+        return jsonify({'success': False, 'message': '请先登录'}), 401
+
+    users = _load_users()
+    user = users.get(username)
+    if not user:
+        return jsonify({'success': False, 'message': '用户不存在'}), 404
+
+    if request.method == 'GET':
+        return jsonify({'success': True, 'holdings': user.get('holdings', [])})
+
+    if request.method == 'POST':
+        data = request.json or {}
+        user['holdings'] = data.get('holdings', [])
+        _save_users(users)
+        return jsonify({'success': True, 'message': '持仓已同步'})
+
+    if request.method == 'DELETE':
+        user['holdings'] = []
+        _save_users(users)
+        return jsonify({'success': True, 'message': '已清空持仓'})
 
 
 if __name__ == '__main__':

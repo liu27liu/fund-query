@@ -75,15 +75,43 @@
             var keyword = getQueryParam(query, 'q');
             renderSearch(keyword);
         } else if (path === '/portfolio') {
-            renderPortfolio();
+            if (!isLoggedIn()) {
+                showLoginRequired('持仓管理');
+            } else {
+                renderPortfolio();
+            }
         } else if (path === '/favorites') {
-            renderFavorites();
+            if (!isLoggedIn()) {
+                showLoginRequired('自选基金');
+            } else {
+                renderFavorites();
+            }
         } else if (path === '/fund') {
             var code = getQueryParam(query, 'code');
             if (code) openDetail(code);
         } else {
             renderHome();
         }
+    }
+
+    function showLoginRequired(featureName) {
+        app.innerHTML = `
+            <div class="login-required-page">
+                <div class="login-required-card">
+                    <div class="login-required-icon">🔒</div>
+                    <h2>${featureName}需要登录</h2>
+                    <p>请登录后使用${featureName}功能，您的数据将云端保存</p>
+                    <button class="form-submit" id="requireLoginBtn">去登录</button>
+                    <button class="form-cancel" id="requireHomeBtn">返回首页</button>
+                </div>
+            </div>
+        `;
+        document.getElementById('requireLoginBtn').addEventListener('click', function () {
+            showLoginForm();
+        });
+        document.getElementById('requireHomeBtn').addEventListener('click', function () {
+            navigate('/');
+        });
     }
 
     function getQueryParam(query, key) {
@@ -1245,6 +1273,7 @@
                     var result = Store.removeFundTransactions(code);
                     showToast(result.message, result.success ? 'success' : 'error');
                     if (result.success) {
+                        syncToServer('holdings');
                         renderPortfolio();
                     }
                 }
@@ -1594,6 +1623,7 @@
 
                 showToast(result.message, result.success ? 'success' : 'error');
                 if (result.success) {
+                    syncToServer('holdings');
                     holdingModal.classList.remove('active');
                     // 如果当前在持仓页,刷新
                     if (location.hash.indexOf('/portfolio') !== -1) {
@@ -1716,6 +1746,7 @@
 
                 showToast(result.message, result.success ? 'success' : 'error');
                 if (result.success) {
+                    syncToServer('holdings');
                     holdingModal.classList.remove('active');
                     renderPortfolio();
                 }
@@ -1872,6 +1903,7 @@
 
                 showToast(result.message, result.success ? 'success' : 'error');
                 if (result.success) {
+                    syncToServer('holdings');
                     holdingModal.classList.remove('active');
                     renderPortfolio();
                 }
@@ -1918,6 +1950,7 @@
                 var result = Store.addGroup(name);
                 showToast(result.message, result.success ? 'success' : 'error');
                 if (result.success) {
+                    syncToServer('favorites');
                     renderFavorites();
                 }
             }
@@ -2475,12 +2508,14 @@
             var result = Store.addFavorite({ code: code, name: name, type: type });
             showToast(result.message, result.success ? 'success' : 'warning');
             if (result.success) {
+                syncToServer('favorites');
                 btn.dataset.action = 'remove';
                 btn.textContent = '移除自选';
             }
         } else {
             Store.removeFavorite(code);
             showToast('已移除自选', 'success');
+            syncToServer('favorites');
             btn.dataset.action = 'add';
             btn.textContent = '+ 自选';
         }
@@ -2665,6 +2700,8 @@
     function setLoginState(user) {
         localStorage.setItem('fund_user', JSON.stringify(user));
         updateLoginUI();
+        // 登录成功后从服务端同步数据
+        syncFromServer();
     }
 
     function clearLoginState() {
@@ -2672,17 +2709,75 @@
         updateLoginUI();
     }
 
+    function isLoggedIn() {
+        var user = getLoginState();
+        return !!(user && user.token && user.username);
+    }
+
+    function getAuthHeaders() {
+        var user = getLoginState();
+        if (user && user.token) {
+            return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + user.token };
+        }
+        return { 'Content-Type': 'application/json' };
+    }
+
+    // 登录后从服务端同步自选和持仓到本地
+    function syncFromServer() {
+        if (!isLoggedIn()) return;
+        Promise.all([
+            fetch('/api/user/favorites', { headers: getAuthHeaders() }).then(function (r) { return r.json(); }),
+            fetch('/api/user/holdings', { headers: getAuthHeaders() }).then(function (r) { return r.json(); })
+        ]).then(function (results) {
+            var favData = results[0];
+            var holdData = results[1];
+            if (favData.success && favData.favorites) {
+                localStorage.setItem('fund_favorites', JSON.stringify(favData.favorites));
+            }
+            if (favData.success && favData.groups) {
+                localStorage.setItem('fund_fav_groups', JSON.stringify(favData.groups));
+            }
+            if (holdData.success && holdData.holdings) {
+                localStorage.setItem('fund_holdings', JSON.stringify(holdData.holdings));
+            }
+            // 刷新当前页面
+            if (typeof router === 'function') router();
+        }).catch(function (e) { console.error('同步数据失败:', e); });
+    }
+
+    // 本地数据变化后同步到服务端
+    function syncToServer(type) {
+        if (!isLoggedIn()) return;
+        if (type === 'favorites') {
+            fetch('/api/user/favorites', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({
+                    favorites: Store.getFavorites(),
+                    groups: Store.getGroups()
+                })
+            }).catch(function (e) { console.error('同步自选失败:', e); });
+        } else if (type === 'holdings') {
+            fetch('/api/user/holdings', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ holdings: Store.getHoldings() })
+            }).catch(function (e) { console.error('同步持仓失败:', e); });
+        }
+    }
+
     function updateLoginUI() {
         var user = getLoginState();
         var userArea = document.getElementById('userArea');
         if (!userArea) return;
-        if (user && user.email) {
-            userArea.innerHTML = '<span class="user-phone">' + user.email + '</span><button class="logout-btn" id="logoutBtn">退出</button>';
+        if (user && user.username) {
+            userArea.innerHTML = '<span class="user-phone">' + user.username + '</span><button class="logout-btn" id="logoutBtn">退出</button>';
             var logoutBtn = document.getElementById('logoutBtn');
             if (logoutBtn) {
                 logoutBtn.addEventListener('click', function () {
                     clearLoginState();
                     showToast('已退出登录', 'success');
+                    navigate('/');
                 });
             }
         } else {
@@ -2697,112 +2792,127 @@
     function showLoginForm() {
         loginFormContent.innerHTML = `
             <div class="login-header">
-                <div class="login-icon">✉️</div>
-                <h3>邮箱登录</h3>
-                <p>验证码登录，无需注册</p>
+                <div class="login-icon">🔐</div>
+                <h3 id="authTitle">登录</h3>
+                <p id="authSubtitle">账号密码登录</p>
+            </div>
+            <div class="login-tabs">
+                <span class="login-tab active" data-mode="login">登录</span>
+                <span class="login-tab" data-mode="register">注册</span>
             </div>
             <div class="login-body">
                 <div class="form-group">
-                    <label class="form-label">邮箱地址 <span class="required">*</span></label>
-                    <input type="email" class="form-input" id="loginEmail" placeholder="请输入邮箱地址">
+                    <label class="form-label">用户名 <span class="required">*</span></label>
+                    <input type="text" class="form-input" id="authUsername" placeholder="3-20位字母/数字/中文" autocomplete="username">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">验证码 <span class="required">*</span></label>
-                    <div class="sms-row">
-                        <input type="text" class="form-input" id="loginCode" maxlength="6" placeholder="请输入验证码">
-                        <button class="sms-btn" id="smsBtn">获取验证码</button>
-                    </div>
+                    <label class="form-label">密码 <span class="required">*</span></label>
+                    <input type="password" class="form-input" id="authPassword" placeholder="至少6位" autocomplete="current-password">
+                </div>
+                <div class="form-group" id="confirmGroup" style="display:none;">
+                    <label class="form-label">确认密码 <span class="required">*</span></label>
+                    <input type="password" class="form-input" id="authConfirm" placeholder="再次输入密码" autocomplete="new-password">
                 </div>
                 <div class="form-actions">
                     <button class="form-cancel" id="loginCancelBtn">取消</button>
                     <button class="form-submit" id="loginSubmitBtn">登录</button>
                 </div>
-                <p class="login-tip">验证码将发送至您的邮箱，5分钟内有效</p>
+                <p class="login-tip" id="authTip">登录后可使用持仓和自选功能，数据云端保存</p>
             </div>
         `;
         loginModal.classList.add('active');
 
-        document.getElementById('loginCancelBtn').addEventListener('click', function () {
-            loginModal.classList.remove('active');
-            stopSmsCountdown();
+        var mode = 'login';
+
+        // Tab切换
+        loginFormContent.querySelectorAll('.login-tab').forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                mode = this.dataset.mode;
+                loginFormContent.querySelectorAll('.login-tab').forEach(function (t) { t.classList.remove('active'); });
+                this.classList.add('active');
+                if (mode === 'register') {
+                    document.getElementById('authTitle').textContent = '注册';
+                    document.getElementById('authSubtitle').textContent = '创建新账号';
+                    document.getElementById('confirmGroup').style.display = '';
+                    document.getElementById('loginSubmitBtn').textContent = '注册';
+                    document.getElementById('authTip').textContent = '注册后数据云端保存，网站更新不影响您的数据';
+                } else {
+                    document.getElementById('authTitle').textContent = '登录';
+                    document.getElementById('authSubtitle').textContent = '账号密码登录';
+                    document.getElementById('confirmGroup').style.display = 'none';
+                    document.getElementById('loginSubmitBtn').textContent = '登录';
+                    document.getElementById('authTip').textContent = '登录后可使用持仓和自选功能，数据云端保存';
+                }
+            });
         });
 
-        document.getElementById('smsBtn').addEventListener('click', function () {
-            sendEmailCode();
+        document.getElementById('loginCancelBtn').addEventListener('click', function () {
+            loginModal.classList.remove('active');
         });
 
         document.getElementById('loginSubmitBtn').addEventListener('click', function () {
-            doLogin();
+            if (mode === 'register') {
+                doRegister();
+            } else {
+                doLogin();
+            }
         });
 
-        // 回车提交
-        document.getElementById('loginCode').addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') doLogin();
+        document.getElementById('authPassword').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                if (mode === 'register') {
+                    document.getElementById('authConfirm').focus();
+                } else {
+                    doLogin();
+                }
+            }
         });
-        document.getElementById('loginEmail').addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') document.getElementById('loginCode').focus();
+        document.getElementById('authConfirm').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') doRegister();
         });
     }
 
-    function sendEmailCode() {
-        var email = document.getElementById('loginEmail').value.trim();
-        if (!email) { showToast('请输入邮箱地址', 'warning'); return; }
-        if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
-            showToast('邮箱格式不正确', 'warning'); return;
-        }
-        if (codeCountdown > 0) return;
+    function doRegister() {
+        var username = document.getElementById('authUsername').value.trim();
+        var password = document.getElementById('authPassword').value.trim();
+        var confirm = document.getElementById('authConfirm').value.trim();
 
-        var btn = document.getElementById('smsBtn');
+        if (!username) { showToast('请输入用户名', 'warning'); return; }
+        if (username.length < 3 || username.length > 20) { showToast('用户名长度需3-20个字符', 'warning'); return; }
+        if (!password) { showToast('请输入密码', 'warning'); return; }
+        if (password.length < 6) { showToast('密码长度至少6位', 'warning'); return; }
+        if (password !== confirm) { showToast('两次密码不一致', 'warning'); return; }
+
+        var btn = document.getElementById('loginSubmitBtn');
         btn.disabled = true;
-        btn.textContent = '发送中...';
+        btn.textContent = '注册中...';
 
-        fetch('/api/auth/send-code', {
+        fetch('/api/auth/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email })
+            body: JSON.stringify({ username: username, password: password })
         }).then(function (r) { return r.json(); }).then(function (data) {
+            btn.disabled = false;
+            btn.textContent = '注册';
             if (data.success) {
-                showToast(data.message || '验证码已发送', 'success');
-                startSmsCountdown();
+                setLoginState({ username: data.username, token: data.token, loginTime: Date.now() });
+                showToast('注册成功，已自动登录', 'success');
+                loginModal.classList.remove('active');
             } else {
-                showToast(data.message || '发送失败', 'error');
-                btn.disabled = false;
-                btn.textContent = '获取验证码';
+                showToast(data.message || '注册失败', 'error');
             }
         }).catch(function (e) {
-            showToast('网络错误，请重试', 'error');
             btn.disabled = false;
-            btn.textContent = '获取验证码';
+            btn.textContent = '注册';
+            showToast('网络错误，请重试', 'error');
         });
-    }
-
-    function startSmsCountdown() {
-        codeCountdown = 60;
-        var btn = document.getElementById('smsBtn');
-        btn.disabled = true;
-        btn.textContent = codeCountdown + 's';
-        codeTimer = setInterval(function () {
-            codeCountdown--;
-            if (codeCountdown <= 0) {
-                stopSmsCountdown();
-            } else {
-                btn.textContent = codeCountdown + 's';
-            }
-        }, 1000);
-    }
-
-    function stopSmsCountdown() {
-        if (codeTimer) { clearInterval(codeTimer); codeTimer = null; }
-        codeCountdown = 0;
-        var btn = document.getElementById('smsBtn');
-        if (btn) { btn.disabled = false; btn.textContent = '获取验证码'; }
     }
 
     function doLogin() {
-        var email = document.getElementById('loginEmail').value.trim();
-        var code = document.getElementById('loginCode').value.trim();
-        if (!email) { showToast('请输入邮箱地址', 'warning'); return; }
-        if (!code) { showToast('请输入验证码', 'warning'); return; }
+        var username = document.getElementById('authUsername').value.trim();
+        var password = document.getElementById('authPassword').value.trim();
+        if (!username) { showToast('请输入用户名', 'warning'); return; }
+        if (!password) { showToast('请输入密码', 'warning'); return; }
 
         var btn = document.getElementById('loginSubmitBtn');
         btn.disabled = true;
@@ -2811,15 +2921,14 @@
         fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email, code: code })
+            body: JSON.stringify({ username: username, password: password })
         }).then(function (r) { return r.json(); }).then(function (data) {
             btn.disabled = false;
             btn.textContent = '登录';
             if (data.success) {
-                setLoginState({ email: data.email, token: data.token, loginTime: Date.now() });
+                setLoginState({ username: data.username, token: data.token, loginTime: Date.now() });
                 showToast('登录成功', 'success');
                 loginModal.classList.remove('active');
-                stopSmsCountdown();
             } else {
                 showToast(data.message || '登录失败', 'error');
             }
