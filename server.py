@@ -725,21 +725,16 @@ def api_news():
 @app.route('/api/market-indices')
 def api_market_indices():
     """大盘指数实时行情 - 对接东方财富push2接口，采集全部国内外指数"""
-    # A股指数
-    a_shares = ('1.000001,0.399001,0.399006,1.000300,1.000016,1.000010,'
-                '1.000905,1.000852,1.000688,0.899050,0.399005,0.399004,0.399106,'
-                '1.000612,1.000073,1.000015,0.399011,1.000132,1.000133,1.000136')
-    # 港股指数
-    hk = '100.HSI,100.HSTECH,100.HSCEI,100.HSCCI,100.CSI'
-    # 美股指数
-    us = '100.DJIA,100.SPX,100.NDX,100.NDAQ,100.RUT,100.VIX'
-    # 欧洲指数
-    eu = '100.FTSE,100.GDAXI,100.FCHI,100.STOXX50E,100.AEX,100.SSMI,100.IBEX'
-    # 亚太指数
-    apac = '100.N225,100.KS11,100.AORD,100.BSESN,100.JKSE,100.SET,100.STI,100.TWII'
-    # 商品/外汇
-    commodity = '100.UDI,100.GC00Y,100.SI00Y,100.CL00Y,100.NG00Y'
-    secids = a_shares + ',' + hk + ',' + us + ',' + eu + ',' + apac + ',' + commodity
+    # 按区域分组定义，每个区域带上标签
+    regions = [
+        ('A股', '1.000001,0.399001,0.399006,1.000300,1.000016,1.000010,1.000905,1.000852,1.000688,0.899050,0.399005,0.399004,0.399106,1.000612,1.000073,1.000015,0.399011,1.000132,1.000133,1.000136'),
+        ('港股', '100.HSI,100.HSTECH,100.HSCEI,100.HSCCI,100.CSI'),
+        ('美股', '100.DJIA,100.SPX,100.NDX,100.NDAQ,100.RUT,100.VIX'),
+        ('欧洲', '100.FTSE,100.GDAXI,100.FCHI,100.STOXX50E,100.AEX,100.SSMI,100.IBEX'),
+        ('亚太', '100.N225,100.KS11,100.AORD,100.BSESN,100.JKSE,100.SET,100.STI,100.TWII'),
+        ('商品', '100.UDI,100.GC00Y,100.SI00Y,100.CL00Y,100.NG00Y'),
+    ]
+    secids = ','.join(codes for _, codes in regions)
     url = 'https://push2.eastmoney.com/api/qt/ulist.np/get'
     params = {
         'fltt': 2,
@@ -752,17 +747,33 @@ def api_market_indices():
         resp = SESSION.get(url, params=params, timeout=8)
         data = resp.json()
         if data.get('data') and data['data'].get('diff'):
+            # 建立code到region的映射
+            code_region = {}
+            for region_name, codes in regions:
+                for c in codes.split(','):
+                    code_region[c.strip()] = region_name
+
             results = []
+            current_region = None
             for item in data['data']['diff']:
                 price = safe_float(item.get('f2'))
                 if price <= 0:
-                    continue  # 过滤无效指数
+                    continue
+                code = item.get('f12', '')
+                region = code_region.get(code, '其他')
+                # 在区域切换时插入分组标记
+                show_region = None
+                if region != current_region:
+                    show_region = region
+                    current_region = region
                 results.append({
-                    'code': item.get('f12', ''),
+                    'code': code,
                     'name': item.get('f14', ''),
                     'price': price,
                     'change': safe_float(item.get('f4')),
                     'changePercent': safe_float(item.get('f3')),
+                    'region': region,
+                    'showRegion': show_region,
                 })
             return jsonify(results)
         print(f'[大盘指数] 无数据: {json.dumps(data, ensure_ascii=False)[:200]}')
