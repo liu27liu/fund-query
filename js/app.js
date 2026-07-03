@@ -36,6 +36,72 @@
         return siteConfig[key] != null ? siteConfig[key] : (fallback != null ? fallback : key);
     }
 
+    // ========== 公告栏 ==========
+    var announcements = [];
+    var annIndex = 0;
+    var annTimer = null;
+
+    function loadAnnouncements() {
+        fetch('/api/announcements')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                announcements = data || [];
+                renderAnnouncements();
+            })
+            .catch(function () {});
+    }
+
+    function renderAnnouncements() {
+        var bar = document.getElementById('announcementBar');
+        var content = document.getElementById('announcementContent');
+        if (!bar || !content) return;
+        if (announcements.length === 0) {
+            bar.style.display = 'none';
+            return;
+        }
+        // 检查是否已关闭（本次会话内）
+        if (sessionStorage.getItem('ann_closed') === '1') {
+            bar.style.display = 'none';
+            return;
+        }
+        bar.style.display = 'block';
+        var typeLabels = { info: '公告', tip: '提示', warning: '注意', danger: '重要' };
+        var html = '';
+        announcements.forEach(function (ann, i) {
+            var tagClass = 'ann-' + (ann.type || 'info');
+            var tagLabel = typeLabels[ann.type] || '公告';
+            var linkOpen = ann.link ? '<a href="' + escapeHtml(ann.link) + '" target="_blank" style="color:#1677ff;">' : '';
+            var linkClose = ann.link ? '</a>' : '';
+            html += '<div class="ann-item ' + (i === 0 ? 'active' : '') + '" data-index="' + i + '">' +
+                '<span class="ann-tag ' + tagClass + '">' + tagLabel + '</span>' +
+                linkOpen + escapeHtml(ann.content) + linkClose +
+                '</div>';
+        });
+        content.innerHTML = html;
+        annIndex = 0;
+        // 多条公告轮播
+        if (announcements.length > 1) {
+            startAnnRotation();
+        }
+    }
+
+    function startAnnRotation() {
+        if (annTimer) clearInterval(annTimer);
+        annTimer = setInterval(function () {
+            var items = document.querySelectorAll('.announcement-content .ann-item');
+            if (items.length <= 1) return;
+            items[annIndex].classList.remove('active');
+            annIndex = (annIndex + 1) % items.length;
+            items[annIndex].classList.add('active');
+        }, 5000);
+    }
+
+    function escapeHtml(s) {
+        if (s == null) return '';
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     function loadSiteConfig(callback) {
         fetch('/api/site-config')
             .then(function (r) { return r.json(); })
@@ -2709,6 +2775,16 @@
 
     // ========== 事件绑定 ==========
     function bindEvents() {
+        // 公告栏关闭按钮
+        var annClose = document.getElementById('announcementClose');
+        if (annClose) {
+            annClose.addEventListener('click', function () {
+                document.getElementById('announcementBar').style.display = 'none';
+                sessionStorage.setItem('ann_closed', '1');
+                if (annTimer) clearInterval(annTimer);
+            });
+        }
+
         // 搜索输入
         searchInput.addEventListener('input', handleSearchInput);
         searchInput.addEventListener('focus', function () {
@@ -3105,6 +3181,8 @@
             router();
             updateFooterTime();
             setInterval(updateFooterTime, 1000);
+            // 加载公告栏
+            loadAnnouncements();
         });
     }
 

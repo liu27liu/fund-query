@@ -268,6 +268,32 @@ def api_site_config():
     return jsonify(result)
 
 
+# ========== 公告（公开接口，前端加载）==========
+_announcement_cache = {'data': None, 'time': 0}
+
+@app.route('/api/announcements')
+def api_announcements():
+    """返回当前有效的公告列表（缓存30秒）"""
+    import admin_db
+    now = time.time()
+    if _announcement_cache['data'] and now - _announcement_cache['time'] < 30:
+        return jsonify(_announcement_cache['data'])
+    anns = admin_db.list_announcements(active_only=True)
+    result = []
+    for a in anns:
+        result.append({
+            'id': a['id'],
+            'title': a['title'],
+            'content': a['content'],
+            'type': a['type'],
+            'link': a['link'],
+            'sort_order': a['sort_order'],
+        })
+    _announcement_cache['data'] = result
+    _announcement_cache['time'] = now
+    return jsonify(result)
+
+
 @app.route('/<path:path>')
 def static_files(path):
     return send_from_directory('.', path)

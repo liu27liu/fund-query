@@ -411,6 +411,75 @@ def search_logs():
     return jsonify({'success': True, 'list': logs, 'total': total})
 
 
+# ========== 15. 公告管理 ==========
+
+def _clear_announcement_cache():
+    """清除公告缓存"""
+    try:
+        import server
+        server._announcement_cache = {'data': None, 'time': 0}
+    except Exception:
+        pass
+
+
+@admin_bp.route('/announcements', methods=['GET'])
+@admin_required('announcements')
+def ann_list():
+    """公告列表"""
+    anns = admin_db.list_announcements(active_only=False)
+    for a in anns:
+        a['create_time_str'] = _fmt_time(a.get('create_time'))
+        a['update_time_str'] = _fmt_time(a.get('update_time'))
+    return jsonify({'success': True, 'list': anns})
+
+
+@admin_bp.route('/announcements', methods=['POST'])
+@admin_required('announcements')
+def ann_create():
+    """新增公告"""
+    data = request.json or {}
+    title = (data.get('title', '') or '').strip()
+    content = (data.get('content', '') or '').strip()
+    if not title or not content:
+        return jsonify({'success': False, 'message': '标题和内容不能为空'})
+    ann_id = admin_db.create_announcement(
+        title=title, content=content,
+        type=data.get('type', 'info'),
+        link=data.get('link', ''),
+        sort_order=int(data.get('sort_order', 0)),
+        status=int(data.get('status', 1)),
+    )
+    _log_op('announcements', '新增公告', f'标题:{title}')
+    _clear_announcement_cache()
+    return jsonify({'success': True, 'message': '公告已发布'})
+
+
+@admin_bp.route('/announcements/<int:aid>', methods=['PUT'])
+@admin_required('announcements')
+def ann_update(aid):
+    """编辑公告"""
+    data = request.json or {}
+    updates = {}
+    for k in ('title', 'content', 'type', 'link', 'sort_order', 'status'):
+        if k in data:
+            updates[k] = int(data[k]) if k in ('sort_order', 'status') else data[k]
+    if updates:
+        admin_db.update_announcement(aid, **updates)
+        _log_op('announcements', '编辑公告', f'ID:{aid}')
+        _clear_announcement_cache()
+    return jsonify({'success': True, 'message': '已更新'})
+
+
+@admin_bp.route('/announcements/<int:aid>', methods=['DELETE'])
+@admin_required('announcements')
+def ann_delete(aid):
+    """删除公告"""
+    admin_db.delete_announcement(aid)
+    _log_op('announcements', '删除公告', f'ID:{aid}')
+    _clear_announcement_cache()
+    return jsonify({'success': True, 'message': '已删除'})
+
+
 # ========== 8. 基金数据管理 ==========
 
 @admin_bp.route('/funds', methods=['GET'])
@@ -852,6 +921,7 @@ def menu():
 
     all_menus = [
         {'key': 'dashboard', 'title': '系统仪表盘', 'icon': 'dashboard', 'perm': 'dashboard'},
+        {'key': 'announcements', 'title': '公告管理', 'icon': 'notice', 'perm': 'announcements'},
         {'key': 'users', 'title': '网站用户管理', 'icon': 'users', 'perm': 'users'},
         {'key': 'admins', 'title': '管理员管理', 'icon': 'admin', 'perm': 'admins', 'super_only': True},
         {'key': 'funds', 'title': '基金数据管理', 'icon': 'fund', 'perm': 'funds'},

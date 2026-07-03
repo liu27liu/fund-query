@@ -152,7 +152,7 @@ function loadMenu() {
 var iconMap = {
     dashboard: '📊', users: '👥', admin: '⚙️', fund: '💰', chart: '📈',
     star: '⭐', search: '🔍', task: '🔄', database: '🗄️', server: '🖥️',
-    setting: '🔧', log: '📝'
+    setting: '🔧', log: '📝', notice: '📢'
 };
 
 function renderMenu() {
@@ -185,6 +185,7 @@ function router() {
     // 路由分发
     switch (hash) {
         case 'dashboard': renderDashboard(); break;
+        case 'announcements': renderAnnouncements(); break;
         case 'users': renderSiteUsers(1); break;
         case 'admins': renderAdmins(1); break;
         case 'funds': renderFunds(1); break;
@@ -786,6 +787,104 @@ function clearSectorCache() {
     });
 }
 
+// ========== 公告管理 ==========
+function renderAnnouncements() {
+    api('/announcements').then(function (res) {
+        if (!res.success) return;
+        var typeLabels = { info: '公告', tip: '提示', warning: '注意', danger: '重要' };
+        var typeTags = { info: 'tag-primary', tip: 'tag-success', warning: 'tag-warning', danger: 'tag-error' };
+        var html = '<div class="search-bar"><button class="btn-primary" onclick="showEditAnn()">+ 发布公告</button></div>';
+        html += '<div class="card"><table class="data-table"><thead><tr><th>ID</th><th>标题</th><th>内容</th><th>类型</th><th>排序</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead><tbody>';
+        res.list.forEach(function (a) {
+            html += '<tr><td>' + a.id + '</td><td><strong>' + escapeHtml(a.title) + '</strong></td>';
+            html += '<td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(a.content) + '</td>';
+            html += '<td><span class="tag ' + (typeTags[a.type] || 'tag-default') + '">' + (typeLabels[a.type] || a.type) + '</span></td>';
+            html += '<td>' + (a.sort_order || 0) + '</td>';
+            html += '<td>' + (a.status === 1 ? '<span class="tag tag-success">显示中</span>' : '<span class="tag tag-default">已隐藏</span>') + '</td>';
+            html += '<td>' + escapeHtml(a.create_time_str) + '</td>';
+            html += '<td><div class="btn-group"><button class="btn-default btn-sm" onclick="showEditAnn(' + a.id + ')">编辑</button>';
+            html += '<button class="btn-default btn-sm" onclick="toggleAnn(' + a.id + ',' + (a.status === 1 ? 0 : 1) + ')">' + (a.status === 1 ? '隐藏' : '显示') + '</button>';
+            html += '<button class="btn-danger btn-sm" onclick="deleteAnn(' + a.id + ')">删除</button></div></td></tr>';
+        });
+        if (!res.list.length) html += '<tr><td colspan="8" class="text-center" style="color:#999;padding:20px;">暂无公告</td></tr>';
+        html += '</tbody></table></div>';
+        document.getElementById('pageContent').innerHTML = html;
+    });
+}
+
+function showEditAnn(id) {
+    if (id) {
+        api('/announcements').then(function (res) {
+            if (!res.success) return;
+            var a = res.list.find(function (x) { return x.id === id; });
+            if (!a) return;
+            _renderAnnForm(a);
+        });
+    } else {
+        _renderAnnForm(null);
+    }
+}
+
+function _renderAnnForm(a) {
+    var title = a ? a.title : '';
+    var content = a ? a.content : '';
+    var type = a ? a.type : 'info';
+    var sort = a ? (a.sort_order || 0) : 0;
+    var status = a ? a.status : 1;
+    var html = '<div class="form-group"><label>标题</label><input type="text" id="annTitle" value="' + escapeHtml(title) + '" placeholder="公告标题"></div>';
+    html += '<div class="form-group"><label>内容</label><textarea id="annContent" rows="3" placeholder="公告内容">' + escapeHtml(content) + '</textarea></div>';
+    html += '<div class="form-row"><div class="form-group"><label>类型</label><select id="annType">';
+    html += '<option value="info" ' + (type === 'info' ? 'selected' : '') + '>公告</option>';
+    html += '<option value="tip" ' + (type === 'tip' ? 'selected' : '') + '>提示</option>';
+    html += '<option value="warning" ' + (type === 'warning' ? 'selected' : '') + '>注意</option>';
+    html += '<option value="danger" ' + (type === 'danger' ? 'selected' : '') + '>重要</option>';
+    html += '</select></div>';
+    html += '<div class="form-group"><label>排序(数字越小越靠前)</label><input type="number" id="annSort" value="' + sort + '"></div>';
+    html += '<div class="form-group"><label>状态</label><select id="annStatus">';
+    html += '<option value="1" ' + (status === 1 ? 'selected' : '') + '>显示</option>';
+    html += '<option value="0" ' + (status === 0 ? 'selected' : '') + '>隐藏</option>';
+    html += '</select></div></div>';
+    var footer = '<button class="btn-default" onclick="closeModal()">取消</button><button class="btn-primary" onclick="saveAnn(' + (a ? a.id : 0) + ')">保存</button>';
+    openModal(a ? '编辑公告' : '发布公告', html, footer);
+}
+
+function saveAnn(id) {
+    var data = {
+        title: document.getElementById('annTitle').value.trim(),
+        content: document.getElementById('annContent').value.trim(),
+        type: document.getElementById('annType').value,
+        sort_order: parseInt(document.getElementById('annSort').value) || 0,
+        status: parseInt(document.getElementById('annStatus').value),
+    };
+    if (!data.title || !data.content) { showToast('标题和内容不能为空', 'error'); return; }
+    if (id) {
+        api('/announcements/' + id, 'PUT', data).then(function (res) {
+            showToast(res.success ? '已更新' : res.message, res.success ? 'success' : 'error');
+            if (res.success) { closeModal(); renderAnnouncements(); }
+        });
+    } else {
+        api('/announcements', 'POST', data).then(function (res) {
+            showToast(res.success ? '已发布' : res.message, res.success ? 'success' : 'error');
+            if (res.success) { closeModal(); renderAnnouncements(); }
+        });
+    }
+}
+
+function toggleAnn(id, status) {
+    api('/announcements/' + id, 'PUT', { status: status }).then(function (res) {
+        showToast(res.success ? (status ? '已显示' : '已隐藏') : res.message, res.success ? 'success' : 'error');
+        if (res.success) renderAnnouncements();
+    });
+}
+
+function deleteAnn(id) {
+    if (!confirm('确定删除此公告？')) return;
+    api('/announcements/' + id, 'DELETE').then(function (res) {
+        showToast(res.success ? '已删除' : res.message, res.success ? 'success' : 'error');
+        if (res.success) renderAnnouncements();
+    });
+}
+
 // ========== 11. 系统配置 ==========
 // 配置分类定义
 var CONFIG_CATEGORIES = [
@@ -972,5 +1071,10 @@ window.loadLoginLogs = loadLoginLogs;
 window.loadOpLogs = loadOpLogs;
 window.navigate = navigate;
 window.closeModal = closeModal;
+window.renderAnnouncements = renderAnnouncements;
+window.showEditAnn = showEditAnn;
+window.saveAnn = saveAnn;
+window.toggleAnn = toggleAnn;
+window.deleteAnn = deleteAnn;
 
 })();

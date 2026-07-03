@@ -186,6 +186,23 @@ def init_db():
         )
     ''')
 
+    # ========== 公告表 ==========
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS announcements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL DEFAULT '',
+            content TEXT NOT NULL DEFAULT '',
+            type TEXT DEFAULT 'info',
+            link TEXT DEFAULT '',
+            sort_order INTEGER DEFAULT 0,
+            status INTEGER DEFAULT 1,
+            start_time REAL,
+            end_time REAL,
+            create_time REAL NOT NULL,
+            update_time REAL
+        )
+    ''')
+
     conn.commit()
 
     # ========== 初始化默认角色 ==========
@@ -194,11 +211,11 @@ def init_db():
         default_roles = [
             ('superadmin', '超级管理员', json.dumps(['*']), '拥有所有权限', 1),
             ('operator', '运营管理员', json.dumps([
-                'dashboard', 'users', 'funds', 'nav', 'favorites',
+                'dashboard', 'announcements', 'users', 'funds', 'nav', 'favorites',
                 'search_stats', 'tasks', 'sources', 'config'
             ]), '可管理用户、基金、任务、配置，不可管理管理员', 1),
             ('readonly', '只读运维', json.dumps([
-                'dashboard', 'users', 'funds', 'nav', 'favorites',
+                'dashboard', 'announcements', 'users', 'funds', 'nav', 'favorites',
                 'search_stats', 'tasks', 'sources'
             ]), '只能查看数据，不能修改', 1),
         ]
@@ -315,6 +332,17 @@ def init_db():
         for name, code, typ, desc, cron, config, status in default_tasks:
             c.execute('''INSERT INTO collection_tasks (name, code, type, description, cron, config, status, create_time)
                          VALUES (?,?,?,?,?,?,?,?)''', (name, code, typ, desc, cron, config, status, time.time()))
+
+    # ========== 初始化默认公告 ==========
+    ann_count = c.execute('SELECT COUNT(*) FROM announcements').fetchone()[0]
+    if ann_count == 0:
+        default_anns = [
+            ('欢迎使用基金净值通', '本平台提供全市场公募基金实时估值查询、持仓盈亏计算、自选基金管理等功能，数据仅供参考，不构成投资建议。', 'info', '', 0, 1, None, None),
+            ('盘中实时估值', '交易日内盘中实时估值数据每3秒更新一次，盘后数据以基金公司公布的官方净值为准。', 'tip', '', 1, 1, None, None),
+        ]
+        for title, content, typ, link, sort, status, start, end in default_anns:
+            c.execute('''INSERT INTO announcements (title, content, type, link, sort_order, status, start_time, end_time, create_time)
+                         VALUES (?,?,?,?,?,?,?,?,?)''', (title, content, typ, link, sort, status, start, end, time.time()))
 
     conn.commit()
     conn.close()
@@ -826,6 +854,72 @@ def get_dashboard_stats():
 _boot_time = time.time()
 def _get_boot_time():
     return _boot_time
+
+
+# ========== 公告管理 ==========
+
+def list_announcements(active_only=False):
+    """获取公告列表，active_only=True 只返回有效公告"""
+    conn = _get_conn()
+    if active_only:
+        now = time.time()
+        rows = conn.execute(
+            '''SELECT * FROM announcements WHERE status=1
+               AND (start_time IS NULL OR start_time<=?)
+               AND (end_time IS NULL OR end_time>=?)
+               ORDER BY sort_order, id DESC''', (now, now)
+        ).fetchall()
+    else:
+        rows = conn.execute('SELECT * FROM announcements ORDER BY sort_order, id DESC').fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_announcement(ann_id):
+    conn = _get_conn()
+    row = conn.execute('SELECT * FROM announcements WHERE id=?', (ann_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def create_announcement(title, content, type='info', link='', sort_order=0, status=1, start_time=None, end_time=None):
+    conn = _get_conn()
+    c = conn.execute(
+        '''INSERT INTO announcements (title, content, type, link, sort_order, status, start_time, end_time, create_time)
+           VALUES (?,?,?,?,?,?,?,?,?)''',
+        (title, content, type, link, sort_order, status, start_time, end_time, time.time())
+    )
+    conn.commit()
+    ann_id = c.lastrowid
+    conn.close()
+    return ann_id
+
+
+def update_announcement(ann_id, **kwargs):
+    conn = _get_conn()
+    sets = []
+    vals = []
+    for k in ('title', 'content', 'type', 'link', 'sort_order', 'status', 'start_time', 'end_time'):
+        if k in kwargs:
+            sets.append(f'{k}=?')
+            vals.append(kwargs[k])
+    if not sets:
+        conn.close()
+        return False
+    sets.append('update_time=?')
+    vals.append(time.time())
+    vals.append(ann_id)
+    conn.execute(f'UPDATE announcements SET {",".join(sets)} WHERE id=?', vals)
+    conn.commit()
+    conn.close()
+    return True
+
+
+def delete_announcement(ann_id):
+    conn = _get_conn()
+    conn.execute('DELETE FROM announcements WHERE id=?', (ann_id,))
+    conn.commit()
+    conn.close()
 
 
 # 初始化（模块导入时执行）
