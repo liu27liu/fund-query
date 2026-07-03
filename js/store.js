@@ -10,12 +10,24 @@ const Store = (function () {
     var HOLDINGS_KEY = 'fund_holdings';
     var DEFAULT_GROUP = '全部';
 
+    // 检查是否已登录
+    function isLoggedIn() {
+        try {
+            var user = localStorage.getItem('fund_user');
+            return !!user;
+        } catch (e) {
+            return false;
+        }
+    }
+
     // ========== 自选基金 ==========
 
     /**
      * 获取所有自选基金
      */
     function getFavorites() {
+        // 未登录返回空数组
+        if (!isLoggedIn()) return [];
         try {
             var data = localStorage.getItem(FAV_KEY);
             return data ? JSON.parse(data) : [];
@@ -192,6 +204,8 @@ const Store = (function () {
      * 获取所有持仓列表
      */
     function getHoldings() {
+        // 未登录返回空数组
+        if (!isLoggedIn()) return [];
         try {
             var data = localStorage.getItem(HOLDINGS_KEY);
             return data ? JSON.parse(data) : [];

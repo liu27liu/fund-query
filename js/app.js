@@ -183,6 +183,9 @@
 
             <div id="portfolioOverview"></div>
 
+            <!-- 未登录时显示登录提示 -->
+            <div id="loginPromptHome" style="display:none;"></div>
+
             <!-- 门户卡片网格 -->
             <div class="portal-grid">
                 <div class="portal-card" data-target="marketSection">
@@ -412,8 +415,44 @@
         var container = document.getElementById('portfolioOverview');
         if (!container) return;
 
+        // 未登录不显示持仓概览
+        if (!isLoggedIn()) {
+            container.innerHTML = '';
+            var promptEl = document.getElementById('loginPromptHome');
+            if (promptEl) {
+                promptEl.style.display = 'block';
+                promptEl.innerHTML = `
+                    <div class="login-prompt-card" style="margin-bottom: 24px; padding: 24px; text-align: center; background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--card-shadow); border: 1px solid var(--border-light);">
+                        <div style="font-size: 48px; margin-bottom: 12px;">🔐</div>
+                        <h3 style="font-size: 18px; margin-bottom: 8px; color: var(--text);">登录后查看持仓和自选</h3>
+                        <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 16px;">登录后可使用持仓盈亏追踪、自选基金管理，数据云端保存</p>
+                        <button class="form-submit" onclick="document.getElementById('loginBtn').click()" style="min-width: 160px;">立即登录</button>
+                    </div>
+                `;
+            }
+            return;
+        }
+
+        // 已登录：隐藏登录提示
+        var promptEl2 = document.getElementById('loginPromptHome');
+        if (promptEl2) promptEl2.style.display = 'none';
+
         var positions = Store.getAggregatedPositions();
-        if (positions.length === 0) return;
+        if (positions.length === 0) {
+            container.innerHTML = `
+                <div class="portfolio-summary" style="margin-bottom: 24px;">
+                    <div class="summary-header">
+                        <span class="summary-title">📊 我的持仓</span>
+                        <a href="#/portfolio" class="summary-link">查看详情 →</a>
+                    </div>
+                    <div style="padding: 32px; text-align: center; color: var(--text-tertiary);">
+                        <div style="font-size: 36px; margin-bottom: 8px;">📭</div>
+                        <p>暂无持仓数据，去<a href="#/portfolio" style="color: var(--primary);">添加持仓</a></p>
+                    </div>
+                </div>
+            `;
+            return;
+        }
 
         // 获取所有持仓基金的实时估值
         var codes = positions.map(function (p) { return p.code; });
@@ -1080,6 +1119,12 @@
 
     // ========== 持仓页 ==========
     function renderPortfolio() {
+        // 未登录显示登录拦截
+        if (!isLoggedIn()) {
+            showLoginRequired('持仓');
+            return;
+        }
+
         var positions = Store.getAggregatedPositions();
 
         app.innerHTML = `
@@ -1948,6 +1993,12 @@
 
     // ========== 自选页 ==========
     function renderFavorites() {
+        // 未登录显示登录拦截
+        if (!isLoggedIn()) {
+            showLoginRequired('自选');
+            return;
+        }
+
         var favorites = Store.getFavorites();
         var groups = Store.getGroups();
         var currentGroup = '全部';
