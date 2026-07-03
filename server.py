@@ -48,6 +48,31 @@ def add_no_cache_headers(resp):
 _email_codes = {}  # {email: {code, expire_time, attempts}}
 _sector_cache = {}  # {key: {data, time}} - 板块数据缓存，60秒过期
 
+# ========== 统一热点数据缓存 ==========
+# 各API独立缓存 + 后台预热线程，确保首页数据秒级响应
+_hot_cache = {}  # {key: {'data': data, 'time': timestamp, 'lock': threading.Lock()}}
+_hot_cache_locks = {}  # 每个key一把锁，防止缓存击穿
+
+def _get_cache(key, ttl):
+    """读取缓存, 未过期返回数据, 否则None"""
+    entry = _hot_cache.get(key)
+    if entry and time.time() - entry['time'] < ttl:
+        return entry['data']
+    return None
+
+def _set_cache(key, data):
+    """写入缓存"""
+    _hot_cache[key] = {'data': data, 'time': time.time()}
+
+def _get_key_lock(key):
+    """获取key专属锁, 防止并发重复采集"""
+    if key not in _hot_cache_locks:
+        _hot_cache_locks[key] = threading.Lock()
+    return _hot_cache_locks[key]
+
+# 板块基金数量独立缓存（10分钟, 基金数量变化不频繁）
+_sector_fund_count_cache = {'data': {}, 'time': 0}
+
 # ========== 用户数据持久化存储 ==========
 # 优先使用 /data (Railway volume)，其次用项目目录
 _DB_DIR = '/data' if os.path.isdir('/data') else os.path.dirname(os.path.abspath(__file__))
@@ -789,6 +814,12 @@ def api_ranking():
     fund_type = request.args.get('type', 'all')
     order = request.args.get('order', 'desc')  # desc=降序(涨幅榜), asc=升序(跌幅榜)
 
+    # 缓存15秒（首页默认参数高频访问）
+    cache_key = f'ranking_{sort_type}_{size}_{page}_{fund_type}_{order}'
+    cached = _get_cache(cache_key, 15)
+    if cached is not None:
+        return jsonify(cached)
+
     # 东方财富基金排行数据接口
     sort_map = {
         'RZDF': 'rzdf',   # 日涨幅
@@ -872,7 +903,9 @@ def api_ranking():
                 r['change'] = r.get('monthChange', 0)
             elif change_idx == 11:
                 r['change'] = r.get('yearChange', 0)
-        return jsonify({'funds': results, 'total': total_count})
+        result = {'funds': results, 'total': total_count}
+        _set_cache(cache_key, result)
+        return jsonify(result)
     except Exception as e:
         print(f'[排行异常]: {e}')
         return jsonify([])
@@ -881,6 +914,28 @@ def api_ranking():
 @app.route('/api/news')
 def api_news():
     """7x24实时财经资讯 - 对接东方财富7x24快讯接口"""
+    # 缓存30秒
+    cached = _get_cache('news', 30)
+    if cached is not None:
+        return jsonify(cached)
+
+    lock = _get_key_lock('news')
+    if not lock.acquire(blocking=False):
+        time.sleep(0.3)
+        cached = _get_cache('news', 60)
+        if cached is not None:
+            return jsonify(cached)
+
+    try:
+        result = _fetch_news()
+        _set_cache('news', result)
+        return jsonify(result)
+    finally:
+        lock.release()
+
+
+def _fetch_news():
+    """实际采集资讯数据"""
     page_size = request.args.get('size', '15')
     sort_end = request.args.get('sortEnd', '')
 
@@ -914,11 +969,11 @@ def api_news():
                     'url': item.get('url_w', '') or item.get('url', '') or item.get('uniqueUrl', '')
                 })
             print(f'[资讯] 主接口返回 {len(results)} 条', flush=True)
-            return jsonify({
+            return {
                 'list': results,
                 'sortEnd': data['data'].get('sortEnd', ''),
                 'total': data['data'].get('total', 0)
-            })
+            }
         # 打印data的keys帮助调试
         if data.get('data'):
             print(f'[资讯] 主接口data keys: {list(data["data"].keys())}', flush=True)
@@ -951,21 +1006,44 @@ def api_news():
                     'url': item.get('url_w', '') or item.get('url', '') or item.get('uniqueUrl', '')
                 })
             print(f'[资讯] 备用接口返回 {len(results)} 条', flush=True)
-            return jsonify({
+            return {
                 'list': results,
                 'sortEnd': '',
                 'total': 0
-            })
+            }
         print(f'[资讯] 备用接口也无数据: msg={data2.get("message", "")}', flush=True)
     except Exception as e:
         print(f'[资讯] 备用接口异常: {e}', flush=True)
 
-    return jsonify({'list': [], 'sortEnd': '', 'total': 0})
+    return {'list': [], 'sortEnd': '', 'total': 0}
 
 
 @app.route('/api/market-indices')
 def api_market_indices():
     """大盘指数实时行情 - 对接东方财富push2接口，采集全部国内外指数"""
+    # 缓存8秒（盘中近实时，盘后也快速返回）
+    cached = _get_cache('market_indices', 8)
+    if cached is not None:
+        return jsonify(cached)
+
+    lock = _get_key_lock('market_indices')
+    if not lock.acquire(blocking=False):
+        # 另一个线程正在采集，等待短暂后重试缓存
+        time.sleep(0.3)
+        cached = _get_cache('market_indices', 30)
+        if cached is not None:
+            return jsonify(cached)
+
+    try:
+        result = _fetch_market_indices()
+        _set_cache('market_indices', result)
+        return jsonify(result)
+    finally:
+        lock.release()
+
+
+def _fetch_market_indices():
+    """实际采集大盘指数数据"""
     # 按区域分组定义，每个区域带上标签
     regions = [
         ('A股', '1.000001,0.399001,0.399006,1.000300,1.000016,1.000010,1.000905,1.000852,1.000688,0.899050,0.399005,0.399004,0.399106,1.000612,1.000073,1.000015,0.399011,1.000132,1.000133,1.000136'),
@@ -985,7 +1063,7 @@ def api_market_indices():
         '_': str(int(time.time() * 1000))
     }
     try:
-        resp = SESSION.get(url, params=params, timeout=8)
+        resp = SESSION.get(url, params=params, timeout=6)
         data = resp.json()
         if data.get('data') and data['data'].get('diff'):
             # 建立code到region的映射（同时映射完整secid和去掉前缀的code）
@@ -1024,12 +1102,12 @@ def api_market_indices():
                     'region': region,
                     'showRegion': show_region,
                 })
-            return jsonify(results)
+            return results
         print(f'[大盘指数] 无数据: {json.dumps(data, ensure_ascii=False)[:200]}')
-        return jsonify([])
+        return []
     except Exception as e:
         print(f'[大盘指数异常]: {e}')
-        return jsonify([])
+        return []
 
 
 @app.route('/api/sectors')
@@ -1300,11 +1378,25 @@ def _fetch_ttjj_theme_data():
 
 def _fetch_sector_fund_counts(bk_codes):
     """批量获取板块关联基金数量 - 天天基金网GetBKRelTopicFundNew
-    并发请求每个板块, pagesize=1只取TotalCount
+    使用独立长缓存(10分钟), 基金数量变化不频繁
     返回: {bk_code: fund_count}
     """
     if not bk_codes:
         return {}
+
+    # 检查独立缓存（10分钟）
+    now = time.time()
+    if _sector_fund_count_cache['data'] and now - _sector_fund_count_cache['time'] < 600:
+        cached = _sector_fund_count_cache['data']
+        # 只返回请求的codes
+        return {k: v for k, v in cached.items() if k in bk_codes}
+
+    # 需要采集的codes：优先用缓存中已有的，只采集缺失的
+    existing = _sector_fund_count_cache.get('data', {})
+    codes_to_fetch = [c for c in bk_codes if c not in existing]
+
+    if not codes_to_fetch:
+        return {k: v for k, v in existing.items() if k in bk_codes}
 
     def _fetch_one(bk_code):
         url = 'https://api.fund.eastmoney.com/ZTJJ/GetBKRelTopicFundNew'
@@ -1324,7 +1416,7 @@ def _fetch_sector_fund_counts(bk_codes):
             'Accept': '*/*',
         }
         try:
-            resp = SESSION.get(url, params=params, headers=headers, timeout=8)
+            resp = SESSION.get(url, params=params, headers=headers, timeout=5)
             text = resp.text
             m = re.search(r'jQuery\((.*)\)', text)
             if m:
@@ -1334,19 +1426,25 @@ def _fetch_sector_fund_counts(bk_codes):
             pass
         return bk_code, 0
 
-    counts = {}
+    new_counts = {}
     from concurrent.futures import ThreadPoolExecutor, as_completed
     with ThreadPoolExecutor(max_workers=20) as executor:
-        futures = [executor.submit(_fetch_one, code) for code in bk_codes if code]
-        for future in as_completed(futures, timeout=30):
+        futures = [executor.submit(_fetch_one, code) for code in codes_to_fetch if code]
+        for future in as_completed(futures, timeout=20):
             try:
                 bk_code, count = future.result()
-                counts[bk_code] = count
+                new_counts[bk_code] = count
             except Exception:
                 pass
 
-    print(f'[板块基金数] 获取 {len(counts)} 个板块的基金数量', flush=True)
-    return counts
+    # 合并到缓存
+    merged_counts = dict(existing)
+    merged_counts.update(new_counts)
+    _sector_fund_count_cache['data'] = merged_counts
+    _sector_fund_count_cache['time'] = now
+
+    print(f'[板块基金数] 新采集 {len(new_counts)} 个, 缓存总计 {len(merged_counts)} 个', flush=True)
+    return {k: v for k, v in merged_counts.items() if k in bk_codes}
 
 
 def _fetch_ths_industry_boards():
@@ -2265,5 +2363,35 @@ if __name__ == '__main__':
             pass
     else:
         print('云端无数据或同步失败，使用本地数据')
+
+    # ========== 启动热点数据预热 ==========
+    def _prewarm_cache():
+        """后台预热首页热点数据，确保首次访问秒级响应"""
+        import time as _time
+        _time.sleep(2)  # 等待服务就绪
+        print('[预热] 开始预热热点数据...', flush=True)
+        try:
+            _set_cache('market_indices', _fetch_market_indices())
+            print('[预热] 大盘指数完成', flush=True)
+        except Exception as e:
+            print(f'[预热] 大盘指数失败: {e}', flush=True)
+        try:
+            # 预热行业板块
+            results = _fetch_industry_sectors()
+            _sector_cache['sectors_行业板块'] = {'data': results, 'time': time.time()}
+            print(f'[预热] 行业板块完成: {len(results)}个', flush=True)
+        except Exception as e:
+            print(f'[预热] 行业板块失败: {e}', flush=True)
+        try:
+            results = _fetch_concept_sectors()
+            _sector_cache['sectors_概念题材'] = {'data': results, 'time': time.time()}
+            print(f'[预热] 概念题材完成: {len(results)}个', flush=True)
+        except Exception as e:
+            print(f'[预热] 概念题材失败: {e}', flush=True)
+        print('[预热] 热点数据预热完成', flush=True)
+
+    prewarm_thread = threading.Thread(target=_prewarm_cache, daemon=True)
+    prewarm_thread.start()
+
     print('='*50)
     app.run(host='0.0.0.0', port=port, debug=False)

@@ -2226,21 +2226,25 @@
     }
 
     // 刷新首页数据：大盘指数 + 板块行情 + 涨跌榜 + 持仓概览 + 资讯
+    // 并行加载所有数据，大幅缩短总等待时间
     async function refreshHomeData() {
-        // 1. 刷新大盘指数
-        await loadMarketIndices();
-        // 2. 刷新赛道板块
+        var tasks = [];
+        // 1. 大盘指数
+        tasks.push(loadMarketIndices());
+        // 2. 赛道板块
         var activeSectorTab = document.querySelector('.sector-tab.active');
         if (activeSectorTab) {
             var sCat = activeSectorTab.dataset.category || '行业板块';
-            await loadSectors(sCat);
+            tasks.push(loadSectors(sCat));
         }
-        // 3. 刷新涨跌榜
-        await loadRanking(currentRankingType, currentRankingOrder, currentFundType);
-        // 4. 刷新持仓概览
-        await loadPortfolioOverview();
-        // 5. 刷新资讯
-        await loadNews(1);
+        // 3. 涨跌榜
+        tasks.push(loadRanking(currentRankingType, currentRankingOrder, currentFundType));
+        // 4. 持仓概览
+        tasks.push(loadPortfolioOverview());
+        // 5. 资讯
+        tasks.push(loadNews(1));
+        // 并行执行所有
+        await Promise.all(tasks);
     }
 
     // ========== 添加持仓表单 ==========
