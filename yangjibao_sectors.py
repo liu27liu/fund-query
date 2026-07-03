@@ -399,6 +399,77 @@ CONCEPT_NAME_MAP = {
     "减肥药": "减肥药",
 }
 
+# ========== 天天基金网主题基金API名称 → 养基宝标准名称映射 ==========
+# 天天基金网 GetBKListByBKTypeNew / GetZTJJListNew 返回的板块名
+# 与养基宝白名单不完全一致, 且hy1/gn分类与养基宝行业/概念分类不完全对应
+# 需要额外映射 + 跨分类匹配(某些养基宝行业板块在天天基金网属于概念, 反之亦然)
+
+TTJJ_INDUSTRY_MAP = {
+    # 天天基金网hy1中需要额外映射的名称
+    "航天装备": "军工",
+    "航空装备": "军工",
+    "电力设备": "电力",
+    "石油石化": "油气",
+    "煤炭开采": "煤炭",
+    "数字媒体": "传媒",
+    "广告营销": "传媒",
+    "装修建材": "建材",
+    "房地产服务": "地产",
+    "房地产开发": "地产",
+    "基础化工": "化工",
+    "农化制品": "化工",
+    "汽车": "新能源车",
+    "汽车服务": "新能源车",
+    "汽车零部件": "新能源车",
+    "电子": "半导体",
+    # 天天基金网gn中映射为养基宝行业板块的(跨分类匹配)
+    "创新药": "创新药",
+    "新能源": "新能源",
+    "储能": "储能",
+    "人工智能": "人工智能",
+    "算力": "算力",
+    "5G": "5G",
+    "游戏": "游戏",
+}
+
+TTJJ_CONCEPT_MAP = {
+    # 天天基金网gn中需要额外映射的名称
+    "人形机器人": "人形机器人",
+    "机器人": "机器人",
+    "智能驾驶": "自动驾驶",
+    "卫星互联网": "卫星导航",
+    "国产软件": "信创",
+    "东数西算": "算力租赁",
+    "算力": "算力租赁",
+    "数据要素": "数字经济",
+    "光通信": "光模块",
+    "AI应用": "AI应用",
+    "DeepSeek": "大模型",
+    "存储芯片": "存储芯片",
+    "光刻胶": "光刻胶",
+    "消费电子": "消费电子",
+    "液冷": "液冷",
+    "充电桩": "充电桩",
+    "固态电池": "固态电池",
+    "储能": "储能设备",
+    "绿色电力": "绿电",
+    "养老产业": "养老产业",
+    "一带一路": "一带一路",
+    "国企改革": "国企改革",
+    "中特估": "中字头",
+    "黄金股": "黄金避险",
+    "稀土永磁": "稀有金属",
+    "元宇宙": "元宇宙",
+    "CPO": "CPO",
+    "光模块": "光模块",
+    "创新药": "创新药",
+    "影视": "影视院线",
+    "碳中和": "碳中和",
+    "新能源": "新能源",
+    # 天天基金网hy1中映射为养基宝概念板块的(跨分类匹配)
+    "军工电子": "军工电子",
+}
+
 
 def get_industry_standard_name(raw_name):
     """将第三方行业板块名映射为养基宝标准名
@@ -450,6 +521,40 @@ def get_concept_standard_name(raw_name):
         if raw_key in raw_name or raw_name in raw_key:
             if std_name in CONCEPT_SECTORS:
                 return std_name
+    return None
+
+
+def get_ttjj_industry_name(raw_name):
+    """将天天基金网主题基金API板块名映射为养基宝行业板块标准名
+    支持跨分类匹配(天天基金网的hy1/gn分类与养基宝行业/概念分类不完全对应)
+    Returns: 标准名 or None
+    """
+    # 0. TTJJ专属映射(优先)
+    if raw_name in TTJJ_INDUSTRY_MAP:
+        std = TTJJ_INDUSTRY_MAP[raw_name]
+        if std in INDUSTRY_SECTORS:
+            return std
+    # 1. 通用映射
+    std = get_industry_standard_name(raw_name)
+    if std:
+        return std
+    return None
+
+
+def get_ttjj_concept_name(raw_name):
+    """将天天基金网主题基金API板块名映射为养基宝概念题材标准名
+    支持跨分类匹配
+    Returns: 标准名 or None
+    """
+    # 0. TTJJ专属映射(优先)
+    if raw_name in TTJJ_CONCEPT_MAP:
+        std = TTJJ_CONCEPT_MAP[raw_name]
+        if std in CONCEPT_SECTORS:
+            return std
+    # 1. 通用映射
+    std = get_concept_standard_name(raw_name)
+    if std:
+        return std
     return None
 
 

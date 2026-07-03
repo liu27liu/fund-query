@@ -21,7 +21,9 @@ from yangjibao_sectors import (
     SECTOR_TOP_CATEGORIES, INDUSTRY_SECTORS, CONCEPT_SECTORS,
     BROAD_INDEX_SECTORS, BOND_SECTORS, QDII_SECTORS, MONEY_SECTORS,
     INDUSTRY_NAME_MAP, CONCEPT_NAME_MAP,
+    TTJJ_INDUSTRY_MAP, TTJJ_CONCEPT_MAP,
     get_industry_standard_name, get_concept_standard_name,
+    get_ttjj_industry_name, get_ttjj_concept_name,
     get_all_whitelist_names, is_valid_sector_name,
     get_index_secids, get_index_etf_codes,
     get_index_name_by_secid, get_index_secid_by_name
@@ -1033,7 +1035,7 @@ def api_market_indices():
 @app.route('/api/sectors')
 def api_sectors():
     """养基宝标准板块行情 - 6大一级分类
-    行业板块/概念题材: data.eastmoney.com/dataapi (可从Railway访问)
+    行业板块/概念题材: 天天基金网主题基金API(与养基宝同源, 东方财富Choice数据)
     宽基指数: push2指数API + ETF估值fallback
     债券板块/海外QDII/货币理财: 基金排行API按类型分组统计
     """
@@ -1083,24 +1085,54 @@ def api_sector_categories():
 
 
 def _fetch_industry_sectors():
-    """采集行业板块 - 同花顺为主+东方财富补充, 映射为养基宝标准名
-    同花顺提供50个行业板块, 东方财富补充同花顺没有的分类(如白酒/半导体/银行等)
+    """采集行业板块 - 天天基金网主题基金API(与养基宝同源), 映射为养基宝标准名
+    天天基金网主题基金API返回162个板块(hy1行业+gn概念), 
+    通过get_ttjj_industry_name跨分类匹配到行业板块白名单
     """
-    # 1. 优先从同花顺获取
+    # 1. 优先从天天基金网主题基金API获取(与养基宝同源)
+    ttjj_list = _fetch_ttjj_theme_data()
+    if ttjj_list:
+        merged = {}
+        for item in ttjj_list:
+            std_name = get_ttjj_industry_name(item['name'])
+            if std_name:
+                if std_name in merged:
+                    old = merged[std_name]
+                    old['changePercent'] = round((old['changePercent'] + item['changePercent']) / 2, 2)
+                else:
+                    merged[std_name] = {
+                        'code': item['code'],
+                        'name': std_name,
+                        'price': 0,
+                        'changePercent': item['changePercent'],
+                        'change': 0,
+                        'upCount': 0,
+                        'downCount': 0,
+                        'type': '行业板块',
+                        'category': '行业板块'
+                    }
+        # 补全白名单中缺失的板块
+        for name in INDUSTRY_SECTORS:
+            if name not in merged:
+                merged[name] = {
+                    'code': '', 'name': name, 'price': 0,
+                    'changePercent': 0, 'change': 0,
+                    'upCount': 0, 'downCount': 0,
+                    'type': '行业板块', 'category': '行业板块'
+                }
+        print(f'[行业板块-TTJJ] 映射到 {len(merged)} 个标准板块', flush=True)
+        return list(merged.values())
+
+    # 2. Fallback: 同花顺+东方财富双数据源
+    print('[行业板块] TTJJ API失败, 回退到同花顺+东方财富', flush=True)
     ths_list = _fetch_ths_industry_boards()
-    # 2. 从东方财富获取补充数据
     em_list = _fetch_dataapi_boards('m:90+t:2')
-
-    # 合并数据源, 同花顺优先
     raw_list = ths_list + em_list
-
-    # 映射为标准名, 同名板块合并
     merged = {}
     for item in raw_list:
         std_name = get_industry_standard_name(item['name'])
         if std_name:
             if std_name in merged:
-                # 合并: 取涨跌幅均值, 涨跌家数累加
                 old = merged[std_name]
                 old['changePercent'] = round((old['changePercent'] + item['changePercent']) / 2, 2)
                 old['upCount'] += item['upCount']
@@ -1117,7 +1149,6 @@ def _fetch_industry_sectors():
                     'type': '行业板块',
                     'category': '行业板块'
                 }
-    # 确保白名单中的板块都有返回(缺失的补0)
     for name in INDUSTRY_SECTORS:
         if name not in merged:
             merged[name] = {
@@ -1127,6 +1158,51 @@ def _fetch_industry_sectors():
                 'type': '行业板块', 'category': '行业板块'
             }
     return list(merged.values())
+
+
+def _fetch_ttjj_theme_data():
+    """从天天基金网主题基金API获取板块涨跌数据(与养基宝同源)
+    API: https://api.fund.eastmoney.com/ztjj/GetZTJJListNew
+    返回162个板块的日涨跌幅(D字段), 数据来源: 东方财富Choice数据
+    """
+    results = []
+    url = 'https://api.fund.eastmoney.com/ztjj/GetZTJJListNew'
+    params = {
+        'callback': 'jQuery',
+        'tt': '0',
+        'dt': 'syl',
+        'st': 'D',
+        '_': str(int(time.time() * 1000))
+    }
+    headers = {
+        'User-Agent': HEADERS['User-Agent'],
+        'Referer': 'https://fund.eastmoney.com/ztjj/',
+        'Accept': '*/*',
+    }
+    for attempt in range(3):
+        try:
+            resp = SESSION.get(url, params=params, headers=headers, timeout=10)
+            text = resp.text
+            # JSONP格式: jQuery({...})
+            m = re.search(r'jQuery\((.*)\)', text)
+            if m:
+                data = json.loads(m.group(1))
+                items = data.get('Data', [])
+                for item in items:
+                    results.append({
+                        'code': item.get('INDEXCODE', ''),
+                        'name': item.get('INDEXNAME', ''),
+                        'changePercent': round(safe_float(item.get('D', 0)), 2),
+                    })
+                print(f'[TTJJ主题基金] 采集到 {len(results)} 个板块', flush=True)
+                return results
+            else:
+                print(f'[TTJJ主题基金] 尝试{attempt+1}解析失败: {text[:150]}', flush=True)
+        except Exception as e:
+            print(f'[TTJJ主题基金] 异常尝试{attempt+1}: {e}', flush=True)
+        if attempt < 2:
+            time.sleep(0.5)
+    return results
 
 
 def _fetch_ths_industry_boards():
@@ -1179,7 +1255,45 @@ def _fetch_ths_industry_boards():
 
 
 def _fetch_concept_sectors():
-    """采集概念题材 - 东方财富概念板块, 映射为养基宝标准名"""
+    """采集概念题材 - 天天基金网主题基金API(与养基宝同源), 映射为养基宝标准名
+    通过get_ttjj_concept_name跨分类匹配到概念题材白名单
+    """
+    # 1. 优先从天天基金网主题基金API获取
+    ttjj_list = _fetch_ttjj_theme_data()
+    if ttjj_list:
+        merged = {}
+        for item in ttjj_list:
+            std_name = get_ttjj_concept_name(item['name'])
+            if std_name:
+                if std_name in merged:
+                    old = merged[std_name]
+                    old['changePercent'] = round((old['changePercent'] + item['changePercent']) / 2, 2)
+                else:
+                    merged[std_name] = {
+                        'code': item['code'],
+                        'name': std_name,
+                        'price': 0,
+                        'changePercent': item['changePercent'],
+                        'change': 0,
+                        'upCount': 0,
+                        'downCount': 0,
+                        'type': '概念题材',
+                        'category': '概念题材'
+                    }
+        # 补全白名单
+        for name in CONCEPT_SECTORS:
+            if name not in merged:
+                merged[name] = {
+                    'code': '', 'name': name, 'price': 0,
+                    'changePercent': 0, 'change': 0,
+                    'upCount': 0, 'downCount': 0,
+                    'type': '概念题材', 'category': '概念题材'
+                }
+        print(f'[概念题材-TTJJ] 映射到 {len(merged)} 个标准板块', flush=True)
+        return list(merged.values())
+
+    # 2. Fallback: 东方财富dataapi
+    print('[概念题材] TTJJ API失败, 回退到东方财富dataapi', flush=True)
     raw_list = _fetch_dataapi_boards('m:90+t:3')
     merged = {}
     for item in raw_list:
