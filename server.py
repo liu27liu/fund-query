@@ -1083,15 +1083,16 @@ def api_sector_categories():
 
 
 def _fetch_industry_sectors():
-    """采集行业板块 - 同花顺行业板块HTML页面解析, 映射为养基宝标准名
-    同花顺页面: http://q.10jqka.com.cn/thshy/
-    表格结构: 序号|板块|涨跌幅|总成交量|总成交额|净流入|上涨家数|下跌家数|均价|领涨股|最新价|涨跌幅
+    """采集行业板块 - 同花顺为主+东方财富补充, 映射为养基宝标准名
+    同花顺提供50个行业板块, 东方财富补充同花顺没有的分类(如白酒/半导体/银行等)
     """
-    raw_list = _fetch_ths_industry_boards()
-    if not raw_list:
-        # 同花顺获取失败, fallback到东方财富
-        print('[行业板块] 同花顺获取失败, fallback到东方财富', flush=True)
-        raw_list = _fetch_dataapi_boards('m:90+t:2')
+    # 1. 优先从同花顺获取
+    ths_list = _fetch_ths_industry_boards()
+    # 2. 从东方财富获取补充数据
+    em_list = _fetch_dataapi_boards('m:90+t:2')
+
+    # 合并数据源, 同花顺优先
+    raw_list = ths_list + em_list
 
     # 映射为标准名, 同名板块合并
     merged = {}
