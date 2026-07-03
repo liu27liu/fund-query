@@ -807,8 +807,10 @@
             html += '<span class="sector-fund-change ' + colorClass + '">' + sign + f.changePercent.toFixed(2) + '%</span>';
             html += '<span class="sector-fund-year ' + yearClass + '">近1年 ' + yearStr + '</span>';
             html += '</div>';
+            html += '<div class="sf-actions">';
             html += '<button class="sf-fav-btn ' + favClass + '" data-action="' + favAction + '" data-code="' + f.code + '" data-name="' + f.name + '" data-type="' + (f.type || '') + '" title="' + (isFav ? '移除自选' : '添加自选') + '">' + favText + '</button>';
-            html += '<span class="sf-detail-arrow">›</span>';
+            html += '<button class="sf-detail-btn" data-code="' + f.code + '" title="查看详情">详情</button>';
+            html += '</div>';
             html += '</div>';
         });
         html += '</div>';
@@ -829,10 +831,10 @@
 
         body.innerHTML = html;
 
-        // 点击基金跳转详情
-        body.querySelectorAll('.sector-fund-item').forEach(function (item) {
-            item.addEventListener('click', function (e) {
-                if (e.target.classList.contains('sf-fav-btn')) return;
+        // 详情按钮
+        body.querySelectorAll('.sf-detail-btn').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
                 var code = this.dataset.code;
                 if (code) {
                     document.getElementById('sectorFundsModal').style.display = 'none';

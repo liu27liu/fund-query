@@ -1600,7 +1600,6 @@ ul, ol { list-style: none; }
     align-items: center;
     padding: 10px 12px;
     border-radius: var(--radius-sm);
-    cursor: pointer;
     transition: background 0.15s var(--ease);
     gap: 8px;
 }
@@ -1643,15 +1642,26 @@ ul, ol { list-style: none; }
     border-color: var(--down, #e74c3c);
     transform: scale(1.1);
 }
-.sf-detail-arrow {
+.sf-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     flex-shrink: 0;
-    font-size: 18px;
-    color: var(--text-tertiary, #ccc);
-    line-height: 1;
-    transition: color 0.15s var(--ease);
 }
-.sector-fund-item:hover .sf-detail-arrow {
+.sf-detail-btn {
+    padding: 4px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--primary);
+    background: transparent;
     color: var(--primary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s var(--ease);
+    white-space: nowrap;
+}
+.sf-detail-btn:hover {
+    background: var(--primary);
+    color: #fff;
 }
 .sector-fund-main {
     display: flex;
