@@ -1023,10 +1023,10 @@ def api_market_indices():
 
 @app.route('/api/sectors')
 def api_sectors():
-    """行业板块+概念板块实时行情 - 对接东方财富push2接口
-    优化: 并行请求行业+概念板块, 添加category主题标签, 120秒缓存
+    """行业板块+概念板块实时行情 - 对接东方财富dataapi接口
+    优化: 使用data.eastmoney.com/dataapi替代被封锁的push2, 并行采集, 主题分类
     """
-    board_type = request.args.get('type', 'all')  # all/industry/concept/category名称
+    board_type = request.args.get('type', 'all')  # all/industry/concept
     category_filter = request.args.get('category', '')  # 主题大类过滤
 
     # 内存缓存：300秒内复用上次结果
@@ -1035,41 +1035,37 @@ def api_sectors():
     if cached and time.time() - cached['time'] < 300:
         return jsonify(cached['data'])
 
-    sector_headers = {
-        'User-Agent': HEADERS['User-Agent'],
-        'Referer': 'https://quote.eastmoney.com/center/boardlist.html',
-        'Accept': '*/*',
-    }
-
-    def fetch_boards(fs_type, label):
+    def fetch_boards(fs_code, label):
+        """从data.eastmoney.com/dataapi采集板块数据
+        该API可从Railway正常访问, 返回f2(指数),f3(涨跌幅*100),f104(涨数),f105(跌数)
+        """
         results = []
-        base_url = 'http://push2.eastmoney.com/api/qt/clist/get'
-        sector_headers = {
+        url = 'https://data.eastmoney.com/dataapi/bkzj/getbkzj'
+        params = {
+            'key': 'f3,f2,f104,f105',
+            'code': fs_code,
+        }
+        headers = {
             'User-Agent': HEADERS['User-Agent'],
-            'Referer': 'https://quote.eastmoney.com/center/boardlist.html',
-            'Accept': '*/*',
+            'Referer': 'https://data.eastmoney.com/bkzj/gn.html',
+            'Accept': 'application/json, text/plain, */*',
         }
         for attempt in range(3):
-            ts = str(int(time.time() * 1000))
-            full_url = (base_url + '?pn=1&pz=500&po=1&np=1'
-                        '&ut=bd1d9ddb04089700cf9c27f6f7426281'
-                        '&fltt=2&invt=2&fid=f3'
-                        '&fs=' + fs_type +
-                        '&fields=f12,f14,f2,f3,f4,f104,f105'
-                        '&_=' + ts)
             try:
-                resp = SESSION.get(full_url, headers=sector_headers, timeout=10)
+                resp = SESSION.get(url, params=params, headers=headers, timeout=10)
                 data = resp.json()
-                if data.get('data') and data['data'].get('diff'):
+                if data.get('rc') == 0 and data.get('data') and data['data'].get('diff'):
                     for item in data['data']['diff']:
                         name = item.get('f14', '')
-                        # 所有板块都返回，用category系统自动归类
+                        # f3是涨跌幅*100的整数(753=7.53%), f2是指数*100
+                        change_pct = safe_float(item.get('f3', 0)) / 100.0
+                        price = safe_float(item.get('f2', 0)) / 100.0
                         results.append({
                             'code': item.get('f12', ''),
                             'name': name,
-                            'price': safe_float(item.get('f2')),
-                            'changePercent': safe_float(item.get('f3')),
-                            'change': safe_float(item.get('f4')),
+                            'price': round(price, 2),
+                            'changePercent': round(change_pct, 2),
+                            'change': round(price * change_pct / 100, 2),
                             'upCount': safe_float(item.get('f104', 0)),
                             'downCount': safe_float(item.get('f105', 0)),
                             'type': label,
@@ -1082,15 +1078,48 @@ def api_sectors():
             except Exception as e:
                 print(f'[板块异常-{label}] 尝试{attempt+1}: {e}', flush=True)
             if attempt < 2:
-                time.sleep(1)
+                time.sleep(0.5)
         return results
 
-    # 请求行业+概念板块（顺序请求，保证稳定性）
+    # 并行请求行业+概念板块
     all_results = []
+    threads = []
+    thread_results = {}
+
+    def worker(fs_code, label, key):
+        thread_results[key] = fetch_boards(fs_code, label)
+
     if board_type in ('all', 'industry'):
-        all_results.extend(fetch_boards('m:90+t:2', 'industry'))
+        t1 = threading.Thread(target=worker, args=('m:90+t:2', 'industry', 'industry'))
+        threads.append(t1)
+        t1.start()
     if board_type in ('all', 'concept'):
-        all_results.extend(fetch_boards('m:90+t:3', 'concept'))
+        t2 = threading.Thread(target=worker, args=('m:90+t:3', 'concept', 'concept'))
+        threads.append(t2)
+        t2.start()
+
+    for t in threads:
+        t.join(timeout=15)
+
+    for key in ['industry', 'concept']:
+        if key in thread_results:
+            all_results.extend(thread_results[key])
+
+    # 去重：同名板块保留概念版（概念板块信息更丰富）
+    seen_names = {}
+    deduped = []
+    for s in all_results:
+        name = s['name']
+        if name not in seen_names:
+            seen_names[name] = True
+            deduped.append(s)
+        elif s['type'] == 'concept':
+            # 概念板块优先，替换已存在的行业板块
+            for i, d in enumerate(deduped):
+                if d['name'] == name:
+                    deduped[i] = s
+                    break
+    all_results = deduped
 
     # 按主题大类过滤
     if category_filter:
@@ -1099,11 +1128,10 @@ def api_sectors():
     # 按涨跌幅降序排序
     all_results.sort(key=lambda x: x.get('changePercent', 0), reverse=True)
 
-    # 缓存结果（即使数据少也缓存，避免频繁请求）
+    # 缓存结果
     if all_results:
         _sector_cache[cache_key] = {'data': all_results, 'time': time.time()}
     elif cached:
-        # 所有重试都失败时，返回过期缓存数据（有总比没有好）
         print(f'[板块] 获取失败，返回过期缓存数据', flush=True)
         return jsonify(cached['data'])
 
