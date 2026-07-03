@@ -1339,10 +1339,31 @@ ul, ol { list-style: none; }
 
 /* ========== 赛道行业板块看板 ========== */
 .sector-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 28px;
+}
+
+.sector-hot-section,
+.sector-normal-section {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     gap: 8px;
-    margin-bottom: 28px;
+}
+
+.sector-hot-label,
+.sector-normal-label {
+    grid-column: 1 / -1;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    padding: 4px 0;
+    margin-bottom: 2px;
+}
+
+.sector-hot-label {
+    color: #fa541c;
 }
 
 .sector-card {
@@ -1356,6 +1377,18 @@ ul, ol { list-style: none; }
     overflow: hidden;
 }
 
+/* 重点板块高亮 */
+.sector-card.sector-hot {
+    border-color: #fa541c;
+    background: linear-gradient(135deg, rgba(250, 84, 28, 0.06), rgba(255, 122, 69, 0.03));
+    box-shadow: 0 2px 8px rgba(250, 84, 28, 0.1);
+}
+
+.sector-card.sector-hot:hover {
+    border-color: #fa541c;
+    box-shadow: 0 4px 12px rgba(250, 84, 28, 0.2);
+}
+
 .sector-card::before {
     content: '';
     position: absolute;
@@ -1367,6 +1400,7 @@ ul, ol { list-style: none; }
 
 .sector-card.sector-up::before { background: #f5222d; }
 .sector-card.sector-down::before { background: #52c41a; }
+.sector-card.sector-hot::before { height: 3px; }
 
 .sector-card:hover {
     transform: translateY(-1px);
@@ -1442,10 +1476,10 @@ ul, ol { list-style: none; }
 }
 
 @media (max-width: 1024px) {
-    .sector-dashboard { grid-template-columns: repeat(4, 1fr); }
+    .sector-hot-section, .sector-normal-section { grid-template-columns: repeat(4, 1fr); }
 }
 @media (max-width: 640px) {
-    .sector-dashboard { grid-template-columns: repeat(3, 1fr); }
+    .sector-hot-section, .sector-normal-section { grid-template-columns: repeat(3, 1fr); }
     .sector-name { font-size: 12px; }
     .sector-pct { font-size: 13px; }
 }
