@@ -13,19 +13,7 @@
       "全部",
       "消费"
     ],
-    "holdings": [
-      {
-        "code": "110021",
-        "name": "110021",
-        "type": "",
-        "amount": 1,
-        "buyPrice": 2.4827,
-        "shares": 0.4027872880331897,
-        "buyDate": "2026-07-03",
-        "group": "",
-        "addTime": 1783063725242
-      }
-    ],
+    "holdings": [],
     "createTime": 1783055840.0759306,
     "recreated": false
   },
