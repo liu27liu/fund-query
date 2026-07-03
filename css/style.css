@@ -381,6 +381,158 @@ ul, ol { list-style: none; }
     to { transform: rotate(360deg); }
 }
 
+/* ========== 门户卡片网格 ========== */
+.portal-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 28px;
+}
+
+.portal-card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    padding: 20px 18px;
+    box-shadow: var(--card-shadow);
+    cursor: pointer;
+    transition: transform 0.25s var(--ease-out), box-shadow 0.25s var(--ease-out);
+    border: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    position: relative;
+    overflow: hidden;
+}
+
+.portal-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(22, 119, 255, 0.04) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.25s var(--ease);
+    pointer-events: none;
+}
+
+.portal-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--card-shadow-hover);
+}
+
+.portal-card:hover::before {
+    opacity: 1;
+}
+
+.portal-card:active {
+    transform: translateY(-1px) scale(0.98);
+}
+
+.portal-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.portal-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.portal-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 2px;
+}
+
+.portal-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.portal-tag {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--primary);
+    background: var(--primary-light);
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+}
+
+.portal-arrow {
+    font-size: 24px;
+    color: var(--text-tertiary);
+    transition: transform 0.2s var(--ease), color 0.2s var(--ease);
+    flex-shrink: 0;
+}
+
+.portal-card:hover .portal-arrow {
+    transform: translateX(4px);
+    color: var(--primary);
+}
+
+@media (max-width: 768px) {
+    .portal-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+    .portal-card {
+        padding: 14px 12px;
+        gap: 10px;
+    }
+    .portal-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 20px;
+        border-radius: 12px;
+    }
+    .portal-title { font-size: 14px; }
+    .portal-desc { font-size: 11px; }
+}
+
+/* ========== 区块锚点 ========== */
+.section-anchor {
+    height: 1px;
+    margin-top: -1px;
+    scroll-margin-top: 80px;
+}
+
+/* ========== 可折叠标题 ========== */
+.collapsible-header {
+    cursor: pointer;
+    user-select: none;
+    transition: opacity 0.2s var(--ease);
+}
+
+.collapsible-header:hover {
+    opacity: 0.8;
+}
+
+.collapse-icon {
+    margin-left: auto;
+    font-size: 18px;
+    color: var(--text-tertiary);
+    transition: transform 0.3s var(--ease);
+    flex-shrink: 0;
+}
+
+.collapsed .collapse-icon {
+    transform: rotate(-90deg);
+}
+
+.collapsed-content {
+    transition: max-height 0.3s var(--ease), opacity 0.3s var(--ease);
+}
+
 /* ========== 首页 Hero 区域 ========== */
 .home-hero {
     background: linear-gradient(135deg, #1677ff 0%, #0958d9 50%, #13c2c2 100%);

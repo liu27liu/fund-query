@@ -99,6 +99,34 @@
         location.hash = path;
     }
 
+    // ========== 折叠/展开区块 ==========
+    function toggleCollapse(header) {
+        var targetId = header.dataset.target;
+        if (!targetId) return;
+        var target = document.getElementById(targetId);
+        if (!target) return;
+        var icon = header.querySelector('.collapse-icon');
+        var isCollapsed = header.classList.contains('collapsed');
+
+        if (isCollapsed) {
+            // 展开
+            header.classList.remove('collapsed');
+            target.classList.remove('collapsed-content');
+            target.style.maxHeight = '';
+            target.style.opacity = '';
+            target.style.overflow = '';
+            if (icon) icon.style.transform = 'rotate(0deg)';
+        } else {
+            // 折叠
+            header.classList.add('collapsed');
+            target.classList.add('collapsed-content');
+            target.style.maxHeight = '0';
+            target.style.opacity = '0';
+            target.style.overflow = 'hidden';
+            if (icon) icon.style.transform = 'rotate(-90deg)';
+        }
+    }
+
     // ========== 首页 ==========
     function renderHome() {
         app.innerHTML = `
@@ -127,9 +155,54 @@
 
             <div id="portfolioOverview"></div>
 
-            <div class="section-title">
+            <!-- 门户卡片网格 -->
+            <div class="portal-grid">
+                <div class="portal-card" data-target="marketSection">
+                    <div class="portal-icon" style="background: linear-gradient(135deg, #1677ff, #4096ff);">📈</div>
+                    <div class="portal-body">
+                        <div class="portal-title">大盘指数</div>
+                        <div class="portal-desc">A股 · 美股 · 全球实时行情</div>
+                        <div class="portal-tag" id="portalMarketTag">17个指数</div>
+                    </div>
+                    <div class="portal-arrow">›</div>
+                </div>
+                <div class="portal-card" data-target="sectorSection">
+                    <div class="portal-icon" style="background: linear-gradient(135deg, #13c2c2, #36cfc9);">🏭</div>
+                    <div class="portal-body">
+                        <div class="portal-title">行业板块</div>
+                        <div class="portal-desc">赛道行情 · 涨跌排名</div>
+                        <div class="portal-tag" id="portalSectorTag">200个板块</div>
+                    </div>
+                    <div class="portal-arrow">›</div>
+                </div>
+                <div class="portal-card" data-target="rankingSection">
+                    <div class="portal-icon" style="background: linear-gradient(135deg, #722ed1, #9254de);">📊</div>
+                    <div class="portal-body">
+                        <div class="portal-title">基金榜单</div>
+                        <div class="portal-desc">日涨跌 · 周涨幅 · 年涨幅</div>
+                        <div class="portal-tag" id="portalRankingTag">实时排行</div>
+                    </div>
+                    <div class="portal-arrow">›</div>
+                </div>
+                <div class="portal-card" data-target="newsSection">
+                    <div class="portal-icon" style="background: linear-gradient(135deg, #fa541c, #ff7a45);">📰</div>
+                    <div class="portal-body">
+                        <div class="portal-title">实时资讯</div>
+                        <div class="portal-desc">7×24小时财经快讯</div>
+                        <div class="portal-tag" id="portalNewsTag">持续更新</div>
+                    </div>
+                    <div class="portal-arrow">›</div>
+                </div>
+            </div>
+
+            <div class="hot-search-list" id="hotKeywordList"></div>
+
+            <!-- 大盘指数 -->
+            <div class="section-anchor" id="marketSection"></div>
+            <div class="section-title collapsible-header" data-target="marketDashboard">
                 <span class="pulse-dot"></span>
                 大盘指数实时看板
+                <span class="collapse-icon">▾</span>
             </div>
             <div class="market-dashboard" id="marketDashboard">
                 <div class="market-card skeleton" style="height: 90px;"></div>
@@ -138,7 +211,9 @@
                 <div class="market-card skeleton" style="height: 90px;"></div>
             </div>
 
-            <div class="section-title">
+            <!-- 行业板块 -->
+            <div class="section-anchor" id="sectorSection"></div>
+            <div class="section-title collapsible-header" data-target="sectorDashboard">
                 <span class="pulse-dot"></span>
                 赛道行业板块实时行情
                 <div class="sector-filter-bar">
@@ -146,6 +221,7 @@
                     <span class="sector-tab" data-board="industry">行业板块</span>
                     <span class="sector-tab" data-board="concept">概念板块</span>
                 </div>
+                <span class="collapse-icon">▾</span>
             </div>
             <div class="sector-dashboard" id="sectorDashboard">
                 <div class="sector-card skeleton" style="height: 72px;"></div>
@@ -156,12 +232,13 @@
                 <div class="sector-card skeleton" style="height: 72px;"></div>
             </div>
 
-            <div class="hot-search-list" id="hotKeywordList"></div>
-
+            <!-- 基金榜单 -->
+            <div class="section-anchor" id="rankingSection"></div>
             <div class="ranking-tabs-section">
-                <div class="section-title no-margin">
+                <div class="section-title no-margin collapsible-header" data-target="rankingTable">
                     <span>📊</span>
                     基金榜单
+                    <span class="collapse-icon">▾</span>
                 </div>
                 <div class="ranking-tabs" id="rankingTabs">
                     <span class="ranking-tab active" data-type="RZDF" data-order="desc" data-ft="all">日涨幅榜</span>
@@ -192,13 +269,16 @@
                 </div>
             </div>
 
-            <div class="section-title">
+            <!-- 实时资讯 -->
+            <div class="section-anchor" id="newsSection"></div>
+            <div class="section-title collapsible-header" data-target="newsFeed">
                 <span class="pulse-dot"></span>
                 7×24 实时财经资讯
                 <span class="news-refresh-info">
                     <span class="refresh-dot"></span>
                     <span id="newsRefreshStatus">加载中...</span>
                 </span>
+                <span class="collapse-icon">▾</span>
             </div>
             <div class="news-feed" id="newsFeed">
                 <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
@@ -224,6 +304,42 @@
                 var kw = this.dataset.keyword;
                 searchInput.value = kw;
                 navigate('/search?q=' + encodeURIComponent(kw));
+            });
+        });
+
+        // 门户卡片点击跳转
+        document.querySelectorAll('.portal-card').forEach(function (card) {
+            card.addEventListener('click', function () {
+                var targetId = this.dataset.target;
+                var target = document.getElementById(targetId);
+                if (target) {
+                    // 展开对应区块（如果已折叠）
+                    var header = target.nextElementSibling;
+                    if (header && header.classList.contains('collapsible-header') && header.classList.contains('collapsed')) {
+                        toggleCollapse(header);
+                    }
+                    // 平滑滚动到目标位置
+                    var offset = 80; // 导航栏高度偏移
+                    var top = target.getBoundingClientRect().top + window.pageYOffset - offset;
+                    window.scrollTo({ top: top, behavior: 'smooth' });
+                    // 闪烁高亮效果
+                    target.style.transition = 'background 0.3s';
+                    target.style.background = 'rgba(22, 119, 255, 0.08)';
+                    setTimeout(function () { target.style.background = ''; }, 800);
+                }
+            });
+        });
+
+        // 可折叠区块标题点击
+        document.querySelectorAll('.collapsible-header').forEach(function (header) {
+            header.addEventListener('click', function (e) {
+                // 不拦截板块筛选和排行榜tab的点击
+                if (e.target.classList.contains('sector-tab') || 
+                    e.target.classList.contains('ranking-tab') ||
+                    e.target.classList.contains('type-tab') ||
+                    e.target.classList.contains('refresh-info') ||
+                    e.target.classList.contains('refresh-dot')) return;
+                toggleCollapse(this);
             });
         });
 
