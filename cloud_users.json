@@ -30,36 +30,14 @@
     "createTime": 1783055985.9264724
   },
   "testuser2": {
-    "password": "9abee7969da66b3df2af161b2dffad8ded66b6a7540ea03d3533a48cdde5ee30",
-    "salt": "709224",
+    "password": "",
+    "salt": "",
     "favorites": [],
     "groups": [
       "全部"
     ],
-    "holdings": [
-      {
-        "addTime": 1783063559567,
-        "amount": 1000,
-        "buyDate": "2026-07-03",
-        "buyPrice": 0.5118,
-        "code": "161725",
-        "name": "招商中证白酒指数(LOF)A",
-        "shares": 1953.8882375928097,
-        "type": "指数型",
-        "group": "定投"
-      },
-      {
-        "addTime": 1783063608236,
-        "amount": 2000,
-        "buyDate": "2026-07-03",
-        "buyPrice": 3.9564,
-        "code": "110011",
-        "name": "易方达优质精选混合(QDII)",
-        "shares": 505.51005965018703,
-        "type": "QDII",
-        "group": "定投"
-      }
-    ],
-    "createTime": 1783063517.4455147
+    "holdings": [],
+    "createTime": 1783069321.610354,
+    "recreated": true
   }
 }
