@@ -142,6 +142,7 @@ def _save_users(users):
             json.dump(users, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f'[用户数据保存失败]: {e}', flush=True)
+        return False
     # 2. GitHub云端同步（防抖3秒，避免频繁API调用）
     global _github_sync_timer
     with _github_sync_lock:
@@ -150,6 +151,7 @@ def _save_users(users):
         _github_sync_timer = threading.Timer(3.0, _github_push_users, args=[users])
         _github_sync_timer.daemon = True
         _github_sync_timer.start()
+    return True
 
 def _hash_password(password, salt=''):
     """密码哈希（SHA256 + 随机盐）"""
