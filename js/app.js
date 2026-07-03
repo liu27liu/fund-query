@@ -860,7 +860,7 @@
                     </thead>
                     <tbody id="rankingTbody">
                         ${ranking.map(function (f, i) {
-                            var change = f.realtimeChange !== undefined ? f.realtimeChange : f.change;
+                            var change = f.realtimeChange !== null ? f.realtimeChange : f.change;
                             var changeClass = FundAPI.getChangeClass(change);
                             var isFav = Store.isFavorite(f.code);
                             return `
@@ -871,13 +871,13 @@
                                             <span class="code">${f.code} · ${f.type}</span>
                                         </div>
                                     </td>
-                                    <td class="num-cell">${FundAPI.formatNum(f.netValue)}</td>
-                                    <td class="num-cell">
+                                    <td class="num-cell net-value-cell">${FundAPI.formatNum(f.netValue)}</td>
+                                    <td class="num-cell change-cell">
                                         <span class="change-badge ${changeClass === 'up' ? 'bg-up' : changeClass === 'down' ? 'bg-down' : 'bg-flat'}">
                                             ${FundAPI.formatChange(change)}
                                         </span>
                                     </td>
-                                    <td>
+                                    <td class="action-cell">
                                         <button class="action-btn ${isFav ? '' : 'add-fav-mini'}" data-action="${isFav ? 'remove' : 'add'}" data-code="${f.code}" data-name="${f.name}" data-type="${f.type}">
                                             ${isFav ? '移除自选' : '+ 自选'}
                                         </button>

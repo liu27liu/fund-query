@@ -999,10 +999,11 @@ ul, ol { list-style: none; }
     width: 100%;
     border-collapse: collapse;
     min-width: 800px;
+    table-layout: fixed;
 }
 
 .fund-table th {
-    padding: 16px 18px;
+    padding: 14px 18px;
     text-align: left;
     font-size: 13px;
     font-weight: 600;
@@ -1016,10 +1017,11 @@ ul, ol { list-style: none; }
 }
 
 .fund-table td {
-    padding: 16px 18px;
+    padding: 14px 18px;
     border-bottom: 1px solid var(--border-light);
     font-size: 14px;
     white-space: nowrap;
+    vertical-align: middle;
 }
 
 .fund-table tr:last-child td {
@@ -1038,6 +1040,19 @@ ul, ol { list-style: none; }
 
 .fund-table .col-name {
     min-width: 200px;
+    width: auto;
+}
+
+.fund-table .net-value-cell,
+.fund-table .change-cell {
+    width: 140px;
+    text-align: right;
+}
+
+.fund-table .action-cell {
+    width: 100px;
+    text-align: right;
+    white-space: nowrap;
 }
 
 .fund-table .fund-name-cell {
@@ -1067,13 +1082,14 @@ ul, ol { list-style: none; }
 
 .change-badge {
     display: inline-block;
-    padding: 3px 10px;
+    padding: 4px 12px;
     border-radius: var(--radius-xs);
     font-size: 13px;
     font-weight: 700;
     font-family: var(--font-num);
-    min-width: 64px;
+    min-width: 72px;
     text-align: center;
+    box-sizing: border-box;
 }
 
 .action-btn {
@@ -1084,6 +1100,7 @@ ul, ol { list-style: none; }
     background: #f3f6fa;
     color: var(--text-secondary);
     transition: all 0.2s var(--ease);
+    white-space: nowrap;
 }
 
 .action-btn:hover {
