@@ -1228,18 +1228,27 @@ def api_fund_holdings():
             # 清理HTML标签
             clean_cells = [re.sub(r'<[^>]+>', '', c).strip() for c in cells]
 
-            # 序号|股票代码|股票名称|占净值(%)|持股数|持仓市值|季度涨跌幅
+            # 实际列: 0:序号 1:股票代码 2:股票名称 3:最新价 4:涨跌幅 5:相关资讯 6:占净值比例 7:持股数 8:持仓市值 9:季度涨跌幅
             stock_code = clean_cells[1] if len(clean_cells) > 1 else ''
             if not stock_code or stock_code == '--':
                 continue
 
+            # 根据列数自适应：新格式10列，旧格式7列
+            if len(clean_cells) >= 10:
+                ratio_idx, shares_idx, value_idx, change_idx = 6, 7, 8, 9
+            else:
+                ratio_idx, shares_idx, value_idx, change_idx = 3, 4, 5, 6
+
+            # 占净值比例可能带%号，需要去除
+            ratio_str = clean_cells[ratio_idx].replace('%', '').strip() if len(clean_cells) > ratio_idx else '0'
+
             stocks.append({
                 'code': stock_code,
                 'name': clean_cells[2] if len(clean_cells) > 2 else '',
-                'ratio': safe_float(clean_cells[3]) if len(clean_cells) > 3 else 0,
-                'shares': clean_cells[4] if len(clean_cells) > 4 else '--',
-                'value': clean_cells[5] if len(clean_cells) > 5 else '--',
-                'quarterChange': clean_cells[6] if len(clean_cells) > 6 else '--'
+                'ratio': safe_float(ratio_str),
+                'shares': clean_cells[shares_idx] if len(clean_cells) > shares_idx else '--',
+                'value': clean_cells[value_idx] if len(clean_cells) > value_idx else '--',
+                'quarterChange': clean_cells[change_idx] if len(clean_cells) > change_idx else '--'
             })
 
         return jsonify({
