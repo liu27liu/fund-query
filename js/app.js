@@ -1377,6 +1377,8 @@
     }
 
     // ========== 持仓页 ==========
+    var portfolioExpandedGroups = {}; // 记录哪些分组展开着
+
     function renderPortfolio() {
         // 未登录显示登录拦截
         if (!isLoggedIn()) {
@@ -1388,19 +1390,10 @@
         var groups = Store.getPortfolioGroups();
         portfolioSelectedCodes = [];
 
-        // 构建分组筛选下拉
-        var groupOptions = '<option value="">全部分组</option>';
-        groups.forEach(function (g) {
-            groupOptions += '<option value="' + escapeHtml(g) + '"' + (portfolioGroupFilter === g ? ' selected' : '') + '>' + escapeHtml(g) + '</option>';
-        });
-
         app.innerHTML = `
             <div class="favorites-header">
                 <h2 style="font-size: 20px;">💼 我的持仓</h2>
                 <div class="portfolio-toolbar">
-                    <select class="portfolio-group-filter" id="portfolioGroupFilter" title="按分组筛选">
-                        ${groupOptions}
-                    </select>
                     <button class="refresh-btn" id="manualRefreshBtn" title="手动刷新">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
                         刷新
@@ -1432,15 +1425,6 @@
         document.getElementById('manualRefreshBtn').addEventListener('click', function () {
             refreshPortfolioData();
         });
-
-        // 绑定分组筛选
-        var groupFilter = document.getElementById('portfolioGroupFilter');
-        if (groupFilter) {
-            groupFilter.addEventListener('change', function () {
-                portfolioGroupFilter = this.value;
-                loadPortfolioData(Store.getAggregatedPositions());
-            });
-        }
 
         // 绑定批量操作按钮
         document.getElementById('batchAddBtn').addEventListener('click', function () {
@@ -1476,15 +1460,7 @@
         var container = document.getElementById('portfolioContent');
         if (!container) return;
 
-        // 分组筛选
-        var filteredPositions = positions;
-        if (portfolioGroupFilter) {
-            filteredPositions = positions.filter(function (p) {
-                return p.group === portfolioGroupFilter;
-            });
-        }
-
-        if (filteredPositions.length === 0 && positions.length === 0) {
+        if (!positions || positions.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
                     <div class="icon">💼</div>
@@ -1501,19 +1477,6 @@
             }
             return;
         }
-
-        if (filteredPositions.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <div class="icon">📂</div>
-                    <h3>该分组下暂无持仓</h3>
-                    <p>切换分组或添加持仓到该分组</p>
-                </div>
-            `;
-            return;
-        }
-
-        positions = filteredPositions;
 
         // 获取所有持仓基金的实时估值
         var codes = positions.map(function (p) { return p.code; });
@@ -1533,18 +1496,57 @@
             }
         });
 
-        // 计算总盈亏
+        // 按分组归类持仓
+        var groupMap = {};  // {groupName: [positions]}
+        var ungrouped = [];
+        positions.forEach(function (p) {
+            if (p.group) {
+                if (!groupMap[p.group]) groupMap[p.group] = [];
+                groupMap[p.group].push(p);
+            } else {
+                ungrouped.push(p);
+            }
+        });
+
+        var groupNames = Object.keys(groupMap);
+        // 默认展开所有分组（首次加载）
+        if (Object.keys(portfolioExpandedGroups).length === 0) {
+            groupNames.forEach(function (g) { portfolioExpandedGroups[g] = true; });
+            if (ungrouped.length > 0) portfolioExpandedGroups['__ungrouped__'] = true;
+        }
+
+        // 计算总汇总
         var totals = Store.calcTotalAggregatedProfit(positions, navMap, changeRateMap);
+
+        // 构建分组HTML
+        var groupSectionsHtml = '';
+
+        // 渲染每个命名分组
+        groupNames.forEach(function (groupName) {
+            var groupPositions = groupMap[groupName];
+            var groupTotals = Store.calcTotalAggregatedProfit(groupPositions, navMap, changeRateMap);
+            var isExpanded = portfolioExpandedGroups[groupName];
+            groupSectionsHtml += buildGroupSection(groupName, groupPositions, groupTotals, isExpanded, navMap, changeRateMap, estimates);
+        });
+
+        // 渲染未分组
+        if (ungrouped.length > 0) {
+            var ungroupedTotals = Store.calcTotalAggregatedProfit(ungrouped, navMap, changeRateMap);
+            var isUngroupedExpanded = portfolioExpandedGroups['__ungrouped__'];
+            groupSectionsHtml += buildGroupSection('__ungrouped__', ungrouped, ungroupedTotals, isUngroupedExpanded, navMap, changeRateMap, estimates, true);
+        }
+
+        // 总汇总
         var profitClass = totals.totalHoldingProfit >= 0 ? 'profit-positive' : 'profit-negative';
         var profitSign = totals.totalHoldingProfit >= 0 ? '+' : '';
         var cumClass = totals.totalCumulativeProfit >= 0 ? 'profit-positive' : 'profit-negative';
         var cumSign = totals.totalCumulativeProfit >= 0 ? '+' : '';
 
-        // 渲染持仓总览 + 持仓表格
         container.innerHTML = `
-            <div class="portfolio-summary">
+            ${groupSectionsHtml}
+            <div class="portfolio-total-summary">
                 <div class="summary-header">
-                    <span class="summary-title">📊 持仓总览</span>
+                    <span class="summary-title">📊 全部汇总</span>
                     <span class="summary-count">共 ${positions.length} 只基金</span>
                 </div>
                 <div class="summary-grid summary-grid-5">
@@ -1570,75 +1572,31 @@
                     </div>
                 </div>
             </div>
-
-            <div class="fund-table-wrap">
-                <table class="fund-table portfolio-table">
-                    <thead>
-                        <tr>
-                            <th class="th-checkbox"><input type="checkbox" id="selectAllCheckbox" title="全选"></th>
-                            <th>基金名称</th>
-                            <th class="text-right">持有份额</th>
-                            <th class="text-right">成本价</th>
-                            <th class="text-right">最新净值</th>
-                            <th class="text-right">持仓市值</th>
-                            <th class="text-right">持仓收益</th>
-                            <th class="text-right">收益率</th>
-                            <th class="text-right">操作</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${positions.map(function (p) {
-                            var currentNav = navMap[p.code] || p.costPrice;
-                            var dailyChange = changeRateMap[p.code] || 0;
-                            var calc = Store.calcPositionProfit(p, currentNav, dailyChange);
-                            var pClass = calc.holdingProfit >= 0 ? 'profit-positive' : 'profit-negative';
-                            var pSign = calc.holdingProfit >= 0 ? '+' : '';
-                            var est = estimates.find(function (e) { return e.fundcode === p.code; });
-                            var displayName = (est && est.name) || p.name;
-                            var clearedBadge = p.isCleared ? '<span class="cleared-badge">已清仓</span>' : '';
-                            var groupBadge = p.group ? '<span class="group-badge">' + escapeHtml(p.group) + '</span>' : '';
-                            var isChecked = portfolioSelectedCodes.indexOf(p.code) !== -1;
-                            return `
-                                <tr data-code="${p.code}">
-                                    <td class="col-checkbox"><input type="checkbox" class="row-checkbox" data-code="${p.code}" ${isChecked ? 'checked' : ''}></td>
-                                    <td class="col-name">
-                                        <div class="fund-name-cell">
-                                            <span class="name">${displayName} ${clearedBadge} ${groupBadge}</span>
-                                            <span class="code">${p.code} · ${p.type || ''} · ${p.transactionCount}笔交易</span>
-                                        </div>
-                                    </td>
-                                    <td class="num-cell">${p.currentShares.toFixed(2)}</td>
-                                    <td class="num-cell">${FundAPI.formatNum(p.costPrice)}</td>
-                                    <td class="num-cell" data-cell="nav" data-code="${p.code}">${FundAPI.formatNum(currentNav)}</td>
-                                    <td class="num-cell" data-cell="value" data-code="${p.code}">¥${formatMoney(calc.currentValue)}</td>
-                                    <td class="num-cell ${pClass}" data-cell="profit" data-code="${p.code}">${pSign}${formatMoney(calc.holdingProfit)}</td>
-                                    <td class="num-cell" data-cell="rate" data-code="${p.code}">
-                                        <span class="change-badge ${pClass === 'profit-positive' ? 'bg-up' : 'bg-down'}">
-                                            ${pSign}${(calc.holdingProfitRate * 100).toFixed(2)}%
-                                        </span>
-                                    </td>
-                                    <td class="action-cell">
-                                        <button class="action-btn add-position" data-action="add-position" data-code="${p.code}">加仓</button>
-                                        ${p.isCleared ? '' : '<button class="action-btn sell-position" data-action="reduce-position" data-code="' + p.code + '">减仓</button>'}
-                                        <button class="action-btn" data-action="set-group" data-code="${p.code}">分组</button>
-                                        <button class="action-btn" data-action="delete-fund" data-code="${p.code}">删除</button>
-                                    </td>
-                                </tr>
-                            `;
-                        }).join('')}
-                    </tbody>
-                </table>
-            </div>
         `;
 
-        // 绑定全选复选框
-        var selectAll = document.getElementById('selectAllCheckbox');
-        if (selectAll) {
-            selectAll.addEventListener('change', function () {
+        // 绑定分组展开/折叠
+        container.querySelectorAll('.portfolio-group-header').forEach(function (header) {
+            header.addEventListener('click', function (e) {
+                if (e.target.classList.contains('action-btn') || e.target.type === 'checkbox') return;
+                var groupName = this.dataset.group;
+                var body = container.querySelector('.portfolio-group-body[data-group="' + groupName + '"]');
+                if (body) {
+                    var isExp = body.style.display !== 'none';
+                    body.style.display = isExp ? 'none' : 'block';
+                    portfolioExpandedGroups[groupName] = !isExp;
+                    this.classList.toggle('collapsed', isExp);
+                }
+            });
+        });
+
+        // 绑定全选（每个分组内）
+        container.querySelectorAll('.group-select-all').forEach(function (cb) {
+            cb.addEventListener('change', function () {
+                var groupName = this.dataset.group;
                 var checked = this.checked;
-                container.querySelectorAll('.row-checkbox').forEach(function (cb) {
-                    cb.checked = checked;
-                    var code = cb.dataset.code;
+                container.querySelectorAll('.row-checkbox[data-group="' + groupName + '"]').forEach(function (rcb) {
+                    rcb.checked = checked;
+                    var code = rcb.dataset.code;
                     if (checked && portfolioSelectedCodes.indexOf(code) === -1) {
                         portfolioSelectedCodes.push(code);
                     } else if (!checked) {
@@ -1647,7 +1605,7 @@
                 });
                 updateBatchBar();
             });
-        }
+        });
 
         // 绑定行复选框
         container.querySelectorAll('.row-checkbox').forEach(function (cb) {
@@ -1673,15 +1631,10 @@
             } else {
                 bar.style.display = 'none';
             }
-            // 更新全选状态
-            var allCbs = container.querySelectorAll('.row-checkbox');
-            if (selectAll && allCbs.length > 0) {
-                selectAll.checked = portfolioSelectedCodes.length === allCbs.length;
-            }
         }
         updateBatchBar();
 
-        // 绑定行点击事件（排除复选框和按钮）
+        // 绑定行点击事件
         container.querySelectorAll('tr[data-code]').forEach(function (tr) {
             tr.addEventListener('click', function (e) {
                 if (e.target.classList.contains('action-btn')) return;
@@ -1745,6 +1698,93 @@
         // 首次加载完成，启动自动刷新
         updateRefreshStatus(true);
         startPortfolioAutoRefresh();
+    }
+
+    // 构建单个分组区块
+    function buildGroupSection(groupName, groupPositions, groupTotals, isExpanded, navMap, changeRateMap, estimates, isUngrouped) {
+        var displayName = isUngrouped ? '未分组' : groupName;
+        var profitClass = groupTotals.totalHoldingProfit >= 0 ? 'profit-positive' : 'profit-negative';
+        var profitSign = groupTotals.totalHoldingProfit >= 0 ? '+' : '';
+        var cumClass = groupTotals.totalCumulativeProfit >= 0 ? 'profit-positive' : 'profit-negative';
+        var cumSign = groupTotals.totalCumulativeProfit >= 0 ? '+' : '';
+        var groupKey = isUngrouped ? '__ungrouped__' : groupName;
+
+        var rowsHtml = groupPositions.map(function (p) {
+            var currentNav = navMap[p.code] || p.costPrice;
+            var dailyChange = changeRateMap[p.code] || 0;
+            var calc = Store.calcPositionProfit(p, currentNav, dailyChange);
+            var pClass = calc.holdingProfit >= 0 ? 'profit-positive' : 'profit-negative';
+            var pSign = calc.holdingProfit >= 0 ? '+' : '';
+            var est = estimates.find(function (e) { return e.fundcode === p.code; });
+            var displayName = (est && est.name) || p.name;
+            var clearedBadge = p.isCleared ? '<span class="cleared-badge">已清仓</span>' : '';
+            var isChecked = portfolioSelectedCodes.indexOf(p.code) !== -1;
+            return `
+                <tr data-code="${p.code}">
+                    <td class="col-checkbox"><input type="checkbox" class="row-checkbox" data-code="${p.code}" data-group="${groupKey}" ${isChecked ? 'checked' : ''}></td>
+                    <td class="col-name">
+                        <div class="fund-name-cell">
+                            <span class="name">${displayName} ${clearedBadge}</span>
+                            <span class="code">${p.code} · ${p.type || ''} · ${p.transactionCount}笔交易</span>
+                        </div>
+                    </td>
+                    <td class="num-cell">${p.currentShares.toFixed(2)}</td>
+                    <td class="num-cell">${FundAPI.formatNum(p.costPrice)}</td>
+                    <td class="num-cell" data-cell="nav" data-code="${p.code}">${FundAPI.formatNum(currentNav)}</td>
+                    <td class="num-cell" data-cell="value" data-code="${p.code}">¥${formatMoney(calc.currentValue)}</td>
+                    <td class="num-cell ${pClass}" data-cell="profit" data-code="${p.code}">${pSign}${formatMoney(calc.holdingProfit)}</td>
+                    <td class="num-cell" data-cell="rate" data-code="${p.code}">
+                        <span class="change-badge ${pClass === 'profit-positive' ? 'bg-up' : 'bg-down'}">
+                            ${pSign}${(calc.holdingProfitRate * 100).toFixed(2)}%
+                        </span>
+                    </td>
+                    <td class="action-cell">
+                        <button class="action-btn add-position" data-action="add-position" data-code="${p.code}">加仓</button>
+                        ${p.isCleared ? '' : '<button class="action-btn sell-position" data-action="reduce-position" data-code="' + p.code + '">减仓</button>'}
+                        <button class="action-btn" data-action="set-group" data-code="${p.code}">分组</button>
+                        <button class="action-btn" data-action="delete-fund" data-code="${p.code}">删除</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        return `
+            <div class="portfolio-group-section">
+                <div class="portfolio-group-header ${isExpanded ? '' : 'collapsed'}" data-group="${groupKey}">
+                    <div class="group-header-left">
+                        <span class="group-toggle-icon">${isExpanded ? '▼' : '▶'}</span>
+                        <input type="checkbox" class="group-select-all" data-group="${groupKey}" title="全选该分组">
+                        <span class="group-name-text">${escapeHtml(displayName)}</span>
+                        <span class="group-count">${groupPositions.length}只</span>
+                    </div>
+                    <div class="group-header-right">
+                        <span class="group-stat">市值 <strong>¥${formatMoney(groupTotals.totalValue)}</strong></span>
+                        <span class="group-stat">成本 <strong>¥${formatMoney(groupTotals.totalCost)}</strong></span>
+                        <span class="group-stat ${profitClass}">收益 <strong>${profitSign}${formatMoney(groupTotals.totalHoldingProfit)}</strong></span>
+                        <span class="group-stat ${profitClass}">收益率 <strong>${profitSign}${(groupTotals.totalProfitRate * 100).toFixed(2)}%</strong></span>
+                        <span class="group-stat ${cumClass}">累计 <strong>${cumSign}${formatMoney(groupTotals.totalCumulativeProfit)}</strong></span>
+                    </div>
+                </div>
+                <div class="portfolio-group-body" data-group="${groupKey}" style="display: ${isExpanded ? 'block' : 'none'};">
+                    <table class="fund-table portfolio-table">
+                        <thead>
+                            <tr>
+                                <th class="th-checkbox"></th>
+                                <th>基金名称</th>
+                                <th class="text-right">持有份额</th>
+                                <th class="text-right">成本价</th>
+                                <th class="text-right">最新净值</th>
+                                <th class="text-right">持仓市值</th>
+                                <th class="text-right">持仓收益</th>
+                                <th class="text-right">收益率</th>
+                                <th class="text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                </div>
+            </div>
+        `;
     }
 
     // ========== 持仓实时刷新 ==========
@@ -1840,6 +1880,26 @@
         var cumSign = totals.totalCumulativeProfit >= 0 ? '+' : '';
         updateSummaryCell('cumulativeProfit', cumSign + formatMoney(totals.totalCumulativeProfit), cumClass);
 
+        // 更新每个分组的汇总数据
+        var groupMap = {};
+        var ungrouped = [];
+        positions.forEach(function (p) {
+            if (p.group) {
+                if (!groupMap[p.group]) groupMap[p.group] = [];
+                groupMap[p.group].push(p);
+            } else {
+                ungrouped.push(p);
+            }
+        });
+        Object.keys(groupMap).forEach(function (gName) {
+            var gTotals = Store.calcTotalAggregatedProfit(groupMap[gName], navMap, changeRateMap);
+            updateGroupStats(gName, gTotals);
+        });
+        if (ungrouped.length > 0) {
+            var uTotals = Store.calcTotalAggregatedProfit(ungrouped, navMap, changeRateMap);
+            updateGroupStats('__ungrouped__', uTotals);
+        }
+
         // 更新每行数据
         positions.forEach(function (p) {
             var currentNav = navMap[p.code] || p.costPrice;
@@ -1883,6 +1943,27 @@
         }
         el.classList.add('flash-update');
         setTimeout(function () { el.classList.remove('flash-update'); }, 600);
+    }
+
+    // 更新分组汇总数据（实时刷新时调用）
+    function updateGroupStats(groupKey, gTotals) {
+        var header = document.querySelector('.portfolio-group-header[data-group="' + groupKey + '"]');
+        if (!header) return;
+        var pClass = gTotals.totalHoldingProfit >= 0 ? 'profit-positive' : 'profit-negative';
+        var pSign = gTotals.totalHoldingProfit >= 0 ? '+' : '';
+        var cClass = gTotals.totalCumulativeProfit >= 0 ? 'profit-positive' : 'profit-negative';
+        var cSign = gTotals.totalCumulativeProfit >= 0 ? '+' : '';
+        var stats = header.querySelectorAll('.group-stat');
+        if (stats.length >= 5) {
+            stats[0].innerHTML = '市值 <strong>¥' + formatMoney(gTotals.totalValue) + '</strong>';
+            stats[1].innerHTML = '成本 <strong>¥' + formatMoney(gTotals.totalCost) + '</strong>';
+            stats[2].innerHTML = '收益 <strong>' + pSign + formatMoney(gTotals.totalHoldingProfit) + '</strong>';
+            stats[2].className = 'group-stat ' + pClass;
+            stats[3].innerHTML = '收益率 <strong>' + pSign + (gTotals.totalProfitRate * 100).toFixed(2) + '%</strong>';
+            stats[3].className = 'group-stat ' + pClass;
+            stats[4].innerHTML = '累计 <strong>' + cSign + formatMoney(gTotals.totalCumulativeProfit) + '</strong>';
+            stats[4].className = 'group-stat ' + cClass;
+        }
     }
 
     // ========== 首页自动刷新 ==========

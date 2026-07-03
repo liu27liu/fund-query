@@ -1860,6 +1860,110 @@ ul, ol { list-style: none; }
     text-align: right;
 }
 
+/* ========== 持仓分组折叠布局 ========== */
+.portfolio-group-section {
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--bg-card);
+}
+
+.portfolio-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    cursor: pointer;
+    background: var(--bg-secondary);
+    transition: background 0.2s var(--ease);
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.portfolio-group-header:hover {
+    background: var(--bg-hover);
+}
+
+.portfolio-group-header.collapsed .group-toggle-icon {
+    transform: rotate(-90deg);
+}
+
+.group-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.group-toggle-icon {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    transition: transform 0.2s var(--ease);
+    display: inline-block;
+    width: 12px;
+}
+
+.group-header-left .group-select-all {
+    cursor: pointer;
+}
+
+.group-name-text {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.group-count {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    background: var(--bg-tertiary);
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.group-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.group-stat {
+    font-size: 13px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.group-stat strong {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.group-stat.profit-positive strong {
+    color: var(--up);
+}
+
+.group-stat.profit-negative strong {
+    color: var(--down);
+}
+
+.portfolio-group-body {
+    overflow-x: auto;
+}
+
+.portfolio-group-body .fund-table {
+    margin-bottom: 0;
+}
+
+.portfolio-total-summary {
+    margin-top: 16px;
+    border: 2px solid var(--primary);
+    border-radius: var(--radius);
+    padding: 16px;
+    background: var(--bg-card);
+}
+
 /* 添加持仓按钮：渐变背景 */
 .add-holding-btn {
     padding: 10px 22px;
