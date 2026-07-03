@@ -960,7 +960,7 @@
         // 渲染表格
         container.innerHTML = `
             <div class="ranking-info-bar">
-                <span>全市场共 <strong>${totalCount}</strong> 只基金，展示${order === 'desc' ? '涨幅' : '跌幅'}前 <strong>20</strong> 只（实时估值排序）</span>
+                <span>全市场共 <strong>${totalCount}</strong> 只基金，展示${order === 'desc' ? '涨幅' : '跌幅'}前 <strong>20</strong> 只${sortType === 'RZDF' ? '（实时估值排序）' : '（' + changeColTitle + '排序）'}</span>
             </div>
             <div class="ranking-table-fixed">
                 <table class="fund-table">

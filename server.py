@@ -842,6 +842,23 @@ def api_ranking():
                     'monthChange': safe_float(parts[8]) if len(parts) > 8 else 0,
                     'yearChange': safe_float(parts[11]) if len(parts) > 11 else 0,
                 })
+        # 根据排序类型，将change设置为对应周期的涨幅，使前端显示正确
+        change_field_map = {
+            'RZDF': 6,   # 日涨幅 -> parts[6]
+            'ZZF': 7,    # 周涨幅 -> parts[7]
+            '1YZF': 8,   # 近1月 -> parts[8]
+            '3YZF': 9,   # 近3月 -> parts[9]
+            '6YZF': 10,  # 近6月 -> parts[10]
+            '1NZF': 11,  # 近1年 -> parts[11]
+        }
+        change_idx = change_field_map.get(sort_type, 6)
+        for r in results:
+            if change_idx == 7:
+                r['change'] = r.get('weekChange', 0)
+            elif change_idx == 8:
+                r['change'] = r.get('monthChange', 0)
+            elif change_idx == 11:
+                r['change'] = r.get('yearChange', 0)
         return jsonify({'funds': results, 'total': total_count})
     except Exception as e:
         print(f'[排行异常]: {e}')
