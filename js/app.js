@@ -1372,7 +1372,7 @@
     var portfolioExpandedGroups = {}; // 记录哪些分组展开着
 
     // 构建持仓净值映射和涨跌幅映射
-    // 当当日实际净值已公布时，使用实际净值和实际涨跌幅；否则使用盘中估值
+    // 检查历史净值表首行是否为当日实际净值，是则用实际值，否则用盘中估值
     async function buildPortfolioNavMaps(positions, estimates) {
         var navMap = {};
         var changeRateMap = {};
@@ -1387,43 +1387,32 @@
             todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
         }
 
-        // 需要检查历史净值的基金（jzrq为当日的，说明实际净值已公布）
-        var needHistoryCheck = [];
-
+        // 先用估值填充默认值
         positions.forEach(function (p) {
             var est = estimates ? estimates.find(function (e) { return e.fundcode === p.code; }) : null;
             if (est) {
-                var jzrq = est.jzrq ? est.jzrq.substring(0, 10) : '';
-                if (jzrq === todayStr) {
-                    // 实际净值已公布，先用dwjz，稍后从历史净值获取实际涨跌幅
-                    navMap[p.code] = est.dwjz || p.costPrice;
-                    changeRateMap[p.code] = est.gszzl || 0; // 临时值，将被实际值替换
-                    needHistoryCheck.push(p.code);
-                } else {
-                    // 盘中，使用估值
-                    navMap[p.code] = est.gsz || est.dwjz || p.costPrice;
-                    changeRateMap[p.code] = est.gszzl || 0;
-                }
+                navMap[p.code] = est.gsz || est.dwjz || p.costPrice;
+                changeRateMap[p.code] = est.gszzl || 0;
             } else {
                 navMap[p.code] = p.costPrice;
                 changeRateMap[p.code] = 0;
             }
         });
 
-        // 对已公布实际净值的基金，获取实际涨跌幅
-        if (needHistoryCheck.length > 0) {
-            var historyPromises = needHistoryCheck.map(function (code) {
-                return FundAPI.getHistoryNav(code, 1, 1).catch(function () { return null; });
-            });
-            var historyResults = await Promise.all(historyPromises);
-            for (var i = 0; i < needHistoryCheck.length; i++) {
-                var histResult = historyResults[i];
-                if (histResult && histResult.list && histResult.list.length > 0) {
-                    var firstRow = histResult.list[0];
-                    if (firstRow.date === todayStr) {
-                        navMap[needHistoryCheck[i]] = firstRow.dwjz;
-                        changeRateMap[needHistoryCheck[i]] = firstRow.change;
-                    }
+        // 并行检查每只基金的历史净值表首行是否为当日
+        var historyPromises = positions.map(function (p) {
+            return FundAPI.getHistoryNav(p.code, 1, 1).catch(function () { return null; });
+        });
+        var historyResults = await Promise.all(historyPromises);
+
+        for (var i = 0; i < positions.length; i++) {
+            var histResult = historyResults[i];
+            if (histResult && histResult.list && histResult.list.length > 0) {
+                var firstRow = histResult.list[0];
+                if (firstRow.date === todayStr) {
+                    // 当日实际净值已公布，使用实际值
+                    navMap[positions[i].code] = firstRow.dwjz;
+                    changeRateMap[positions[i].code] = firstRow.change;
                 }
             }
         }
