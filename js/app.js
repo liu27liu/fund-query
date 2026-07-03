@@ -927,8 +927,8 @@
 
                 if (myRequestId !== rankingRequestId) return;
 
-                // 检查当日实际净值是否已公布（检查前3只基金的历史净值表首行日期）
-                // 只要有一只基金的当日实际净值已公布，就认为市场已进入盘后阶段
+                // 检查当日实际净值是否已公布（检查有估值数据的前3只基金）
+                // 优先检查有估值的基金（QDII基金通常无估值且净值延迟公布）
                 var actualNavPublished = false;
                 if (dailyCandidates.length > 0) {
                     var todayStr = '';
@@ -939,11 +939,16 @@
                         var now = new Date();
                         todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
                     }
-                    // 检查前3只基金（避免第1只是QDII等延迟公布净值的基金）
-                    var checkCount = Math.min(3, dailyCandidates.length);
-                    for (var ci = 0; ci < checkCount && !actualNavPublished; ci++) {
+                    // 找出有估值数据的前3只基金
+                    var fundsWithEstimate = [];
+                    for (var ci = 0; ci < dailyCandidates.length && fundsWithEstimate.length < 3; ci++) {
+                        var estCheck = dailyEstimates.find(function (e) { return e.fundcode === dailyCandidates[ci].code; });
+                        if (estCheck) fundsWithEstimate.push(dailyCandidates[ci].code);
+                    }
+                    // 检查这些有估值的基金的历史净值表首行日期
+                    for (var cj = 0; cj < fundsWithEstimate.length && !actualNavPublished; cj++) {
                         try {
-                            var histResult = await FundAPI.getHistoryNav(dailyCandidates[ci].code, 1, 1);
+                            var histResult = await FundAPI.getHistoryNav(fundsWithEstimate[cj], 1, 1);
                             if (histResult && histResult.list && histResult.list.length > 0 && histResult.list[0].date === todayStr) {
                                 actualNavPublished = true;
                             }
