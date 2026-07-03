@@ -21,5 +21,15 @@
       }
     ],
     "createTime": 1783055840.0759306
+  },
+  "testlzp": {
+    "password": "0f6f6bcfc2e51ba03b670987da0966bd3d53bb450f010494fc21ca8b90536f7a",
+    "salt": "289051",
+    "favorites": [],
+    "groups": [
+      "全部"
+    ],
+    "holdings": [],
+    "createTime": 1783055985.9264724
   }
 }
