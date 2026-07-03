@@ -162,7 +162,6 @@
                     <div class="portal-body">
                         <div class="portal-title">大盘指数</div>
                         <div class="portal-desc">A股 · 美股 · 全球实时行情</div>
-                        <div class="portal-tag" id="portalMarketTag">17个指数</div>
                     </div>
                     <div class="portal-arrow">›</div>
                 </div>
@@ -171,7 +170,6 @@
                     <div class="portal-body">
                         <div class="portal-title">行业板块</div>
                         <div class="portal-desc">赛道行情 · 涨跌排名</div>
-                        <div class="portal-tag" id="portalSectorTag">200个板块</div>
                     </div>
                     <div class="portal-arrow">›</div>
                 </div>
@@ -180,7 +178,6 @@
                     <div class="portal-body">
                         <div class="portal-title">基金榜单</div>
                         <div class="portal-desc">日涨跌 · 周涨幅 · 年涨幅</div>
-                        <div class="portal-tag" id="portalRankingTag">实时排行</div>
                     </div>
                     <div class="portal-arrow">›</div>
                 </div>
@@ -189,7 +186,6 @@
                     <div class="portal-body">
                         <div class="portal-title">实时资讯</div>
                         <div class="portal-desc">7×24小时财经快讯</div>
-                        <div class="portal-tag" id="portalNewsTag">持续更新</div>
                     </div>
                     <div class="portal-arrow">›</div>
                 </div>
