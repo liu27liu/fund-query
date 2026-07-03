@@ -2927,6 +2927,7 @@
                 var code = this.dataset.code;
                 Store.removeFavorite(code);
                 showToast('已移除自选', 'success');
+                syncToServer('favorites');
                 renderFavorites();
             });
         });
