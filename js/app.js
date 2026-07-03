@@ -575,19 +575,10 @@
         var codes = positions.map(function (p) { return p.code; });
         var estimates = await FundAPI.batchRealtimeEstimate(codes);
 
-        // 构建净值映射和日涨跌幅映射
-        var navMap = {};
-        var changeRateMap = {};
-        positions.forEach(function (p) {
-            var est = estimates.find(function (e) { return e.fundcode === p.code; });
-            if (est) {
-                navMap[p.code] = est.gsz || est.dwjz || p.costPrice;
-                changeRateMap[p.code] = est.gszzl || 0;
-            } else {
-                navMap[p.code] = p.costPrice;
-                changeRateMap[p.code] = 0;
-            }
-        });
+        // 构建净值映射和日涨跌幅映射（自动检测实际净值是否已公布）
+        var navMaps = await buildPortfolioNavMaps(positions, estimates);
+        var navMap = navMaps.navMap;
+        var changeRateMap = navMaps.changeRateMap;
 
         var totals = Store.calcTotalAggregatedProfit(positions, navMap, changeRateMap);
         var profitClass = totals.totalHoldingProfit >= 0 ? 'profit-positive' : 'profit-negative';
@@ -1380,6 +1371,66 @@
     // ========== 持仓页 ==========
     var portfolioExpandedGroups = {}; // 记录哪些分组展开着
 
+    // 构建持仓净值映射和涨跌幅映射
+    // 当当日实际净值已公布时，使用实际净值和实际涨跌幅；否则使用盘中估值
+    async function buildPortfolioNavMaps(positions, estimates) {
+        var navMap = {};
+        var changeRateMap = {};
+
+        // 获取当日日期（优先从估值的gztime取，保证与服务端一致）
+        var todayStr = '';
+        if (estimates && estimates.length > 0 && estimates[0].gztime) {
+            todayStr = estimates[0].gztime.substring(0, 10);
+        }
+        if (!todayStr) {
+            var now = new Date();
+            todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+        }
+
+        // 需要检查历史净值的基金（jzrq为当日的，说明实际净值已公布）
+        var needHistoryCheck = [];
+
+        positions.forEach(function (p) {
+            var est = estimates ? estimates.find(function (e) { return e.fundcode === p.code; }) : null;
+            if (est) {
+                var jzrq = est.jzrq ? est.jzrq.substring(0, 10) : '';
+                if (jzrq === todayStr) {
+                    // 实际净值已公布，先用dwjz，稍后从历史净值获取实际涨跌幅
+                    navMap[p.code] = est.dwjz || p.costPrice;
+                    changeRateMap[p.code] = est.gszzl || 0; // 临时值，将被实际值替换
+                    needHistoryCheck.push(p.code);
+                } else {
+                    // 盘中，使用估值
+                    navMap[p.code] = est.gsz || est.dwjz || p.costPrice;
+                    changeRateMap[p.code] = est.gszzl || 0;
+                }
+            } else {
+                navMap[p.code] = p.costPrice;
+                changeRateMap[p.code] = 0;
+            }
+        });
+
+        // 对已公布实际净值的基金，获取实际涨跌幅
+        if (needHistoryCheck.length > 0) {
+            var historyPromises = needHistoryCheck.map(function (code) {
+                return FundAPI.getHistoryNav(code, 1, 1).catch(function () { return null; });
+            });
+            var historyResults = await Promise.all(historyPromises);
+            for (var i = 0; i < needHistoryCheck.length; i++) {
+                var histResult = historyResults[i];
+                if (histResult && histResult.list && histResult.list.length > 0) {
+                    var firstRow = histResult.list[0];
+                    if (firstRow.date === todayStr) {
+                        navMap[needHistoryCheck[i]] = firstRow.dwjz;
+                        changeRateMap[needHistoryCheck[i]] = firstRow.change;
+                    }
+                }
+            }
+        }
+
+        return { navMap: navMap, changeRateMap: changeRateMap };
+    }
+
     function renderPortfolio() {
         // 未登录显示登录拦截
         if (!isLoggedIn()) {
@@ -1483,19 +1534,10 @@
         var codes = positions.map(function (p) { return p.code; });
         var estimates = await FundAPI.batchRealtimeEstimate(codes);
 
-        // 构建净值映射和日涨跌幅映射
-        var navMap = {};
-        var changeRateMap = {};
-        positions.forEach(function (p) {
-            var est = estimates.find(function (e) { return e.fundcode === p.code; });
-            if (est) {
-                navMap[p.code] = est.gsz || est.dwjz || p.costPrice;
-                changeRateMap[p.code] = est.gszzl || 0;
-            } else {
-                navMap[p.code] = p.costPrice;
-                changeRateMap[p.code] = 0;
-            }
-        });
+        // 构建净值映射和日涨跌幅映射（自动检测实际净值是否已公布）
+        var navMaps = await buildPortfolioNavMaps(positions, estimates);
+        var navMap = navMaps.navMap;
+        var changeRateMap = navMaps.changeRateMap;
 
         // 按分组归类持仓
         var groupMap = {};  // {groupName: [positions]}
@@ -1853,19 +1895,10 @@
             return;
         }
 
-        // 构建净值映射和日涨跌幅映射
-        var navMap = {};
-        var changeRateMap = {};
-        positions.forEach(function (p) {
-            var est = estimates.find(function (e) { return e.fundcode === p.code; });
-            if (est) {
-                navMap[p.code] = est.gsz || est.dwjz || p.costPrice;
-                changeRateMap[p.code] = est.gszzl || 0;
-            } else {
-                navMap[p.code] = p.costPrice;
-                changeRateMap[p.code] = 0;
-            }
-        });
+        // 构建净值映射和日涨跌幅映射（自动检测实际净值是否已公布）
+        var navMaps = await buildPortfolioNavMaps(positions, estimates);
+        var navMap = navMaps.navMap;
+        var changeRateMap = navMaps.changeRateMap;
 
         // 更新总览数据
         var totals = Store.calcTotalAggregatedProfit(positions, navMap, changeRateMap);
