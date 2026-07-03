@@ -1036,7 +1036,7 @@ def _fetch_news():
 def api_market_indices():
     """大盘指数实时行情 - 对接东方财富push2接口，采集全部国内外指数"""
     # stale-while-revalidate: 缓存存在就直接返回(即使过期), 同时后台刷新
-    cached = _get_cache('market_indices', 15)
+    cached = _get_cache('market_indices', 30)
     if cached is not None:
         return jsonify(cached)
 
@@ -2437,14 +2437,14 @@ def _refresh_hot_cache():
 
 
 def _prewarm_loop():
-    """后台预热循环: 启动2秒后首次预热, 之后每10秒刷新"""
+    """后台预热循环: 启动3秒后首次预热, 之后每30秒刷新"""
     import time as _time
-    _time.sleep(2)
+    _time.sleep(3)
     print('[预热] 开始预热热点数据...', flush=True)
     _refresh_hot_cache()
     print('[预热] 热点数据预热完成', flush=True)
     while True:
-        _time.sleep(10)
+        _time.sleep(30)
         try:
             _refresh_hot_cache()
         except Exception as e:
