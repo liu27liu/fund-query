@@ -163,5 +163,15 @@
     ],
     "createTime": 1783072196.7195215,
     "recreated": true
+  },
+  "xueq": {
+    "password": "eaca1b59558ef2997a25889488d50313658f204461a2c1e1238c21fe6684187a",
+    "salt": "869382",
+    "favorites": [],
+    "groups": [
+      "全部"
+    ],
+    "holdings": [],
+    "createTime": 1783077085.5106936
   }
 }
