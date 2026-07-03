@@ -590,7 +590,7 @@
             </div>
         `;
 
-        var ranking = await FundAPI.getFundRanking(sortType, 10, order, fundType);
+        var ranking = await FundAPI.getFundRanking(sortType, 20, order, fundType);
 
         if (ranking.length === 0) {
             container.innerHTML = `
@@ -619,7 +619,7 @@
                     <tr>
                         <th>基金名称</th>
                         <th class="text-right">最新净值</th>
-                        <th class="text-right">估值</th>
+                        <th class="text-right">实时估值</th>
                         <th class="text-right">${changeColTitle}</th>
                         <th class="text-right">操作</th>
                     </tr>
@@ -627,16 +627,18 @@
                 <tbody>
                     ${ranking.map(function (f, i) {
                         var est = estimates.find(function (e) { return e.fundcode === f.code; });
+                        // 使用API返回的实际涨跌幅作为排名依据，不被实时估值覆盖
                         var change;
                         if (sortType === 'RZDF') {
-                            change = est ? est.gszzl : f.change;
+                            change = f.change;
                         } else if (sortType === 'ZZF') {
                             change = f.weekChange;
                         } else if (sortType === '1NZF') {
                             change = f.yearChange;
                         } else {
-                            change = est ? est.gszzl : f.change;
+                            change = f.change;
                         }
+                        var estChange = est ? est.gszzl : null; // 实时估值涨幅（仅作参考显示）
                         var changeClass = FundAPI.getChangeClass(change);
                         var isFav = Store.isFavorite(f.code);
                         return `
@@ -648,7 +650,10 @@
                                     </div>
                                 </td>
                                 <td class="num-cell">${FundAPI.formatNum(est ? est.dwjz : f.netValue)}</td>
-                                <td class="num-cell">${est ? FundAPI.formatNum(est.gsz) : '--'}</td>
+                                <td class="num-cell">
+                                    ${est ? FundAPI.formatNum(est.gsz) : '--'}
+                                    ${estChange !== null ? '<br><span style="font-size:11px;color:var(--text-tertiary)">估' + FundAPI.formatChange(estChange) + '</span>' : ''}
+                                </td>
                                 <td class="num-cell">
                                     <span class="change-badge ${changeClass === 'up' ? 'bg-up' : changeClass === 'down' ? 'bg-down' : 'bg-flat'}">
                                         ${FundAPI.formatChange(change)}

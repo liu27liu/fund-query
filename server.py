@@ -511,7 +511,7 @@ def api_trend():
 def api_ranking():
     """基金涨幅排行 - 对接东方财富基金排行"""
     sort_type = request.args.get('sort', 'RZDF')
-    size = request.args.get('size', '10')
+    size = request.args.get('size', '20')
     fund_type = request.args.get('type', 'all')
     order = request.args.get('order', 'desc')  # desc=降序(涨幅榜), asc=升序(跌幅榜)
 
