@@ -522,46 +522,15 @@
             return;
         }
 
-        // 重点关注的板块关键词（置顶高亮显示）
-        var HOT_KEYWORDS = ['CPO', '共封装光学', '半导体', '通信设备', '通信服务', '光刻机', '光刻胶', '芯片概念', '存储芯片', '先进封装', '铜缆高速连接', 'MCU芯片', '汽车芯片', '第三代半导体'];
-
         // 按涨跌幅降序排序（API已排序，确保一致）
         var sorted = sectors.slice().sort(function (a, b) {
             return (b.changePercent || 0) - (a.changePercent || 0);
         });
 
-        // 分为热点板块和普通板块
-        var hotSectors = [];
-        var normalSectors = [];
-        sorted.forEach(function (s) {
-            var isHot = HOT_KEYWORDS.some(function (kw) {
-                return s.name.indexOf(kw) >= 0;
-            });
-            if (isHot) {
-                hotSectors.push(s);
-            } else {
-                normalSectors.push(s);
-            }
-        });
-
         var html = '';
-
-        // 热点板块区域
-        if (hotSectors.length > 0) {
-            html += '<div class="sector-hot-section"><div class="sector-hot-label">🔥 重点板块</div>';
-            html += hotSectors.map(function (s) {
-                return renderSectorCard(s, true);
-            }).join('');
-            html += '</div>';
-        }
-
-        // 普通板块区域
+        // 显示全部板块（按涨跌幅排序）
         html += '<div class="sector-normal-section">';
-        if (hotSectors.length > 0) {
-            html += '<div class="sector-normal-label">全部板块（按涨跌幅排序）</div>';
-        }
-        // 显示全部板块
-        html += normalSectors.map(function (s) {
+        html += sorted.map(function (s) {
             return renderSectorCard(s, false);
         }).join('');
         html += '</div>';
