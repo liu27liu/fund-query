@@ -10,6 +10,7 @@ import time
 import os
 import random
 import hashlib
+import threading
 import urllib.parse
 from datetime import datetime
 import requests
@@ -223,23 +224,25 @@ def api_estimate():
 
 @app.route('/api/estimate/batch')
 def api_estimate_batch():
-    """批量实时估值"""
+    """批量实时估值 - 并发请求提高速度"""
     codes = request.args.get('codes', '').strip()
     if not codes:
         return jsonify([])
 
     code_list = [c.strip() for c in codes.split(',') if c.strip()]
     results = []
-    for code in code_list:
+    results_lock = threading.Lock()
+
+    def fetch_one(code):
         url = f'https://fundgz.1234567.com.cn/js/{code}.js'
         params = {'rt': int(time.time() * 1000)}
         try:
-            resp = SESSION.get(url, params=params, timeout=8)
+            resp = SESSION.get(url, params=params, timeout=5)
             text = resp.text.strip()
             match = re.search(r'jsonpgz\((.+)\)', text)
             if match:
                 data = json.loads(match.group(1))
-                results.append({
+                return {
                     'fundcode': data.get('fundcode', ''),
                     'name': data.get('name', ''),
                     'jzrq': data.get('jzrq', ''),
@@ -247,9 +250,24 @@ def api_estimate_batch():
                     'gsz': safe_float(data.get('gsz')),
                     'gszzl': safe_float(data.get('gszzl')),
                     'gztime': data.get('gztime', '')
-                })
+                }
         except Exception as e:
             print(f'[批量估值异常] {code}: {e}')
+        return None
+
+    # 使用线程池并发请求
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        future_to_code = {executor.submit(fetch_one, code): code for code in code_list}
+        for future in as_completed(future_to_code, timeout=12):
+            try:
+                result = future.result(timeout=5)
+                if result:
+                    with results_lock:
+                        results.append(result)
+            except Exception:
+                pass
+
     return jsonify(results)
 
 

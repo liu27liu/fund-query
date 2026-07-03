@@ -737,9 +737,9 @@
             </div>
         `;
 
-        // 1. 从全市场拉取候选基金（日涨幅前200，覆盖足够范围）
+        // 1. 从全市场拉取候选基金（日涨幅前100，覆盖足够范围）
         var candidates = await Promise.race([
-            FundAPI.getFundRanking(sortType, 200, order, fundType),
+            FundAPI.getFundRanking(sortType, 100, order, fundType),
             new Promise(function (resolve) { setTimeout(function () { resolve([]); }, 15000); })
         ]);
 
@@ -755,11 +755,11 @@
             return;
         }
 
-        // 2. 获取这些基金的实时估值
+        // 2. 获取这些基金的实时估值（服务端并发请求）
         var codes = candidates.map(function (f) { return f.code; });
         var estimates = await Promise.race([
             FundAPI.batchRealtimeEstimate(codes),
-            new Promise(function (resolve) { setTimeout(function () { resolve([]); }, 15000); })
+            new Promise(function (resolve) { setTimeout(function () { resolve([]); }, 12000); })
         ]);
 
         // 3. 用实时估值涨幅重新排序
@@ -771,10 +771,18 @@
             return f;
         });
 
-        ranking.sort(function (a, b) {
-            if (order === 'desc') return (b.realtimeChange || 0) - (a.realtimeChange || 0);
-            return (a.realtimeChange || 0) - (b.realtimeChange || 0);
-        });
+        // 如果实时估值获取失败（estimates为空），用API原始涨跌幅排序
+        if (estimates.length === 0) {
+            ranking.sort(function (a, b) {
+                if (order === 'desc') return (b.change || 0) - (a.change || 0);
+                return (a.change || 0) - (b.change || 0);
+            });
+        } else {
+            ranking.sort(function (a, b) {
+                if (order === 'desc') return (b.realtimeChange || 0) - (a.realtimeChange || 0);
+                return (a.realtimeChange || 0) - (b.realtimeChange || 0);
+            });
+        }
 
         // 取前20
         ranking = ranking.slice(0, 20);
