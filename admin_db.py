@@ -228,9 +228,18 @@ def init_db():
     if admin_count == 0:
         salt = str(random.randint(100000, 999999))
         default_password = os.environ.get('ADMIN_DEFAULT_PASSWORD', 'admin123')
+        default_username = os.environ.get('ADMIN_DEFAULT_USERNAME', 'liuzhengpin')
         c.execute('INSERT INTO admins (username, password_hash, salt, role, status, email, create_time) VALUES (?,?,?,?,?,?,?)',
-                  ('admin', _hash_pw(default_password, salt), salt, 'superadmin', 1, '', time.time()))
-        print(f'[AdminDB] 默认超管账户已创建: admin / {default_password}', flush=True)
+                  (default_username, _hash_pw(default_password, salt), salt, 'superadmin', 1, '', time.time()))
+        print(f'[AdminDB] 默认超管账户已创建: {default_username} / {default_password}', flush=True)
+    else:
+        # 迁移：将旧默认账户 admin 重命名为 liuzhengpin
+        default_username = os.environ.get('ADMIN_DEFAULT_USERNAME', 'liuzhengpin')
+        old_admin = c.execute('SELECT id FROM admins WHERE username=?', ('admin',)).fetchone()
+        new_exists = c.execute('SELECT id FROM admins WHERE username=?', (default_username,)).fetchone()
+        if old_admin and not new_exists:
+            c.execute('UPDATE admins SET username=? WHERE id=?', (default_username, old_admin[0]))
+            print(f'[AdminDB] 默认超管账户已重命名: admin -> {default_username}', flush=True)
 
     # ========== 初始化默认系统配置 ==========
     config_count = c.execute('SELECT COUNT(*) FROM system_config').fetchone()[0]
