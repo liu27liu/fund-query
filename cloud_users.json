@@ -20,19 +20,7 @@
       "全部",
       "消费"
     ],
-    "holdings": [
-      {
-        "code": "110011",
-        "name": "易方达优质精选混合(QDII)",
-        "type": "QDII",
-        "amount": 1,
-        "buyPrice": 3.9625,
-        "shares": 0.25236593059936907,
-        "buyDate": "2026-07-03",
-        "group": "",
-        "addTime": 1783067063198
-      }
-    ],
+    "holdings": [],
     "createTime": 1783055840.0759306,
     "recreated": false
   },
