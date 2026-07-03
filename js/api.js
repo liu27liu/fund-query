@@ -442,7 +442,7 @@ const FundAPI = (function () {
         try {
             var url = '/api/sectors?type=' + boardType;
             if (category) url += '&category=' + encodeURIComponent(category);
-            const data = await fetchJSON(url);
+            const data = await fetchJSON(url, 30000);
             if (Array.isArray(data)) return data;
             return [];
         } catch (e) {
