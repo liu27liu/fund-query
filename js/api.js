@@ -435,7 +435,7 @@ const FundAPI = (function () {
         }
     }
 
-    // ========== 养基宝标准板块行情 (6大一级分类) ==========
+    // ========== 板块行情 (行业板块/概念题材) ==========
     async function getSectors(category) {
         category = category || '行业板块';
         try {
@@ -453,7 +453,21 @@ const FundAPI = (function () {
         try {
             return await fetchJSON('/api/sector-categories', 5000);
         } catch (e) {
-            return ['行业板块', '概念题材', '宽基指数', '债券板块', '海外QDII', '货币理财'];
+            return ['行业板块', '概念题材'];
+        }
+    }
+
+    async function getSectorFunds(bkCode, page, size) {
+        page = page || 1;
+        size = size || 20;
+        try {
+            var url = '/api/sector-funds?code=' + encodeURIComponent(bkCode) + '&page=' + page + '&size=' + size;
+            const data = await fetchJSON(url, 15000);
+            if (data && Array.isArray(data.funds)) return data;
+            return { funds: [], total: 0, page: page, size: size };
+        } catch (e) {
+            console.warn('板块基金接口异常:', e);
+            return { funds: [], total: 0, page: page, size: size };
         }
     }
 
@@ -499,6 +513,7 @@ const FundAPI = (function () {
         getMarketIndices: getMarketIndices,
         getSectors: getSectors,
         getSectorCategories: getSectorCategories,
+        getSectorFunds: getSectorFunds,
         getFundManagers: getFundManagers,
         getFundHoldings: getFundHoldings,
         parseFundType: parseFundType,

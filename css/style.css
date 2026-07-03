@@ -1588,6 +1588,89 @@ ul, ol { list-style: none; }
     .sector-pct { font-size: 13px; }
 }
 
+/* ========== 板块基金弹窗 ========== */
+.sector-funds-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.sector-fund-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.15s var(--ease);
+}
+.sector-fund-item:hover {
+    background: var(--bg-secondary);
+}
+.sector-fund-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+.sector-fund-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sector-fund-code {
+    font-size: 11px;
+    color: var(--text-tertiary, #999);
+}
+.sector-fund-data {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    flex-shrink: 0;
+}
+.sector-fund-nav {
+    font-size: 11px;
+    color: var(--text-tertiary, #999);
+}
+.sector-fund-change {
+    font-size: 14px;
+    font-weight: 600;
+}
+.sector-fund-year {
+    font-size: 11px;
+}
+.sector-fund-change.fund-up, .sector-fund-year.fund-up { color: var(--up); }
+.sector-fund-change.fund-down, .sector-fund-year.fund-down { color: var(--down); }
+.sector-funds-pager {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 0 8px;
+}
+.sector-funds-pager button {
+    padding: 5px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s var(--ease);
+}
+.sector-funds-pager button:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+.sf-info {
+    font-size: 12px;
+    color: var(--text-tertiary, #999);
+}
+
 /* ========== 基金类型筛选 ========== */
 .ranking-type-filter {
     display: flex;

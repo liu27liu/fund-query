@@ -1034,12 +1034,10 @@ def api_market_indices():
 
 @app.route('/api/sectors')
 def api_sectors():
-    """养基宝标准板块行情 - 6大一级分类
-    行业板块/概念题材: 天天基金网主题基金API(与养基宝同源, 东方财富Choice数据)
-    宽基指数: push2指数API + ETF估值fallback
-    债券板块/海外QDII/货币理财: 基金排行API按类型分组统计
+    """养基宝标准板块行情 - 行业板块/概念题材
+    数据源: 天天基金网主题基金API(与养基宝同源, 东方财富Choice数据)
     """
-    category = request.args.get('type', '行业板块')  # 一级分类名称
+    category = request.args.get('type', '行业板块')
     if not category:
         category = '行业板块'
 
@@ -1054,14 +1052,6 @@ def api_sectors():
         results = _fetch_industry_sectors()
     elif category == '概念题材':
         results = _fetch_concept_sectors()
-    elif category == '宽基指数':
-        results = _fetch_index_sectors()
-    elif category == '债券板块':
-        results = _fetch_fund_type_sectors('zq', BOND_SECTORS)
-    elif category == '海外QDII':
-        results = _fetch_fund_type_sectors('qdii', QDII_SECTORS)
-    elif category == '货币理财':
-        results = _fetch_money_sectors(MONEY_SECTORS)
     else:
         results = []
 
@@ -1080,8 +1070,102 @@ def api_sectors():
 
 @app.route('/api/sector-categories')
 def api_sector_categories():
-    """返回养基宝6大一级分类列表"""
+    """返回板块一级分类列表"""
     return jsonify(SECTOR_TOP_CATEGORIES)
+
+
+@app.route('/api/sector-funds')
+def api_sector_funds():
+    """获取板块对应的基金列表 - 天天基金网主题基金API
+    参数: code=BK000642 (板块代码), page=1, size=20
+    返回: 基金代码、名称、净值、日涨幅、近1周/1月/3月/6月/1年收益率等
+    """
+    bk_code = request.args.get('code', '').strip()
+    if not bk_code or not bk_code.startswith('BK'):
+        return jsonify({'error': '缺少板块代码'}), 400
+
+    page = int(request.args.get('page', 1))
+    size = int(request.args.get('size', 20))
+    if size > 50:
+        size = 50
+
+    # 缓存
+    cache_key = f'sector_funds_{bk_code}_{page}_{size}'
+    cached = _sector_cache.get(cache_key)
+    if cached and time.time() - cached['time'] < 120:
+        return jsonify(cached['data'])
+
+    url = 'https://api.fund.eastmoney.com/ZTJJ/GetBKRelTopicFundNew'
+    params = {
+        'callback': 'jQuery',
+        'sort': 'undefined',
+        'sorttype': 'DESC',
+        'pageindex': str(page),
+        'pagesize': str(size),
+        'tp': bk_code,
+        'isbuy': '1',
+        '_': str(int(time.time() * 1000))
+    }
+    headers = {
+        'User-Agent': HEADERS['User-Agent'],
+        'Referer': 'https://fund.eastmoney.com/ztjj/',
+        'Accept': '*/*',
+    }
+
+    funds = []
+    total = 0
+    for attempt in range(3):
+        try:
+            resp = SESSION.get(url, params=params, headers=headers, timeout=10)
+            text = resp.text
+            m = re.search(r'jQuery\((.*)\)', text)
+            if m:
+                data = json.loads(m.group(1))
+                total = data.get('TotalCount', 0)
+                for item in data.get('Data', []):
+                    funds.append({
+                        'code': item.get('FCODE', ''),
+                        'name': item.get('SHORTNAME', ''),
+                        'type': item.get('FTYPE', ''),
+                        'netValue': round(safe_float(item.get('DWJZ', 0)), 4),
+                        'changePercent': round(safe_float(item.get('RZDF', 0)), 2),
+                        'week': _safe_pct(item.get('SYL_Z')),
+                        'month': _safe_pct(item.get('SYL_Y')),
+                        'quarter': _safe_pct(item.get('SYL_3Y')),
+                        'halfYear': _safe_pct(item.get('SYL_6Y')),
+                        'year': _safe_pct(item.get('SYL_1N')),
+                        'ytd': _safe_pct(item.get('SYL_JN')),
+                        'feeRate': item.get('RATE', ''),
+                        'correlation': round(safe_float(item.get('CORR_1Y', 0)), 2),
+                    })
+                print(f'[板块基金-{bk_code}] 获取到 {len(funds)} 只基金, 总计 {total}', flush=True)
+                break
+            else:
+                print(f'[板块基金-{bk_code}] 尝试{attempt+1}解析失败', flush=True)
+        except Exception as e:
+            print(f'[板块基金-{bk_code}] 异常尝试{attempt+1}: {e}', flush=True)
+        if attempt < 2:
+            time.sleep(0.5)
+
+    result = {
+        'funds': funds,
+        'total': total,
+        'page': page,
+        'size': size,
+    }
+    if funds:
+        _sector_cache[cache_key] = {'data': result, 'time': time.time()}
+    return jsonify(result)
+
+
+def _safe_pct(val):
+    """安全解析百分比数值, 空字符串返回None"""
+    if val is None or val == '' or val == '--':
+        return None
+    try:
+        return round(float(val), 2)
+    except (ValueError, TypeError):
+        return None
 
 
 def _fetch_industry_sectors():

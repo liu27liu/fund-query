@@ -359,10 +359,6 @@
                     <div class="sector-filter-bar">
                         <span class="sector-tab active" data-category="行业板块">行业板块</span>
                         <span class="sector-tab" data-category="概念题材">概念题材</span>
-                        <span class="sector-tab" data-category="宽基指数">宽基指数</span>
-                        <span class="sector-tab" data-category="债券板块">债券板块</span>
-                        <span class="sector-tab" data-category="海外QDII">海外QDII</span>
-                        <span class="sector-tab" data-category="货币理财">货币理财</span>
                     </div>
                     <span class="collapse-icon">▾</span>
                 </div>
@@ -717,12 +713,17 @@
 
         container.innerHTML = html;
 
-        // 点击板块搜索相关基金
+        // 点击板块查看对应基金
         container.querySelectorAll('.sector-card').forEach(function (card) {
             card.addEventListener('click', function () {
+                var code = this.dataset.code;
                 var name = this.dataset.name;
-                searchInput.value = name;
-                navigate('/search?q=' + encodeURIComponent(name));
+                if (code) {
+                    showSectorFunds(code, name);
+                } else {
+                    searchInput.value = name;
+                    navigate('/search?q=' + encodeURIComponent(name));
+                }
             });
         });
     }
@@ -757,6 +758,96 @@
             </div>
         `;
     }
+
+    // ========== 板块基金弹窗 ==========
+    var sectorFundsPage = 1;
+
+    async function showSectorFunds(bkCode, sectorName) {
+        sectorFundsPage = 1;
+        var modal = document.getElementById('sectorFundsModal');
+        var title = document.getElementById('sectorFundsTitle');
+        var body = document.getElementById('sectorFundsBody');
+
+        modal.dataset.bkCode = bkCode;
+        modal.dataset.sectorName = sectorName;
+        title.textContent = sectorName + ' - 相关基金';
+        body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-secondary);">加载中...</div>';
+        modal.style.display = 'flex';
+
+        await loadSectorFundsPage(bkCode, sectorName);
+    }
+
+    async function loadSectorFundsPage(bkCode, sectorName) {
+        var body = document.getElementById('sectorFundsBody');
+        var data = await FundAPI.getSectorFunds(bkCode, sectorFundsPage, 20);
+
+        if (!data.funds || data.funds.length === 0) {
+            body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-secondary);">暂无相关基金数据</div>';
+            return;
+        }
+
+        var html = '<div class="sector-funds-list">';
+        data.funds.forEach(function (f) {
+            var isUp = (f.changePercent || 0) >= 0;
+            var colorClass = isUp ? 'fund-up' : 'fund-down';
+            var sign = isUp ? '+' : '';
+            var yearStr = f.year != null ? (f.year >= 0 ? '+' : '') + f.year.toFixed(2) + '%' : '--';
+            var yearClass = f.year != null ? (f.year >= 0 ? 'fund-up' : 'fund-down') : '';
+            html += '<div class="sector-fund-item" data-code="' + f.code + '">';
+            html += '<div class="sector-fund-main">';
+            html += '<span class="sector-fund-name">' + f.name + '</span>';
+            html += '<span class="sector-fund-code">' + f.code + ' · ' + (f.type || '') + '</span>';
+            html += '</div>';
+            html += '<div class="sector-fund-data">';
+            html += '<span class="sector-fund-nav">净值 ' + f.netValue.toFixed(4) + '</span>';
+            html += '<span class="sector-fund-change ' + colorClass + '">' + sign + f.changePercent.toFixed(2) + '%</span>';
+            html += '<span class="sector-fund-year ' + yearClass + '">近1年 ' + yearStr + '</span>';
+            html += '</div>';
+            html += '</div>';
+        });
+        html += '</div>';
+
+        // 分页
+        var totalPages = Math.ceil(data.total / data.size);
+        if (totalPages > 1) {
+            html += '<div class="sector-funds-pager">';
+            if (sectorFundsPage > 1) {
+                html += '<button class="sf-prev" onclick="window._sectorFundsPrev()">上一页</button>';
+            }
+            html += '<span class="sf-info">第 ' + sectorFundsPage + '/' + totalPages + ' 页 (共' + data.total + '只)</span>';
+            if (sectorFundsPage < totalPages) {
+                html += '<button class="sf-next" onclick="window._sectorFundsNext()">下一页</button>';
+            }
+            html += '</div>';
+        }
+
+        body.innerHTML = html;
+
+        // 点击基金跳转详情
+        body.querySelectorAll('.sector-fund-item').forEach(function (item) {
+            item.addEventListener('click', function () {
+                var code = this.dataset.code;
+                if (code) navigate('/fund/' + code);
+            });
+        });
+    }
+
+    window._sectorFundsPrev = function () {
+        if (sectorFundsPage > 1) {
+            sectorFundsPage--;
+            var modal = document.getElementById('sectorFundsModal');
+            var bkCode = modal.dataset.bkCode;
+            var sectorName = modal.dataset.sectorName;
+            if (bkCode) loadSectorFundsPage(bkCode, sectorName);
+        }
+    };
+    window._sectorFundsNext = function () {
+        sectorFundsPage++;
+        var modal = document.getElementById('sectorFundsModal');
+        var bkCode = modal.dataset.bkCode;
+        var sectorName = modal.dataset.sectorName;
+        if (bkCode) loadSectorFundsPage(bkCode, sectorName);
+    };
 
     // ========== 大盘指数看板 ==========
     async function loadMarketIndices() {
@@ -3963,6 +4054,10 @@
                     loginModal.classList.remove('active');
                     stopSmsCountdown();
                 }
+                var sfModal = document.getElementById('sectorFundsModal');
+                if (sfModal && sfModal.style.display === 'flex') {
+                    sfModal.style.display = 'none';
+                }
             }
         });
 
@@ -3978,6 +4073,16 @@
                 if (e.target === loginModal) {
                     loginModal.classList.remove('active');
                     stopSmsCountdown();
+                }
+            });
+        }
+
+        // 板块基金弹窗关闭
+        var sectorFundsModal = document.getElementById('sectorFundsModal');
+        if (sectorFundsModal) {
+            sectorFundsModal.addEventListener('click', function (e) {
+                if (e.target === sectorFundsModal) {
+                    sectorFundsModal.style.display = 'none';
                 }
             });
         }
