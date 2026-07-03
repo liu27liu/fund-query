@@ -2368,6 +2368,9 @@ if __name__ == '__main__':
 
 
 # ========== 热点数据预热(模块级, gunicorn和直接运行均生效) ==========
+_prewarm_started = False
+_prewarm_lock = threading.Lock()
+
 def _refresh_hot_cache():
     """刷新所有热点缓存"""
     try:
@@ -2403,5 +2406,19 @@ def _prewarm_loop():
             print(f'[预热] 周期刷新异常: {e}', flush=True)
 
 
-_prewarm_thread = threading.Thread(target=_prewarm_loop, daemon=True)
-_prewarm_thread.start()
+def _ensure_prewarm():
+    """确保预热线程已启动(在worker进程中, 首次请求时触发)"""
+    global _prewarm_started
+    if not _prewarm_started:
+        with _prewarm_lock:
+            if not _prewarm_started:
+                _prewarm_started = True
+                t = threading.Thread(target=_prewarm_loop, daemon=True)
+                t.start()
+                print('[预热] 预热线程已在worker中启动', flush=True)
+
+
+@app.before_request
+def _start_prewarm_on_first_request():
+    """首个请求到达时启动预热线程(gunicorn worker进程中)"""
+    _ensure_prewarm()
