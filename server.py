@@ -1063,9 +1063,7 @@ def api_sectors():
                 if data.get('data') and data['data'].get('diff'):
                     for item in data['data']['diff']:
                         name = item.get('f14', '')
-                        # 只采集有主题分类的板块（SECTOR_CATEGORY_MAP作为过滤器）
-                        if name not in SECTOR_CATEGORY_MAP:
-                            continue
+                        # 所有板块都返回，用category系统自动归类
                         results.append({
                             'code': item.get('f12', ''),
                             'name': name,
