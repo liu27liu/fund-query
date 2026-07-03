@@ -1901,14 +1901,16 @@ ul, ol { list-style: none; }
     padding: 0 16px;
     border: 1.5px solid var(--border);
     border-radius: var(--radius-sm);
-    font-size: 14px;
-    color: var(--text);
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a1a2e;
     background: #fafcff;
     transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease), background 0.2s;
 }
 
 .form-input::placeholder {
     color: var(--text-tertiary);
+    font-weight: 400;
 }
 
 .form-input:focus {
@@ -2931,6 +2933,38 @@ select.form-input {
     color: var(--text-tertiary);
     margin-top: 6px;
     line-height: 1.5;
+}
+
+/* 输入框+小按钮组合 */
+.input-with-btn {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+.input-with-btn .form-input {
+    flex: 1;
+    min-width: 0;
+}
+.btn-mini {
+    flex-shrink: 0;
+    padding: 0 16px;
+    height: 44px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--primary-gradient);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s var(--ease);
+}
+.btn-mini:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+.btn-mini:active {
+    transform: translateY(0);
 }
 
 /* ========== 持仓批量操作 & 分组 ========== */

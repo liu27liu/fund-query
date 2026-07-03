@@ -2116,16 +2116,16 @@
                 </div>
                 <div class="form-group" id="reduceBySharesGroup">
                     <label class="form-label">赎回份额 <span class="required">*</span></label>
-                    <div style="display:flex; gap:8px;">
-                        <input type="number" class="form-input" id="reducePosShares" value="" step="0.01" placeholder="输入赎回份额" style="flex:1;">
-                        <button class="form-submit" id="reduceAllBtn" style="white-space:nowrap; padding:8px 16px;">全部</button>
+                    <div class="input-with-btn">
+                        <input type="number" class="form-input" id="reducePosShares" value="" step="0.01" placeholder="输入赎回份额">
+                        <button class="btn-mini" id="reduceAllBtn">全部</button>
                     </div>
                 </div>
                 <div class="form-group" id="reduceByAmountGroup" style="display:none;">
                     <label class="form-label">赎回金额 <span class="required">*</span></label>
-                    <div style="display:flex; gap:8px;">
-                        <input type="number" class="form-input" id="reducePosAmount" value="" step="0.01" placeholder="输入赎回金额（元）" style="flex:1;">
-                        <button class="form-submit" id="reduceAllAmountBtn" style="white-space:nowrap; padding:8px 16px;">全部</button>
+                    <div class="input-with-btn">
+                        <input type="number" class="form-input" id="reducePosAmount" value="" step="0.01" placeholder="输入赎回金额（元）">
+                        <button class="btn-mini" id="reduceAllAmountBtn">全部</button>
                     </div>
                 </div>
                 <div class="form-group">
