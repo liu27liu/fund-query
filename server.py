@@ -914,14 +914,28 @@ def api_ranking():
 @app.route('/api/news')
 def api_news():
     """7x24实时财经资讯 - 对接东方财富7x24快讯接口"""
-    # 缓存30秒
+    # stale-while-revalidate
     cached = _get_cache('news', 30)
     if cached is not None:
         return jsonify(cached)
 
+    # 检查过期缓存
+    stale = _hot_cache.get('news')
+    if stale and stale.get('data'):
+        def _bg_refresh_news():
+            try:
+                result = _fetch_news()
+                if result:
+                    _set_cache('news', result)
+            except Exception:
+                pass
+        threading.Thread(target=_bg_refresh_news, daemon=True).start()
+        return jsonify(stale['data'])
+
+    # 完全没有缓存, 同步获取
     lock = _get_key_lock('news')
     if not lock.acquire(blocking=False):
-        time.sleep(0.3)
+        time.sleep(0.5)
         cached = _get_cache('news', 60)
         if cached is not None:
             return jsonify(cached)
@@ -1021,16 +1035,30 @@ def _fetch_news():
 @app.route('/api/market-indices')
 def api_market_indices():
     """大盘指数实时行情 - 对接东方财富push2接口，采集全部国内外指数"""
-    # 缓存15秒（盘中近实时，盘后也快速返回）
+    # stale-while-revalidate: 缓存存在就直接返回(即使过期), 同时后台刷新
     cached = _get_cache('market_indices', 15)
     if cached is not None:
         return jsonify(cached)
 
+    # 缓存不存在, 检查是否有过期缓存可用
+    stale = _hot_cache.get('market_indices')
+    if stale and stale.get('data'):
+        # 有过期缓存, 后台刷新, 立即返回旧数据
+        def _bg_refresh():
+            try:
+                data = _fetch_market_indices()
+                if data:
+                    _set_cache('market_indices', data)
+            except Exception:
+                pass
+        threading.Thread(target=_bg_refresh, daemon=True).start()
+        return jsonify(stale['data'])
+
+    # 完全没有缓存, 同步获取
     lock = _get_key_lock('market_indices')
     if not lock.acquire(blocking=False):
-        # 另一个线程正在采集，等待短暂后重试缓存
-        time.sleep(0.3)
-        cached = _get_cache('market_indices', 30)
+        time.sleep(0.5)
+        cached = _get_cache('market_indices', 60)
         if cached is not None:
             return jsonify(cached)
 
