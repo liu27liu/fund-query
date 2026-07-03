@@ -734,8 +734,8 @@
 
         // 直接用API排名（覆盖全市场所有基金，按涨跌幅降序/升序）
         var ranking = await Promise.race([
-            FundAPI.getFundRanking(sortType, 10000, order, fundType),
-            new Promise(function (resolve) { setTimeout(function () { resolve([]); }, 15000); })
+            FundAPI.getFundRanking(sortType, 9999, order, fundType),
+            new Promise(function (resolve) { setTimeout(function () { resolve([]); }, 20000); })
         ]);
 
         if (!ranking || ranking.length === 0) {
@@ -847,7 +847,15 @@
         }
 
         renderVisibleRows();
-        scrollWrap.addEventListener('scroll', renderVisibleRows);
+        var scrollTick = false;
+        scrollWrap.addEventListener('scroll', function () {
+            if (scrollTick) return;
+            scrollTick = true;
+            requestAnimationFrame(function () {
+                renderVisibleRows();
+                scrollTick = false;
+            });
+        });
 
         updateRankingRefreshStatus(true);
 
