@@ -732,10 +732,10 @@
             </div>
         `;
 
-        // 直接用API排名（覆盖全市场基金，按涨跌幅降序/升序）
+        // 直接用API排名（覆盖全市场所有基金，按涨跌幅降序/升序）
         var ranking = await Promise.race([
-            FundAPI.getFundRanking(sortType, 50, order, fundType),
-            new Promise(function (resolve) { setTimeout(function () { resolve([]); }, 12000); })
+            FundAPI.getFundRanking(sortType, 10000, order, fundType),
+            new Promise(function (resolve) { setTimeout(function () { resolve([]); }, 15000); })
         ]);
 
         if (!ranking || ranking.length === 0) {
@@ -769,66 +769,85 @@
         if (sortType === 'ZZF') changeColTitle = '周涨幅';
         else if (sortType === '1NZF') changeColTitle = '近1年涨幅';
 
-        // 渲染表格（放在可滚动容器中）
+        var totalCount = ranking.length;
+
+        // 虚拟滚动渲染：只渲染可视区域内的行
+        var ROW_HEIGHT = 52;
+        var VISIBLE_ROWS = 15;
+        var BUFFER = 5;
+
         container.innerHTML = `
-            <div class="ranking-scroll-wrap">
-                <table class="fund-table">
-                    <thead>
-                        <tr>
-                            <th>基金名称</th>
-                            <th class="text-right">最新净值</th>
-                            <th class="text-right">${changeColTitle}</th>
-                            <th class="text-right">操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="rankingTbody">
-                        ${ranking.map(function (f, i) {
-                            var change;
-                            if (sortType === 'ZZF') change = f.weekChange;
-                            else if (sortType === '1NZF') change = f.yearChange;
-                            else change = f.change;
-                            var changeClass = FundAPI.getChangeClass(change);
-                            var isFav = Store.isFavorite(f.code);
-                            return `
-                                <tr data-code="${f.code}">
-                                    <td class="col-name">
-                                        <div class="fund-name-cell">
-                                            <span class="name">${(i + 1)}. ${f.name}</span>
-                                            <span class="code">${f.code} · ${f.type}</span>
-                                        </div>
-                                    </td>
-                                    <td class="num-cell">${FundAPI.formatNum(f.netValue)}</td>
-                                    <td class="num-cell">
-                                        <span class="change-badge ${changeClass === 'up' ? 'bg-up' : changeClass === 'down' ? 'bg-down' : 'bg-flat'}">
-                                            ${FundAPI.formatChange(change)}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <button class="action-btn ${isFav ? '' : 'add-fav-mini'}" data-action="${isFav ? 'remove' : 'add'}" data-code="${f.code}" data-name="${f.name}" data-type="${f.type}">
-                                            ${isFav ? '移除自选' : '+ 自选'}
-                                        </button>
-                                    </td>
-                                </tr>
-                            `;
-                        }).join('')}
-                    </tbody>
-                </table>
+            <div class="ranking-info-bar">
+                <span>共 <strong>${totalCount}</strong> 只基金</span>
+                <span class="ranking-scroll-hint">↓ 自动滚动，鼠标悬停暂停</span>
+            </div>
+            <div class="ranking-scroll-wrap" id="rankingScrollWrap">
+                <div class="ranking-virtual-spacer" id="rankingSpacer" style="height: ${totalCount * ROW_HEIGHT}px; position: relative;">
+                    <table class="fund-table ranking-virtual-table" id="rankingVirtualTable" style="position: absolute; top: 0; width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>基金名称</th>
+                                <th class="text-right">最新净值</th>
+                                <th class="text-right">${changeColTitle}</th>
+                                <th class="text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rankingTbody"></tbody>
+                    </table>
+                </div>
             </div>
         `;
 
-        // 绑定事件
-        container.querySelectorAll('tr[data-code]').forEach(function (tr) {
-            tr.addEventListener('click', function (e) {
-                if (e.target.classList.contains('action-btn')) return;
-                openDetail(this.dataset.code);
+        var scrollWrap = document.getElementById('rankingScrollWrap');
+        var tbody = document.getElementById('rankingTbody');
+        var spacer = document.getElementById('rankingSpacer');
+
+        function renderVisibleRows() {
+            var scrollTop = scrollWrap.scrollTop;
+            var startIdx = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - BUFFER);
+            var endIdx = Math.min(totalCount, startIdx + VISIBLE_ROWS + BUFFER * 2);
+
+            // 设置table的top偏移，使行对齐
+            document.getElementById('rankingVirtualTable').style.top = (startIdx * ROW_HEIGHT) + 'px';
+
+            var html = '';
+            for (var i = startIdx; i < endIdx; i++) {
+                var f = ranking[i];
+                var change;
+                if (sortType === 'ZZF') change = f.weekChange;
+                else if (sortType === '1NZF') change = f.yearChange;
+                else change = f.change;
+                var changeClass = FundAPI.getChangeClass(change);
+                var isFav = Store.isFavorite(f.code);
+                html += '<tr data-code="' + f.code + '" style="height:' + ROW_HEIGHT + 'px;">';
+                html += '<td class="col-name"><div class="fund-name-cell">';
+                html += '<span class="name">' + (i + 1) + '. ' + f.name + '</span>';
+                html += '<span class="code">' + f.code + ' · ' + f.type + '</span>';
+                html += '</div></td>';
+                html += '<td class="num-cell">' + FundAPI.formatNum(f.netValue) + '</td>';
+                html += '<td class="num-cell"><span class="change-badge ' + (changeClass === 'up' ? 'bg-up' : changeClass === 'down' ? 'bg-down' : 'bg-flat') + '">' + FundAPI.formatChange(change) + '</span></td>';
+                html += '<td><button class="action-btn ' + (isFav ? '' : 'add-fav-mini') + '" data-action="' + (isFav ? 'remove' : 'add') + '" data-code="' + f.code + '" data-name="' + f.name + '" data-type="' + f.type + '">' + (isFav ? '移除自选' : '+ 自选') + '</button></td>';
+                html += '</tr>';
+            }
+            tbody.innerHTML = html;
+
+            // 绑定行点击
+            tbody.querySelectorAll('tr[data-code]').forEach(function (tr) {
+                tr.addEventListener('click', function (e) {
+                    if (e.target.classList.contains('action-btn')) return;
+                    openDetail(this.dataset.code);
+                });
             });
-        });
-        container.querySelectorAll('.action-btn').forEach(function (btn) {
-            btn.addEventListener('click', function (e) {
-                e.stopPropagation();
-                handleFavToggle(this);
+            tbody.querySelectorAll('.action-btn').forEach(function (btn) {
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    handleFavToggle(this);
+                });
             });
-        });
+        }
+
+        renderVisibleRows();
+        scrollWrap.addEventListener('scroll', renderVisibleRows);
 
         updateRankingRefreshStatus(true);
 

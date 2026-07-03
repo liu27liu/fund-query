@@ -956,12 +956,34 @@ ul, ol { list-style: none; }
 }
 
 /* 基金榜单自动滚动容器 */
+.ranking-info-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    background: var(--card-bg);
+    border-radius: var(--radius) var(--radius) 0 0;
+    border: 1px solid var(--border-light);
+    border-bottom: none;
+}
+
+.ranking-info-bar strong {
+    color: var(--primary);
+}
+
+.ranking-scroll-hint {
+    font-size: 12px;
+    color: var(--text-tertiary);
+}
+
 .ranking-scroll-wrap {
     max-height: 480px;
     overflow-y: auto;
-    scroll-behavior: smooth;
+    scroll-behavior: auto;
     background: var(--card-bg);
-    border-radius: var(--radius);
+    border-radius: 0 0 var(--radius) var(--radius);
     box-shadow: var(--card-shadow);
     border: 1px solid var(--border-light);
 }
@@ -975,11 +997,11 @@ ul, ol { list-style: none; }
     border-radius: 3px;
 }
 
-.ranking-scroll-wrap table {
+.ranking-virtual-table {
     margin: 0;
 }
 
-.ranking-scroll-wrap thead {
+.ranking-virtual-table thead {
     position: sticky;
     top: 0;
     z-index: 10;
