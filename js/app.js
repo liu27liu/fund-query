@@ -832,7 +832,6 @@
                         <div class="news-title">${item.title}</div>
                         <div class="news-summary">${item.summary || ''}</div>
                         <div class="news-meta">
-                            ${item.source ? '<span class="news-source">' + item.source + '</span>' : ''}
                             <span class="news-full-time">${time}</span>
                         </div>
                     </div>
