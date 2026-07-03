@@ -739,13 +739,19 @@
         } else if (s.upCount !== undefined && s.downCount !== undefined && (s.upCount > 0 || s.downCount > 0)) {
             upDownText = s.upCount + '/' + s.downCount;
         }
+        // 货币基金显示年化收益率
+        var pctText = sign + (s.changePercent || 0).toFixed(2) + '%';
+        if (s.yieldType === '7日年化') {
+            pctText = (s.changePercent || 0).toFixed(4) + '%';
+            upDownText = '近1年年化';
+        }
         return `
             <div class="sector-card ${colorClass}${hotClass}" data-code="${s.code || ''}" data-name="${s.name}">
                 <div class="sector-info">
                     <span class="sector-name">${s.name}</span>
                 </div>
                 <div class="sector-data">
-                    <span class="sector-pct">${sign}${(s.changePercent || 0).toFixed(2)}%</span>
+                    <span class="sector-pct">${pctText}</span>
                     ${upDownText ? '<span class="sector-updown">' + upDownText + '</span>' : ''}
                 </div>
             </div>

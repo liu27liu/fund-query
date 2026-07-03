@@ -1320,16 +1320,41 @@ def _fetch_fund_type_sectors(fund_type, sector_defs):
     results = []
     for sec_def in sector_defs:
         sec_name = sec_def['name']
-        keywords = sec_def['keywords']
+        keywords = sec_def.get('keywords', [])
+        rep_codes = sec_def.get('rep_codes', [])
         matched = [f for f in funds if any(kw in f['name'] for kw in keywords)]
         if matched:
             avg_change = sum(f['change'] for f in matched) / len(matched)
             up_count = sum(1 for f in matched if f['change'] > 0)
             down_count = sum(1 for f in matched if f['change'] < 0)
+            fund_count = len(matched)
+        elif rep_codes:
+            # 关键词匹配不到, 用代表性基金代码获取涨跌幅
+            avg_change = 0
+            valid = 0
+            for code in rep_codes:
+                try:
+                    url = f'https://fundgz.1234567.com.cn/js/{code}.js'
+                    resp = SESSION.get(url, params={'rt': int(time.time() * 1000)}, timeout=8)
+                    text = resp.text.strip()
+                    m = re.search(r'jsonpgz\((.+)\)', text)
+                    if m:
+                        data = json.loads(m.group(1))
+                        chg = safe_float(data.get('gszzl', 0))
+                        avg_change += chg
+                        valid += 1
+                except:
+                    pass
+            if valid > 0:
+                avg_change = avg_change / valid
+            up_count = 0
+            down_count = 0
+            fund_count = valid
         else:
             avg_change = 0
             up_count = 0
             down_count = 0
+            fund_count = 0
         results.append({
             'code': '',
             'name': sec_name,
@@ -1338,7 +1363,7 @@ def _fetch_fund_type_sectors(fund_type, sector_defs):
             'change': 0,
             'upCount': up_count,
             'downCount': down_count,
-            'fundCount': len(matched),
+            'fundCount': fund_count,
             'type': '债券板块' if fund_type == 'zq' else '海外QDII',
             'category': '债券板块' if fund_type == 'zq' else '海外QDII'
         })
@@ -1377,20 +1402,18 @@ def _fetch_money_sectors(sector_defs):
         rep_codes = sec_def.get('rep_codes', [])
 
         if rep_codes:
-            # 货币基金: 用代表性基金代码获取7日年化收益率
+            # 货币基金: 用pingzhongdata API获取年化收益率
             avg_yield = 0
             valid_count = 0
             for code in rep_codes:
                 try:
-                    # 货币基金的7日年化收益率从fundgz API获取
-                    url = f'https://fundgz.1234567.com.cn/js/{code}.js'
-                    resp = SESSION.get(url, params={'rt': int(time.time() * 1000)}, timeout=8)
-                    text = resp.text.strip()
-                    m = re.search(r'jsonpgz\((.+)\)', text)
+                    url = f'https://fund.eastmoney.com/pingzhongdata/{code}.js'
+                    resp = SESSION.get(url, timeout=8)
+                    text = resp.text
+                    # syl_1n是近1年收益率(年化), 用于货币基金展示
+                    m = re.search(r'var\s+syl_1n\s*=\s*"([^"]+)"', text)
                     if m:
-                        data = json.loads(m.group(1))
-                        # 货币基金的gszzl是7日年化收益率
-                        yld = safe_float(data.get('gszzl', 0))
+                        yld = safe_float(m.group(1))
                         if yld > 0:
                             avg_yield += yld
                             valid_count += 1
