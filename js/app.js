@@ -1288,7 +1288,7 @@
     }
 
     // ========== 首页自动刷新 ==========
-    var HOME_REFRESH_INTERVAL = 60; // 首页自动刷新间隔（秒）
+    var HOME_REFRESH_INTERVAL = 120; // 首页自动刷新间隔（秒）
 
     function startHomeAutoRefresh() {
         stopHomeAutoRefresh();

@@ -712,10 +712,10 @@ def api_sectors():
     """行业板块+概念板块实时行情 - 对接东方财富push2接口"""
     board_type = request.args.get('type', 'all')  # all/industry/concept
 
-    # 内存缓存：60秒内复用上次结果，避免频繁请求被东方财富限流
+    # 内存缓存：180秒内复用上次结果，避免频繁请求被东方财富限流
     cache_key = 'sectors_' + board_type
     cached = _sector_cache.get(cache_key)
-    if cached and time.time() - cached['time'] < 60:
+    if cached and time.time() - cached['time'] < 180:
         return jsonify(cached['data'])
 
     results = []
@@ -729,7 +729,7 @@ def api_sectors():
     def fetch_boards(fs_type, label):
         # 手动构建URL，requests会自动编码+和:导致东方财富API不识别
         base_url = 'https://push2.eastmoney.com/api/qt/clist/get'
-        for attempt in range(3):
+        for attempt in range(5):
             ts = str(int(time.time() * 1000))
             full_url = (base_url + '?pn=1&pz=500&po=1&np=1'
                         '&ut=bd1d9ddb04089700cf9c27f6f7426281'
@@ -738,7 +738,7 @@ def api_sectors():
                         '&fields=f12,f14,f2,f3,f4,f104,f105'
                         '&_=' + ts)
             try:
-                resp = SESSION.get(full_url, headers=sector_headers, timeout=10)
+                resp = SESSION.get(full_url, headers=sector_headers, timeout=15)
                 data = resp.json()
                 if data.get('data') and data['data'].get('diff'):
                     for item in data['data']['diff']:
@@ -758,8 +758,8 @@ def api_sectors():
                     print(f'[板块-{label}] 尝试{attempt+1}无数据: {str(data)[:150]}', flush=True)
             except Exception as e:
                 print(f'[板块异常-{label}] 尝试{attempt+1}: {e}', flush=True)
-            if attempt < 2:
-                time.sleep(1)
+            if attempt < 4:
+                time.sleep(2)
 
     if board_type in ('all', 'industry'):
         fetch_boards('m:90+t:2', 'industry')
@@ -772,6 +772,10 @@ def api_sectors():
     # 缓存结果
     if results:
         _sector_cache[cache_key] = {'data': results, 'time': time.time()}
+    elif cached:
+        # 所有重试都失败时，返回过期缓存数据（有总比没有好）
+        print(f'[板块] 所有重试失败，返回过期缓存数据', flush=True)
+        return jsonify(cached['data'])
 
     return jsonify(results)
 
