@@ -921,7 +921,7 @@
         // 竞态保护：如果有新请求了，放弃当前渲染
         if (myRequestId !== rankingRequestId) return;
 
-        // 3. 用实时估值涨幅重新排序
+        // 3. 合并实时估值数据
         var ranking = candidates.map(function (f) {
             var est = estimates.find(function (e) { return e.fundcode === f.code; });
             f.realtimeChange = est ? est.gszzl : null;  // null表示无实时估值
@@ -931,21 +931,26 @@
             return f;
         });
 
-        // 过滤掉没有实时估值的基金（避免显示昨天的旧数据）
-        var withRealtime = ranking.filter(function (f) { return f.hasRealtime; });
-
-        // 如果实时估值数据太少（不足20只），保留所有基金用原始涨跌幅
-        if (withRealtime.length >= 20) {
-            ranking = withRealtime;
+        // 日涨幅榜：用实时估值涨跌幅重新排序；周/年涨幅榜：保持API返回的原始排序（原始change已是周/年涨幅）
+        if (sortType === 'RZDF') {
+            // 过滤掉没有实时估值的基金（避免显示昨天的旧数据）
+            var withRealtime = ranking.filter(function (f) { return f.hasRealtime; });
+            if (withRealtime.length >= 20) {
+                ranking = withRealtime;
+            }
+            ranking.sort(function (a, b) {
+                var aChange = a.realtimeChange !== null ? a.realtimeChange : a.change;
+                var bChange = b.realtimeChange !== null ? b.realtimeChange : b.change;
+                if (order === 'desc') return bChange - aChange;
+                return aChange - bChange;
+            });
+        } else {
+            // 周涨幅/年涨幅：按API返回的change字段排序（change已是周/年涨幅）
+            ranking.sort(function (a, b) {
+                if (order === 'desc') return (b.change || 0) - (a.change || 0);
+                return (a.change || 0) - (b.change || 0);
+            });
         }
-
-        // 按实时估值涨跌幅排序
-        ranking.sort(function (a, b) {
-            var aChange = a.realtimeChange !== null ? a.realtimeChange : a.change;
-            var bChange = b.realtimeChange !== null ? b.realtimeChange : b.change;
-            if (order === 'desc') return bChange - aChange;
-            return aChange - bChange;
-        });
 
         // 取前20
         ranking = ranking.slice(0, 20);
@@ -962,14 +967,17 @@
                     <thead>
                         <tr>
                             <th>基金名称</th>
-                            <th class="text-right">今日实时估值</th>
+                            <th class="text-right">${sortType === 'RZDF' ? '今日实时估值' : '最新净值'}</th>
                             <th class="text-right">${changeColTitle}</th>
                             <th class="text-right">操作</th>
                         </tr>
                     </thead>
                     <tbody id="rankingTbody">
                         ${ranking.map(function (f, i) {
-                            var change = f.realtimeChange !== null ? f.realtimeChange : f.change;
+                            // 日涨幅榜显示实时涨跌幅，周/年涨幅榜显示原始涨幅
+                            var change = sortType === 'RZDF'
+                                ? (f.realtimeChange !== null ? f.realtimeChange : f.change)
+                                : f.change;
                             var changeClass = FundAPI.getChangeClass(change);
                             var isFav = Store.isFavorite(f.code);
                             return `
