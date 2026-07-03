@@ -357,9 +357,19 @@
                     <span class="pulse-dot"></span>
                     ${T('text_section_sector', '赛道行业板块实时行情')}
                     <div class="sector-filter-bar">
-                        <span class="sector-tab active" data-board="all">全部板块</span>
-                        <span class="sector-tab" data-board="industry">行业板块</span>
-                        <span class="sector-tab" data-board="concept">概念板块</span>
+                        <span class="sector-tab active" data-board="all">全部</span>
+                        <span class="sector-tab" data-category="科技">科技</span>
+                        <span class="sector-tab" data-category="消费">消费</span>
+                        <span class="sector-tab" data-category="医药健康">医药</span>
+                        <span class="sector-tab" data-category="新能源">新能源</span>
+                        <span class="sector-tab" data-category="金融">金融</span>
+                        <span class="sector-tab" data-category="军工">军工</span>
+                        <span class="sector-tab" data-category="高端制造">制造</span>
+                        <span class="sector-tab" data-category="周期">周期</span>
+                        <span class="sector-tab" data-category="基建交通">基建</span>
+                        <span class="sector-tab" data-category="农业食品">农业</span>
+                        <span class="sector-tab" data-category="文体娱乐">文体</span>
+                        <span class="sector-tab" data-category="综合">综合</span>
                     </div>
                     <span class="collapse-icon">▾</span>
                 </div>
@@ -480,10 +490,13 @@
 
         // 板块Tab切换
         document.querySelectorAll('.sector-tab').forEach(function (tab) {
-            tab.addEventListener('click', function () {
+            tab.addEventListener('click', function (e) {
+                e.stopPropagation();
                 document.querySelectorAll('.sector-tab').forEach(function (t) { t.classList.remove('active'); });
                 this.classList.add('active');
-                loadSectors(this.dataset.board);
+                var board = this.dataset.board || 'all';
+                var category = this.dataset.category || '';
+                loadSectors(board, category);
             });
         });
 
@@ -681,11 +694,14 @@
     // ========== 赛道行业板块看板 ==========
     var allSectorsCache = []; // 缓存全部板块数据
 
-    async function loadSectors(boardType) {
+    async function loadSectors(boardType, category) {
         var container = document.getElementById('sectorDashboard');
         if (!container) return;
 
-        var sectors = await FundAPI.getSectors(boardType);
+        boardType = boardType || 'all';
+        category = category || '';
+
+        var sectors = await FundAPI.getSectors(boardType, category);
         allSectorsCache = sectors;
 
         if (sectors.length === 0) {
@@ -693,18 +709,51 @@
             return;
         }
 
-        // 按涨跌幅降序排序（API已排序，确保一致）
+        // 按涨跌幅降序排序
         var sorted = sectors.slice().sort(function (a, b) {
             return (b.changePercent || 0) - (a.changePercent || 0);
         });
 
         var html = '';
-        // 显示全部板块（按涨跌幅排序）
-        html += '<div class="sector-normal-section">';
-        html += sorted.map(function (s) {
-            return renderSectorCard(s, false);
-        }).join('');
-        html += '</div>';
+        if (category) {
+            // 按分类筛选：直接展示该分类下的板块
+            html += '<div class="sector-normal-section">';
+            html += sorted.map(function (s) {
+                return renderSectorCard(s, false);
+            }).join('');
+            html += '</div>';
+        } else {
+            // 全部板块：按主题大类分组展示
+            var grouped = {};
+            sorted.forEach(function (s) {
+                var cat = s.category || '综合';
+                if (!grouped[cat]) grouped[cat] = [];
+                grouped[cat].push(s);
+            });
+
+            // 按预设顺序展示各分类
+            var categoryOrder = ['科技', '消费', '医药健康', '新能源', '金融', '军工', '高端制造', '周期', '基建交通', '农业食品', '文体娱乐', '综合'];
+            categoryOrder.forEach(function (cat) {
+                if (grouped[cat] && grouped[cat].length > 0) {
+                    var catChange = 0;
+                    grouped[cat].forEach(function (s) { catChange += (s.changePercent || 0); });
+                    var avgChange = (catChange / grouped[cat].length).toFixed(2);
+                    var catClass = avgChange >= 0 ? 'sector-up' : 'sector-down';
+                    html += '<div class="sector-group-section">';
+                    html += '<div class="sector-group-header ' + catClass + '">';
+                    html += '<span class="sector-group-title">' + cat + '</span>';
+                    html += '<span class="sector-group-count">' + grouped[cat].length + '个板块</span>';
+                    html += '<span class="sector-group-avg">' + (avgChange >= 0 ? '+' : '') + avgChange + '%</span>';
+                    html += '</div>';
+                    html += '<div class="sector-normal-section">';
+                    html += grouped[cat].map(function (s) {
+                        return renderSectorCard(s, false);
+                    }).join('');
+                    html += '</div>';
+                    html += '</div>';
+                }
+            });
+        }
 
         container.innerHTML = html;
 
@@ -722,7 +771,7 @@
         var isUp = s.changePercent >= 0;
         var colorClass = isUp ? 'sector-up' : 'sector-down';
         var sign = isUp ? '+' : '';
-        var typeBadge = s.type === 'industry' ? '行业' : '概念';
+        var typeBadge = s.category || (s.type === 'industry' ? '行业' : '概念');
         var hotClass = isHot ? ' sector-hot' : '';
         return `
             <div class="sector-card ${colorClass}${hotClass}" data-code="${s.code}" data-name="${s.name}">
@@ -2077,7 +2126,9 @@
         // 2. 刷新赛道板块
         var activeSectorTab = document.querySelector('.sector-tab.active');
         if (activeSectorTab) {
-            await loadSectors(activeSectorTab.dataset.board);
+            var sBoard = activeSectorTab.dataset.board || 'all';
+            var sCat = activeSectorTab.dataset.category || '';
+            await loadSectors(sBoard, sCat);
         }
         // 3. 刷新涨跌榜
         await loadRanking(currentRankingType, currentRankingOrder, currentFundType);

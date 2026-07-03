@@ -436,10 +436,13 @@ const FundAPI = (function () {
     }
 
     // ========== 行业/概念板块实时行情 ==========
-    async function getSectors(boardType) {
+    async function getSectors(boardType, category) {
         boardType = boardType || 'all';
+        category = category || '';
         try {
-            const data = await fetchJSON('/api/sectors?type=' + boardType);
+            var url = '/api/sectors?type=' + boardType;
+            if (category) url += '&category=' + encodeURIComponent(category);
+            const data = await fetchJSON(url);
             if (Array.isArray(data)) return data;
             return [];
         } catch (e) {

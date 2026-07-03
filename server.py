@@ -16,6 +16,7 @@ from datetime import datetime
 import requests
 from flask import Flask, request, jsonify, send_from_directory, Response
 from allowed_sectors import ALLOWED_SECTORS
+from sector_categories import get_sector_category
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 
@@ -1022,16 +1023,17 @@ def api_market_indices():
 
 @app.route('/api/sectors')
 def api_sectors():
-    """行业板块+概念板块实时行情 - 对接东方财富push2接口"""
-    board_type = request.args.get('type', 'all')  # all/industry/concept
+    """行业板块+概念板块实时行情 - 对接东方财富push2接口
+    优化: 并行请求行业+概念板块, 添加category主题标签, 120秒缓存
+    """
+    board_type = request.args.get('type', 'all')  # all/industry/concept/category名称
+    category_filter = request.args.get('category', '')  # 主题大类过滤
 
-    # 内存缓存：180秒内复用上次结果，避免频繁请求被东方财富限流
-    cache_key = 'sectors_' + board_type
+    # 内存缓存：120秒内复用上次结果
+    cache_key = 'sectors_' + board_type + '_' + category_filter
     cached = _sector_cache.get(cache_key)
-    if cached and time.time() - cached['time'] < 180:
+    if cached and time.time() - cached['time'] < 120:
         return jsonify(cached['data'])
-
-    results = []
 
     sector_headers = {
         'User-Agent': HEADERS['User-Agent'],
@@ -1040,9 +1042,9 @@ def api_sectors():
     }
 
     def fetch_boards(fs_type, label):
-        # 手动构建URL，requests会自动编码+和:导致东方财富API不识别
+        results = []
         base_url = 'https://push2.eastmoney.com/api/qt/clist/get'
-        for attempt in range(5):
+        for attempt in range(3):
             ts = str(int(time.time() * 1000))
             full_url = (base_url + '?pn=1&pz=500&po=1&np=1'
                         '&ut=bd1d9ddb04089700cf9c27f6f7426281'
@@ -1051,12 +1053,11 @@ def api_sectors():
                         '&fields=f12,f14,f2,f3,f4,f104,f105'
                         '&_=' + ts)
             try:
-                resp = SESSION.get(full_url, headers=sector_headers, timeout=15)
+                resp = SESSION.get(full_url, headers=sector_headers, timeout=10)
                 data = resp.json()
                 if data.get('data') and data['data'].get('diff'):
                     for item in data['data']['diff']:
                         name = item.get('f14', '')
-                        # 只采集白名单中的板块
                         if name not in ALLOWED_SECTORS:
                             continue
                         results.append({
@@ -1067,34 +1068,43 @@ def api_sectors():
                             'change': safe_float(item.get('f4')),
                             'upCount': safe_float(item.get('f104', 0)),
                             'downCount': safe_float(item.get('f105', 0)),
-                            'type': label
+                            'type': label,
+                            'category': get_sector_category(name)
                         })
-                    print(f'[板块-{label}] 返回 {len(data["data"]["diff"])} 个, 白名单过滤后 {len([i for i in results if i["type"]==label])} 个', flush=True)
-                    return
-                else:
-                    print(f'[板块-{label}] 尝试{attempt+1}无数据: {str(data)[:150]}', flush=True)
+                    return results
             except Exception as e:
                 print(f'[板块异常-{label}] 尝试{attempt+1}: {e}', flush=True)
-            if attempt < 4:
-                time.sleep(2)
+            if attempt < 2:
+                time.sleep(1)
+        return results
 
-    if board_type in ('all', 'industry'):
-        fetch_boards('m:90+t:2', 'industry')
-    if board_type in ('all', 'concept'):
-        fetch_boards('m:90+t:3', 'concept')
+    # 并行请求行业+概念板块
+    all_results = []
+    import concurrent.futures
+    tasks = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        if board_type in ('all', 'industry'):
+            tasks.append(executor.submit(fetch_boards, 'm:90+t:2', 'industry'))
+        if board_type in ('all', 'concept'):
+            tasks.append(executor.submit(fetch_boards, 'm:90+t:3', 'concept'))
+        for future in concurrent.futures.as_completed(tasks):
+            all_results.extend(future.result())
+
+    # 按主题大类过滤
+    if category_filter:
+        all_results = [s for s in all_results if s.get('category') == category_filter]
 
     # 按涨跌幅降序排序
-    results.sort(key=lambda x: x.get('changePercent', 0), reverse=True)
+    all_results.sort(key=lambda x: x.get('changePercent', 0), reverse=True)
 
     # 缓存结果
-    if results:
-        _sector_cache[cache_key] = {'data': results, 'time': time.time()}
+    if all_results:
+        _sector_cache[cache_key] = {'data': all_results, 'time': time.time()}
     elif cached:
-        # 所有重试都失败时，返回过期缓存数据（有总比没有好）
         print(f'[板块] 所有重试失败，返回过期缓存数据', flush=True)
         return jsonify(cached['data'])
 
-    return jsonify(results)
+    return jsonify(all_results)
 
 
 @app.route('/api/fund-managers')

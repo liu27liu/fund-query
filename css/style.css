@@ -1414,6 +1414,39 @@ ul, ol { list-style: none; }
     gap: 10px;
 }
 
+/* 板块分组 */
+.sector-group-section {
+    margin-bottom: 20px;
+}
+.sector-group-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    margin-bottom: 10px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    border-left: 3px solid var(--primary);
+}
+.sector-group-header.sector-up { border-left-color: var(--up); }
+.sector-group-header.sector-down { border-left-color: var(--down); }
+.sector-group-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.sector-group-count {
+    font-size: 12px;
+    color: var(--text-tertiary);
+}
+.sector-group-avg {
+    margin-left: auto;
+    font-size: 14px;
+    font-weight: 700;
+}
+.sector-group-header.sector-up .sector-group-avg { color: var(--up); }
+.sector-group-header.sector-down .sector-group-avg { color: var(--down); }
+
 .sector-hot-label,
 .sector-normal-label {
     grid-column: 1 / -1;
@@ -1520,7 +1553,13 @@ ul, ol { list-style: none; }
     gap: 4px;
     font-size: 12px;
     font-weight: normal;
+    overflow-x: auto;
+    max-width: 70%;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
 }
+.sector-filter-bar::-webkit-scrollbar { height: 3px; }
 
 .sector-tab {
     padding: 3px 10px;
