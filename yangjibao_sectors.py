@@ -81,14 +81,14 @@ BROAD_INDEX_SECTORS = [
 # 关键词: 用于从基金名称中匹配子类
 # rep_codes: 代表性基金代码(关键词匹配不到时用)
 BOND_SECTORS = [
-    {"name": "短债", "keywords": ["短债", "超短", "7日", "30日"], "rep_codes": []},
-    {"name": "中短债", "keywords": ["中短", "90日", "120日"], "rep_codes": []},
+    {"name": "短债", "keywords": ["短债", "超短", "30日"], "rep_codes": ["003547", "003548", "006965"]},
+    {"name": "中短债", "keywords": ["中短", "90日", "120日"], "rep_codes": ["006585", "006586", "007352"]},
     {"name": "中长期纯债", "keywords": ["纯债", "长债", "添利", "增利"], "rep_codes": []},
-    {"name": "利率债", "keywords": ["利率", "政金", "国开", "稳健"], "rep_codes": []},
+    {"name": "利率债", "keywords": ["利率", "政金", "国开"], "rep_codes": []},
     {"name": "信用债", "keywords": ["信用"], "rep_codes": []},
     {"name": "可转债", "keywords": ["可转", "转债"], "rep_codes": []},
     {"name": "二级债基", "keywords": ["双利", "增强债", "增强"], "rep_codes": []},
-    {"name": "一级债基", "keywords": ["一级"], "rep_codes": []},
+    {"name": "一级债基", "keywords": ["一级"], "rep_codes": ["001668", "002611", "470008"]},
     {"name": "国债", "keywords": ["国债", "国债券"], "rep_codes": ["005832", "003838", "501307"]},
     {"name": "城投债", "keywords": ["城投"], "rep_codes": ["005833", "005372", "005681"]},
 ]
@@ -98,15 +98,15 @@ BOND_SECTORS = [
 # rep_codes: 代表性QDII基金代码(关键词匹配不到时用)
 QDII_SECTORS = [
     {"name": "美股纳斯达克", "keywords": ["纳斯达克", "纳指"], "rep_codes": ["160213", "270042"]},
-    {"name": "美股道琼斯", "keywords": ["道琼斯", "道指", "美国"], "rep_codes": []},
+    {"name": "美股道琼斯", "keywords": ["道琼斯", "道指", "美国"], "rep_codes": ["006679", "513400"]},
     {"name": "美股标普500", "keywords": ["标普", "S&P", "SP500", "500"], "rep_codes": ["161125", "513500"]},
     {"name": "港股恒生指数", "keywords": ["恒生", "恒指", "恒生中国"], "rep_codes": ["160717", "513600"]},
     {"name": "恒生科技", "keywords": ["恒生科技", "港股科技", "科技"], "rep_codes": []},
     {"name": "恒生医药", "keywords": ["恒生医药", "恒生医疗", "港股医疗"], "rep_codes": []},
     {"name": "港股消费", "keywords": ["港股消费", "恒生消费", "全球消费", "消费"], "rep_codes": []},
     {"name": "日经225", "keywords": ["日经", "日本"], "rep_codes": []},
-    {"name": "德国DAX", "keywords": ["德国", "DAX"], "rep_codes": ["000614"]},
-    {"name": "法国CAC40", "keywords": ["法国", "CAC"], "rep_codes": ["000615"]},
+    {"name": "德国DAX", "keywords": ["德国", "DAX"], "rep_codes": []},
+    {"name": "法国CAC40", "keywords": ["法国", "CAC"], "rep_codes": []},
     {"name": "越南市场", "keywords": ["越南"], "rep_codes": []},
     {"name": "印度市场", "keywords": ["印度"], "rep_codes": []},
     {"name": "原油QDII", "keywords": ["原油", "石油", "油气", "能源"], "rep_codes": ["162411", "501018"]},
@@ -120,7 +120,7 @@ QDII_SECTORS = [
 # 同业存单指数基金也在zq类型中, 用关键词匹配
 MONEY_SECTORS = [
     {"name": "货币基金", "keywords": ["货币"], "rep_codes": ["110006", "070008", "001666", "003171", "004137"]},
-    {"name": "同业存单", "keywords": ["存单", "同业"], "rep_codes": ["015946", "015947", "016015", "016058"]},
+    {"name": "同业存单", "keywords": ["存单", "同业"], "rep_codes": ["016063", "014428", "015827", "014426", "015823"]},
 ]
 
 # ========== 东方财富行业板块名称 → 养基宝标准名称映射 ==========
