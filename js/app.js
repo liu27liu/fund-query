@@ -3359,10 +3359,6 @@
             var ratioBar = stock.ratio > 0
                 ? '<div class="ratio-bar"><div class="ratio-fill" style="width:' + Math.min(stock.ratio * 3, 100) + '%"></div></div>'
                 : '';
-            var changeClass = '';
-            var changeText = stock.quarterChange || '--';
-            if (changeText.indexOf('-') === 0) changeClass = 'down';
-            else if (changeText !== '--' && changeText.indexOf('+') === 0) changeClass = 'up';
 
             return `
                 <tr>
@@ -3379,8 +3375,8 @@
                             ${ratioBar}
                         </div>
                     </td>
+                    <td class="num-cell">${stock.shares || '--'}</td>
                     <td class="num-cell">${stock.value || '--'}</td>
-                    <td class="num-cell ${changeClass}">${changeText}</td>
                 </tr>
             `;
         }).join('');
@@ -3393,8 +3389,8 @@
                         <th style="width:36px;">#</th>
                         <th>股票名称</th>
                         <th class="text-right">占净值</th>
-                        <th class="text-right">持仓市值</th>
-                        <th class="text-right">季度涨跌</th>
+                        <th class="text-right">持股数(万股)</th>
+                        <th class="text-right">持仓市值(万元)</th>
                     </tr>
                 </thead>
                 <tbody>

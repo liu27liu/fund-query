@@ -1233,9 +1233,9 @@ def api_fund_holdings():
             if not stock_code or stock_code == '--':
                 continue
 
-            # 根据列数自适应：新格式10列，旧格式7列
-            if len(clean_cells) >= 10:
-                ratio_idx, shares_idx, value_idx, change_idx = 6, 7, 8, 9
+            # 根据列数自适应：新格式9-10列(含最新价/涨跌幅/相关资讯)，旧格式7列
+            if len(clean_cells) >= 9:
+                ratio_idx, shares_idx, value_idx, change_idx = 6, 7, 8, -1
             else:
                 ratio_idx, shares_idx, value_idx, change_idx = 3, 4, 5, 6
 
@@ -1248,7 +1248,7 @@ def api_fund_holdings():
                 'ratio': safe_float(ratio_str),
                 'shares': clean_cells[shares_idx] if len(clean_cells) > shares_idx else '--',
                 'value': clean_cells[value_idx] if len(clean_cells) > value_idx else '--',
-                'quarterChange': clean_cells[change_idx] if len(clean_cells) > change_idx else '--'
+                'quarterChange': clean_cells[change_idx] if (change_idx >= 0 and len(clean_cells) > change_idx) else '--'
             })
 
         return jsonify({
