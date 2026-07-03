@@ -16,7 +16,7 @@ from datetime import datetime
 import requests
 from flask import Flask, request, jsonify, send_from_directory, Response
 from allowed_sectors import ALLOWED_SECTORS
-from sector_categories import get_sector_category
+from sector_categories import get_sector_category, SECTOR_CATEGORY_MAP
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 
@@ -1066,7 +1066,8 @@ def api_sectors():
                 if data.get('data') and data['data'].get('diff'):
                     for item in data['data']['diff']:
                         name = item.get('f14', '')
-                        if name not in ALLOWED_SECTORS:
+                        # 只采集有主题分类的板块（SECTOR_CATEGORY_MAP作为过滤器）
+                        if name not in SECTOR_CATEGORY_MAP:
                             continue
                         results.append({
                             'code': item.get('f12', ''),
