@@ -1044,9 +1044,6 @@ def api_sectors():
     def fetch_boards(fs_type, label):
         results = []
         base_url = 'https://push2.eastmoney.com/api/qt/clist/get'
-        # 每个线程用独立的session，避免线程安全问题
-        local_session = requests.Session()
-        local_session.headers.update(HEADERS)
         sector_headers = {
             'User-Agent': HEADERS['User-Agent'],
             'Referer': 'https://quote.eastmoney.com/center/boardlist.html',
@@ -1061,7 +1058,7 @@ def api_sectors():
                         '&fields=f12,f14,f2,f3,f4,f104,f105'
                         '&_=' + ts)
             try:
-                resp = local_session.get(full_url, headers=sector_headers, timeout=10)
+                resp = SESSION.get(full_url, headers=sector_headers, timeout=12)
                 data = resp.json()
                 if data.get('data') and data['data'].get('diff'):
                     for item in data['data']['diff']:
@@ -1087,17 +1084,12 @@ def api_sectors():
                 time.sleep(1)
         return results
 
-    # 并行请求行业+概念板块
+    # 请求行业+概念板块（顺序请求，保证稳定性）
     all_results = []
-    import concurrent.futures
-    tasks = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        if board_type in ('all', 'industry'):
-            tasks.append(executor.submit(fetch_boards, 'm:90+t:2', 'industry'))
-        if board_type in ('all', 'concept'):
-            tasks.append(executor.submit(fetch_boards, 'm:90+t:3', 'concept'))
-        for future in concurrent.futures.as_completed(tasks):
-            all_results.extend(future.result())
+    if board_type in ('all', 'industry'):
+        all_results.extend(fetch_boards('m:90+t:2', 'industry'))
+    if board_type in ('all', 'concept'):
+        all_results.extend(fetch_boards('m:90+t:3', 'concept'))
 
     # 按主题大类过滤
     if category_filter:
