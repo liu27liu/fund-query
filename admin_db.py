@@ -234,6 +234,58 @@ def init_db():
             c.execute('INSERT INTO system_config (key, value, description, update_time) VALUES (?,?,?,?)',
                       (key, value, desc, time.time()))
 
+    # ========== 追加站点文案配置（增量，不覆盖已有值）==========
+    site_text_configs = [
+        # --- 页眉 ---
+        ('text_header_logo', '基金净值通', '页眉Logo文字'),
+        ('text_nav_home', '首页', '导航-首页'),
+        ('text_nav_portfolio', '持仓', '导航-持仓'),
+        ('text_nav_favorites', '自选', '导航-自选'),
+        ('text_nav_search', '搜索', '导航-搜索'),
+        ('text_search_placeholder', '输入基金代码 / 名称 / 拼音首字母', '搜索框占位符'),
+        ('text_login_btn', '登录', '登录按钮文字'),
+        # --- 页脚 ---
+        ('text_footer_main', '基金净值通 · 实时估值查询平台', '页脚主文字'),
+        ('text_footer_time_prefix', '当前时间: ', '页脚时间前缀'),
+        # --- 首页 Hero ---
+        ('text_hero_title', '基金净值通 · 实时估值查询平台', '首页大标题'),
+        ('text_hero_subtitle', '覆盖全市场公募基金 · 盘中实时估值 · 历史净值走势 · 自选基金管理', '首页副标题'),
+        ('text_hero_stat1_num', '10000+', '首页统计1-数值'),
+        ('text_hero_stat1_label', '覆盖基金', '首页统计1-标签'),
+        ('text_hero_stat2_num', '3s', '首页统计2-数值'),
+        ('text_hero_stat2_label', '估值更新', '首页统计2-标签'),
+        ('text_hero_stat3_num', '24h', '首页统计3-数值'),
+        ('text_hero_stat3_label', '数据采集', '首页统计3-标签'),
+        ('text_hero_stat4_num', '0', '首页统计4-数值'),
+        ('text_hero_stat4_label', '使用成本', '首页统计4-标签'),
+        # --- 门户卡片 ---
+        ('text_portal_market_title', '大盘指数', '门户卡片-大盘指数标题'),
+        ('text_portal_market_desc', 'A股 · 美股 · 全球实时行情', '门户卡片-大盘指数描述'),
+        ('text_portal_sector_title', '行业板块', '门户卡片-行业板块标题'),
+        ('text_portal_sector_desc', '赛道行情 · 涨跌排名', '门户卡片-行业板块描述'),
+        ('text_portal_ranking_title', '基金榜单', '门户卡片-基金榜单标题'),
+        ('text_portal_ranking_desc', '日涨跌 · 周涨幅 · 年涨幅', '门户卡片-基金榜单描述'),
+        ('text_portal_news_title', '实时资讯', '门户卡片-实时资讯标题'),
+        ('text_portal_news_desc', '7×24小时财经快讯', '门户卡片-实时资讯描述'),
+        # --- 版块标题 ---
+        ('text_section_market', '大盘指数实时看板', '版块标题-大盘指数'),
+        ('text_section_sector', '赛道行业板块实时行情', '版块标题-行业板块'),
+        ('text_section_ranking', '基金榜单', '版块标题-基金榜单'),
+        ('text_section_news', '7×24 实时财经资讯', '版块标题-实时资讯'),
+        # --- 加载提示 ---
+        ('text_loading_data', '正在加载数据...', '首页加载提示'),
+        ('text_loading_ranking', '正在加载涨跌排行...', '榜单加载提示'),
+        ('text_loading_news', '正在加载实时资讯...', '资讯加载提示'),
+        ('text_load_more_news', '加载更多资讯', '加载更多资讯按钮'),
+        # --- 浏览器标签 ---
+        ('text_page_title', '基金净值通 - 实时估值 · 持仓盈亏 · 自选管理', '浏览器标签页标题'),
+    ]
+    for key, value, desc in site_text_configs:
+        existing = c.execute('SELECT key FROM system_config WHERE key=?', (key,)).fetchone()
+        if not existing:
+            c.execute('INSERT INTO system_config (key, value, description, update_time) VALUES (?,?,?,?)',
+                      (key, value, desc, time.time()))
+
     # ========== 初始化默认数据源 ==========
     ds_count = c.execute('SELECT COUNT(*) FROM data_sources').fetchone()[0]
     if ds_count == 0:

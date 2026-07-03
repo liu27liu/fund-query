@@ -251,6 +251,23 @@ def admin_page():
     return send_from_directory('.', 'admin.html')
 
 
+# ========== 站点文案配置（公开接口，前端启动时加载）==========
+_site_config_cache = {'data': None, 'time': 0}
+
+@app.route('/api/site-config')
+def api_site_config():
+    """返回站点文案配置（缓存60秒，减少数据库读取）"""
+    import admin_db
+    now = time.time()
+    if _site_config_cache['data'] and now - _site_config_cache['time'] < 60:
+        return jsonify(_site_config_cache['data'])
+    configs = admin_db.get_all_config()
+    result = {k: v['value'] for k, v in configs.items()}
+    _site_config_cache['data'] = result
+    _site_config_cache['time'] = now
+    return jsonify(result)
+
+
 @app.route('/<path:path>')
 def static_files(path):
     return send_from_directory('.', path)

@@ -787,18 +787,38 @@ function clearSectorCache() {
 }
 
 // ========== 11. 系统配置 ==========
+// 配置分类定义
+var CONFIG_CATEGORIES = [
+    { title: '网站基础设置', keys: ['site_name', 'site_logo', 'text_page_title'] },
+    { title: '页眉 & 导航', keys: ['text_header_logo', 'text_nav_home', 'text_nav_portfolio', 'text_nav_favorites', 'text_nav_search', 'text_search_placeholder', 'text_login_btn'] },
+    { title: '页脚', keys: ['text_footer_main', 'text_footer_time_prefix'] },
+    { title: '首页 Hero 区域', keys: ['text_hero_title', 'text_hero_subtitle', 'text_hero_stat1_num', 'text_hero_stat1_label', 'text_hero_stat2_num', 'text_hero_stat2_label', 'text_hero_stat3_num', 'text_hero_stat3_label', 'text_hero_stat4_num', 'text_hero_stat4_label'] },
+    { title: '门户卡片', keys: ['text_portal_market_title', 'text_portal_market_desc', 'text_portal_sector_title', 'text_portal_sector_desc', 'text_portal_ranking_title', 'text_portal_ranking_desc', 'text_portal_news_title', 'text_portal_news_desc'] },
+    { title: '版块标题', keys: ['text_section_market', 'text_section_sector', 'text_section_ranking', 'text_section_news'] },
+    { title: '加载提示', keys: ['text_loading_data', 'text_loading_ranking', 'text_loading_news', 'text_load_more_news'] },
+    { title: 'SEO 设置', keys: ['site_seo_keywords', 'site_seo_description'] },
+    { title: '交易 & 采集参数', keys: ['trading_start_time', 'trading_end_time', 'nav_deviation_threshold', 'collection_interval_intraday', 'collection_interval_postclose', 'alert_email'] },
+];
+
 function renderConfig() {
     api('/config').then(function (res) {
         if (!res.success) return;
         var d = res.data;
-        var html = '<div class="card"><div class="card-title">系统配置</div>';
-        html += '<div id="configForm">';
-        Object.keys(d).forEach(function (key) {
-            html += '<div class="form-group"><label>' + escapeHtml(key) + ' <span style="color:#999;font-weight:normal;">(' + escapeHtml(d[key].description || '') + ')</span></label>';
-            html += '<input type="text" id="cfg_' + key + '" value="' + escapeHtml(d[key].value) + '"></div>';
+        var html = '';
+        CONFIG_CATEGORIES.forEach(function (cat) {
+            html += '<div class="card"><div class="card-title">' + escapeHtml(cat.title) + '</div>';
+            cat.keys.forEach(function (key) {
+                if (!d[key]) return;
+                html += '<div class="form-group"><label>' + escapeHtml(key);
+                if (d[key].description) html += ' <span style="color:#999;font-weight:normal;">(' + escapeHtml(d[key].description) + ')</span>';
+                html += '</label>';
+                html += '<input type="text" id="cfg_' + key + '" value="' + escapeHtml(d[key].value) + '" style="width:100%;"></div>';
+            });
+            html += '</div>';
         });
-        html += '</div>';
-        html += '<div style="margin-top:16px;"><button class="btn-primary" onclick="saveConfig()">保存配置</button></div>';
+        // 保存按钮
+        html += '<div style="position:sticky;bottom:0;background:#f0f2f5;padding:16px 0;text-align:center;z-index:10;">';
+        html += '<button class="btn-primary" onclick="saveConfig()" style="padding:10px 40px;font-size:15px;">保存所有配置</button>';
         html += '</div>';
         document.getElementById('pageContent').innerHTML = html;
     });
@@ -812,7 +832,7 @@ function saveConfig() {
         configs[key] = input.value;
     });
     api('/config', 'POST', { configs: configs }).then(function (res) {
-        showToast(res.success ? '配置已保存' : res.message, res.success ? 'success' : 'error');
+        showToast(res.success ? res.message : res.message, res.success ? 'success' : 'error');
     });
 }
 

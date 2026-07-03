@@ -30,6 +30,58 @@
     var currentRankingOrder = 'desc';// 当前排行排序方向
     var currentFundType = 'all';     // 当前基金类型筛选
 
+    // ========== 站点文案配置 ==========
+    var siteConfig = {};  // 从后端加载的文案配置
+    function T(key, fallback) {
+        return siteConfig[key] != null ? siteConfig[key] : (fallback != null ? fallback : key);
+    }
+
+    function loadSiteConfig(callback) {
+        fetch('/api/site-config')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                siteConfig = data || {};
+                applyStaticText();
+                if (callback) callback();
+            })
+            .catch(function () { if (callback) callback(); });
+    }
+
+    // 应用静态HTML中的文案（页眉、页脚、导航等）
+    function applyStaticText() {
+        // 浏览器标签页标题
+        document.title = T('text_page_title', '基金净值通 - 实时估值 · 持仓盈亏 · 自选管理');
+        // 页眉Logo文字
+        var logoText = document.querySelector('.logo-text');
+        if (logoText) logoText.textContent = T('text_header_logo', '基金净值通');
+        // 搜索框占位符
+        if (searchInput) searchInput.placeholder = T('text_search_placeholder', '输入基金代码 / 名称 / 拼音首字母');
+        // 搜索按钮
+        if (searchBtn) searchBtn.textContent = T('text_search_placeholder_btn', '搜索');
+        // 导航链接
+        var navLinks = document.querySelectorAll('.nav-link');
+        var navTexts = [
+            T('text_nav_home', '首页'),
+            T('text_nav_portfolio', '持仓'),
+            T('text_nav_favorites', '自选'),
+            T('text_nav_search', '搜索')
+        ];
+        navLinks.forEach(function (link, i) {
+            if (navTexts[i] != null) link.textContent = navTexts[i];
+        });
+        // 登录按钮
+        if (loginBtn && !isLoggedIn()) loginBtn.textContent = T('text_login_btn', '登录');
+        // 页脚文字
+        var footerP = document.querySelector('.app-footer .footer-inner p');
+        if (footerP) footerP.textContent = T('text_footer_main', '基金净值通 · 实时估值查询平台');
+        // SEO meta
+        var metaDesc = document.querySelector('meta[name="description"]');
+        if (metaDesc) metaDesc.setAttribute('content', T('site_seo_description', metaDesc.getAttribute('content')));
+        // 加载提示
+        var loadingP = document.querySelector('.loading-screen p');
+        if (loadingP) loadingP.textContent = T('text_loading_data', '正在加载数据...');
+    }
+
     // ========== Toast 消息提示 ==========
     function showToast(message, type = 'default') {
         var toast = document.createElement('div');
@@ -159,24 +211,24 @@
     function renderHome() {
         app.innerHTML = `
             <div class="home-hero">
-                <h1>基金净值通 · 实时估值查询平台</h1>
-                <p>覆盖全市场公募基金 · 盘中实时估值 · 历史净值走势 · 自选基金管理</p>
+                <h1>${T('text_hero_title', '基金净值通 · 实时估值查询平台')}</h1>
+                <p>${T('text_hero_subtitle', '覆盖全市场公募基金 · 盘中实时估值 · 历史净值走势 · 自选基金管理')}</p>
                 <div class="hero-stats">
                     <div class="hero-stat">
-                        <div class="num">10000+</div>
-                        <div class="label">覆盖基金</div>
+                        <div class="num">${T('text_hero_stat1_num', '10000+')}</div>
+                        <div class="label">${T('text_hero_stat1_label', '覆盖基金')}</div>
                     </div>
                     <div class="hero-stat">
-                        <div class="num">3s</div>
-                        <div class="label">估值更新</div>
+                        <div class="num">${T('text_hero_stat2_num', '3s')}</div>
+                        <div class="label">${T('text_hero_stat2_label', '估值更新')}</div>
                     </div>
                     <div class="hero-stat">
-                        <div class="num">24h</div>
-                        <div class="label">数据采集</div>
+                        <div class="num">${T('text_hero_stat3_num', '24h')}</div>
+                        <div class="label">${T('text_hero_stat3_label', '数据采集')}</div>
                     </div>
                     <div class="hero-stat">
-                        <div class="num">0</div>
-                        <div class="label">使用成本</div>
+                        <div class="num">${T('text_hero_stat4_num', '0')}</div>
+                        <div class="label">${T('text_hero_stat4_label', '使用成本')}</div>
                     </div>
                 </div>
             </div>
@@ -191,32 +243,32 @@
                 <div class="portal-card" data-target="marketSection">
                     <div class="portal-icon" style="background: linear-gradient(135deg, #1677ff, #4096ff);">📈</div>
                     <div class="portal-body">
-                        <div class="portal-title">大盘指数</div>
-                        <div class="portal-desc">A股 · 美股 · 全球实时行情</div>
+                        <div class="portal-title">${T('text_portal_market_title', '大盘指数')}</div>
+                        <div class="portal-desc">${T('text_portal_market_desc', 'A股 · 美股 · 全球实时行情')}</div>
                     </div>
                     <div class="portal-arrow">›</div>
                 </div>
                 <div class="portal-card" data-target="sectorSection">
                     <div class="portal-icon" style="background: linear-gradient(135deg, #13c2c2, #36cfc9);">🏭</div>
                     <div class="portal-body">
-                        <div class="portal-title">行业板块</div>
-                        <div class="portal-desc">赛道行情 · 涨跌排名</div>
+                        <div class="portal-title">${T('text_portal_sector_title', '行业板块')}</div>
+                        <div class="portal-desc">${T('text_portal_sector_desc', '赛道行情 · 涨跌排名')}</div>
                     </div>
                     <div class="portal-arrow">›</div>
                 </div>
                 <div class="portal-card" data-target="rankingSection">
                     <div class="portal-icon" style="background: linear-gradient(135deg, #722ed1, #9254de);">📊</div>
                     <div class="portal-body">
-                        <div class="portal-title">基金榜单</div>
-                        <div class="portal-desc">日涨跌 · 周涨幅 · 年涨幅</div>
+                        <div class="portal-title">${T('text_portal_ranking_title', '基金榜单')}</div>
+                        <div class="portal-desc">${T('text_portal_ranking_desc', '日涨跌 · 周涨幅 · 年涨幅')}</div>
                     </div>
                     <div class="portal-arrow">›</div>
                 </div>
                 <div class="portal-card" data-target="newsSection">
                     <div class="portal-icon" style="background: linear-gradient(135deg, #fa541c, #ff7a45);">📰</div>
                     <div class="portal-body">
-                        <div class="portal-title">实时资讯</div>
-                        <div class="portal-desc">7×24小时财经快讯</div>
+                        <div class="portal-title">${T('text_portal_news_title', '实时资讯')}</div>
+                        <div class="portal-desc">${T('text_portal_news_desc', '7×24小时财经快讯')}</div>
                     </div>
                     <div class="portal-arrow">›</div>
                 </div>
@@ -226,7 +278,7 @@
             <div class="portal-section" id="marketSection" data-loaded="false">
                 <div class="section-title collapsible-header" data-target="marketDashboard">
                     <span class="pulse-dot"></span>
-                    大盘指数实时看板
+                    ${T('text_section_market', '大盘指数实时看板')}
                     <span class="collapse-icon">▾</span>
                 </div>
                 <div class="market-dashboard" id="marketDashboard">
@@ -241,7 +293,7 @@
             <div class="portal-section" id="sectorSection" data-loaded="false">
                 <div class="section-title collapsible-header" data-target="sectorDashboard">
                     <span class="pulse-dot"></span>
-                    赛道行业板块实时行情
+                    ${T('text_section_sector', '赛道行业板块实时行情')}
                     <div class="sector-filter-bar">
                         <span class="sector-tab active" data-board="all">全部板块</span>
                         <span class="sector-tab" data-board="industry">行业板块</span>
@@ -264,7 +316,7 @@
                 <div class="ranking-tabs-section">
                     <div class="section-title no-margin collapsible-header" data-target="rankingTable">
                         <span>📊</span>
-                        基金榜单
+                        ${T('text_section_ranking', '基金榜单')}
                         <span class="collapse-icon">▾</span>
                     </div>
                     <div class="ranking-tabs" id="rankingTabs">
@@ -292,7 +344,7 @@
                 <div class="fund-table-wrap" id="rankingTable">
                     <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
                         <div class="loader" style="margin: 0 auto 12px;"></div>
-                        正在加载涨跌排行...
+                        ${T('text_loading_ranking', '正在加载涨跌排行...')}
                     </div>
                 </div>
             </div>
@@ -301,7 +353,7 @@
             <div class="portal-section" id="newsSection" data-loaded="false">
                 <div class="section-title collapsible-header" data-target="newsFeed">
                     <span class="pulse-dot"></span>
-                    7×24 实时财经资讯
+                    ${T('text_section_news', '7×24 实时财经资讯')}
                     <span class="news-refresh-info">
                         <span class="refresh-dot"></span>
                         <span id="newsRefreshStatus">加载中...</span>
@@ -311,11 +363,11 @@
                 <div class="news-feed" id="newsFeed">
                     <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
                         <div class="loader" style="margin: 0 auto 12px;"></div>
-                        正在加载实时资讯...
+                        ${T('text_loading_news', '正在加载实时资讯...')}
                     </div>
                 </div>
                 <div class="news-load-more-wrap">
-                    <button class="news-load-more-btn" id="newsLoadMoreBtn" style="display:none;">加载更多资讯</button>
+                    <button class="news-load-more-btn" id="newsLoadMoreBtn" style="display:none;">${T('text_load_more_news', '加载更多资讯')}</button>
                 </div>
             </div>
         `;
@@ -2760,7 +2812,7 @@
     function updateFooterTime() {
         var el = document.getElementById('footerTime');
         if (el) {
-            el.textContent = '当前时间: ' + FundAPI.formatDate(new Date(), 'YYYY-MM-DD HH:mm:ss');
+            el.textContent = T('text_footer_time_prefix', '当前时间: ') + FundAPI.formatDate(new Date(), 'YYYY-MM-DD HH:mm:ss');
         }
     }
 
@@ -3044,13 +3096,16 @@
     function init() {
         bindEvents();
         updateLoginUI();
-        // 页面加载时如果已登录，从服务端同步数据（确保多设备/版本更新后数据一致）
-        if (isLoggedIn()) {
-            syncFromServer();
-        }
-        router();
-        updateFooterTime();
-        setInterval(updateFooterTime, 1000);
+        // 先加载站点文案配置，再渲染页面
+        loadSiteConfig(function () {
+            // 页面加载时如果已登录，从服务端同步数据（确保多设备/版本更新后数据一致）
+            if (isLoggedIn()) {
+                syncFromServer();
+            }
+            router();
+            updateFooterTime();
+            setInterval(updateFooterTime, 1000);
+        });
     }
 
     // DOM加载完成后初始化

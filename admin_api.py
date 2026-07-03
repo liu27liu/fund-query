@@ -759,8 +759,14 @@ def config_set():
     configs = data.get('configs', {})
     for key, value in configs.items():
         admin_db.set_config(key, str(value), g.admin['username'])
+    # 清除站点文案缓存，使前台立即生效
+    try:
+        import server
+        server._site_config_cache = {'data': None, 'time': 0}
+    except Exception:
+        pass
     _log_op('config', '更新系统配置', f'更新{len(configs)}项配置')
-    return jsonify({'success': True, 'message': '配置已保存'})
+    return jsonify({'success': True, 'message': '配置已保存，前台已即时生效'})
 
 
 # ========== 13. 日志 ==========
