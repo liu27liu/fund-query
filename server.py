@@ -19,6 +19,11 @@ from allowed_sectors import ALLOWED_SECTORS
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 
+# ========== 注册后台管理蓝图 ==========
+from admin_api import admin_bp
+app.register_blueprint(admin_bp)
+
+
 # ========== 全局响应头：禁止缓存，确保数据实时 ==========
 @app.after_request
 def add_no_cache_headers(resp):
@@ -240,6 +245,12 @@ def index():
     return send_from_directory('.', 'index.html')
 
 
+@app.route('/admin')
+def admin_page():
+    """后台管理页面"""
+    return send_from_directory('.', 'admin.html')
+
+
 @app.route('/<path:path>')
 def static_files(path):
     return send_from_directory('.', path)
@@ -275,7 +286,29 @@ def api_search():
                     'shortName': base_info.get('SHORTNAME', item.get('NAME', '')),
                     'category': parse_fund_type(base_info.get('FTYPE', ''))
                 })
+            # 记录搜索日志（异步，不阻塞响应）
+            try:
+                import admin_db
+                admin_db.add_search_log(
+                    keyword,
+                    ip=request.headers.get('X-Forwarded-For', '').split(',')[0].strip() or request.remote_addr or '',
+                    user_agent=request.headers.get('User-Agent', ''),
+                    result_count=len(results)
+                )
+            except Exception:
+                pass
             return jsonify(results)
+        # 无结果也记录
+        try:
+            import admin_db
+            admin_db.add_search_log(
+                keyword,
+                ip=request.headers.get('X-Forwarded-For', '').split(',')[0].strip() or request.remote_addr or '',
+                user_agent=request.headers.get('User-Agent', ''),
+                result_count=0
+            )
+        except Exception:
+            pass
         return jsonify([])
     except Exception as e:
         print(f'[搜索异常] {keyword}: {e}')

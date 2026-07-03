@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - 基金净值通</title>
+    <link rel="icon" type="image/jpeg" href="assets/logo.jpg">
+    <link rel="stylesheet" href="css/admin.css?v=1">
+</head>
+<body>
+    <!-- ========== 登录页 ========== -->
+    <div id="loginPage" class="login-page">
+        <div class="login-card">
+            <div class="login-header">
+                <img src="assets/logo.jpg" alt="logo" class="login-logo">
+                <h1>管理后台</h1>
+                <p>基金净值通 · 管理控制台</p>
+            </div>
+            <div class="login-form">
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input type="text" id="loginUsername" placeholder="请输入管理员账号" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" id="loginPassword" placeholder="请输入密码">
+                </div>
+                <button class="btn-login" id="btnLogin">登 录</button>
+                <p class="login-hint">默认账号: admin / admin123</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 主界面 ========== -->
+    <div id="mainLayout" class="main-layout" style="display:none;">
+        <!-- 侧边栏 -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/logo.jpg" alt="logo">
+                <span>管理后台</span>
+            </div>
+            <nav class="sidebar-menu" id="sidebarMenu"></nav>
+            <div class="sidebar-footer">
+                <a href="/" class="back-to-site" target="_blank">← 返回前台</a>
+            </div>
+        </aside>
+
+        <!-- 主内容区 -->
+        <div class="content-area">
+            <!-- 顶部栏 -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="menu-toggle" id="menuToggle">☰</button>
+                    <h2 id="pageTitle">系统仪表盘</h2>
+                </div>
+                <div class="topbar-right">
+                    <span class="admin-info" id="adminInfo"></span>
+                    <button class="btn-text" id="btnChangePw">修改密码</button>
+                    <button class="btn-text btn-logout" id="btnLogout">退出</button>
+                </div>
+            </header>
+
+            <!-- 页面内容 -->
+            <main class="page-content" id="pageContent">
+                <div class="loading-state">加载中...</div>
+            </main>
+        </div>
+    </div>
+
+    <!-- ========== 修改密码弹窗 ========== -->
+    <div class="modal-overlay" id="changePwModal" style="display:none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>修改密码</h3>
+                <button class="modal-close" onclick="document.getElementById('changePwModal').style.display='none'">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>原密码</label>
+                    <input type="password" id="cpOldPassword" placeholder="请输入原密码">
+                </div>
+                <div class="form-group">
+                    <label>新密码</label>
+                    <input type="password" id="cpNewPassword" placeholder="请输入新密码（至少6位）">
+                </div>
+                <div class="form-group">
+                    <label>确认新密码</label>
+                    <input type="password" id="cpConfirmPassword" placeholder="请再次输入新密码">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-default" onclick="document.getElementById('changePwModal').style.display='none'">取消</button>
+                <button class="btn-primary" id="btnSavePw">确认修改</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 通用弹窗 ========== -->
+    <div class="modal-overlay" id="genericModal" style="display:none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="genericModalTitle"></h3>
+                <button class="modal-close" onclick="document.getElementById('genericModal').style.display='none'">×</button>
+            </div>
+            <div class="modal-body" id="genericModalBody"></div>
+            <div class="modal-footer" id="genericModalFooter"></div>
+        </div>
+    </div>
+
+    <!-- ========== Toast 提示 ========== -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="js/admin.js?v=1"></script>
+</body>
+</html>

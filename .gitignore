@@ -31,3 +31,8 @@ Thumbs.db
 # User data (stored in GitHub cloud, not in repo)
 cloud_users.json
 users.json
+
+# Admin database (generated at runtime)
+admin.db
+admin.db-wal
+admin.db-shm
