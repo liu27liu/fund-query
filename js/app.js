@@ -766,7 +766,8 @@
         var ranking = candidates.map(function (f) {
             var est = estimates.find(function (e) { return e.fundcode === f.code; });
             f.realtimeChange = est ? est.gszzl : f.change;
-            f.netValue = est ? est.dwjz : f.netValue;
+            // 显示今日实时估值净值（gsz），而非昨天的净值（dwjz）
+            f.netValue = est ? est.gsz : f.netValue;
             return f;
         });
 
@@ -778,7 +779,7 @@
         // 取前20
         ranking = ranking.slice(0, 20);
 
-        var changeColTitle = sortType === 'RZDF' ? '实时日涨跌幅' : (sortType === 'ZZF' ? '周涨幅' : (sortType === '1NZF' ? '近1年涨幅' : '日涨跌幅'));
+        var changeColTitle = sortType === 'RZDF' ? '今日实时涨跌幅' : (sortType === 'ZZF' ? '周涨幅' : (sortType === '1NZF' ? '近1年涨幅' : '日涨跌幅'));
 
         // 渲染表格
         container.innerHTML = `
@@ -791,7 +792,7 @@
                     <thead>
                         <tr>
                             <th>基金名称</th>
-                            <th class="text-right">最新净值</th>
+                            <th class="text-right">今日实时估值</th>
                             <th class="text-right">${changeColTitle}</th>
                             <th class="text-right">操作</th>
                         </tr>
