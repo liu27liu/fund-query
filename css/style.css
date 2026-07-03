@@ -2892,3 +2892,195 @@ select.form-input {
 .num-pop {
     animation: numPop 0.4s var(--ease);
 }
+
+/* ========== 持仓批量操作 & 分组 ========== */
+
+/* 分组筛选下拉 */
+.portfolio-group-filter {
+    height: 34px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    background: var(--card-bg);
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s var(--ease);
+}
+.portfolio-group-filter:hover { border-color: var(--primary-2); }
+.portfolio-group-filter:focus { border-color: var(--primary); box-shadow: var(--shadow-glow); }
+
+/* 批量操作栏 */
+.batch-action-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, #e6f4ff 0%, #f0f5ff 100%);
+    border: 1px solid #d6e4ff;
+    border-radius: var(--radius-sm);
+    animation: fadeInUp 0.25s var(--ease-out);
+}
+
+.batch-info {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--primary-dark);
+    margin-right: auto;
+}
+
+.batch-btn {
+    padding: 6px 14px;
+    border-radius: var(--radius-xs);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s var(--ease);
+    white-space: nowrap;
+}
+.batch-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+
+.batch-add { background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; }
+.batch-add:hover { background: #ffccc7; }
+.batch-reduce { background: #f6ffed; color: #389e0d; border: 1px solid #b7eb8f; }
+.batch-reduce:hover { background: #d9f7be; }
+.batch-group { background: #e6f4ff; color: #0958d9; border: 1px solid #91caff; }
+.batch-group:hover { background: #bae0ff; }
+.batch-cancel { background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border); }
+.batch-cancel:hover { background: var(--bg); }
+
+/* 表格复选框列 */
+.th-checkbox, .col-checkbox {
+    width: 40px;
+    text-align: center !important;
+    padding: 8px 4px !important;
+}
+.th-checkbox input[type="checkbox"],
+.col-checkbox input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--primary);
+    vertical-align: middle;
+}
+
+/* 分组标签 */
+.group-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #0958d9;
+    background: #e6f4ff;
+    padding: 1px 8px;
+    border-radius: var(--radius-pill);
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
+/* 批量表单基金列表 */
+.batch-fund-list {
+    max-height: 160px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+    background: var(--bg);
+}
+.batch-fund-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-light);
+    font-size: 13px;
+}
+.batch-fund-item:last-child { border-bottom: none; }
+.batch-fund-item:hover { background: var(--primary-light); }
+.batch-fund-code {
+    color: var(--text-tertiary);
+    font-family: var(--font-num);
+    font-size: 12px;
+}
+
+/* 快捷比例按钮 */
+.quick-percent-btns {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+}
+.quick-percent-btn {
+    flex: 1;
+    padding: 6px 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    background: var(--card-bg);
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s var(--ease);
+}
+.quick-percent-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: var(--primary-light);
+}
+
+/* 分组标签选择列表 */
+.group-tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.group-tag-option {
+    display: inline-block;
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s var(--ease);
+    user-select: none;
+}
+.group-tag-option:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: var(--primary-light);
+}
+
+/* 危险按钮（移出分组等） */
+.form-danger {
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 600;
+    border: 1px solid #ffa39e;
+    background: #fff1f0;
+    color: #cf1322;
+    cursor: pointer;
+    transition: all 0.2s var(--ease);
+}
+.form-danger:hover { background: #ffccc7; }
+
+/* 移动端批量操作栏 */
+@media (max-width: 768px) {
+    .batch-action-bar {
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 8px 10px;
+    }
+    .batch-info {
+        width: 100%;
+        margin-bottom: 4px;
+    }
+    .batch-btn {
+        padding: 5px 10px;
+        font-size: 12px;
+    }
+    .portfolio-group-filter {
+        font-size: 12px;
+    }
+}

@@ -25,6 +25,8 @@
     var currentDetailCode = null;    // 当前查看的基金代码
     var portfolioTimer = null;       // 持仓页自动刷新定时器
     var portfolioRefreshCountdown = null; // 倒计时定时器
+    var portfolioSelectedCodes = []; // 持仓页选中的基金代码
+    var portfolioGroupFilter = '';   // 持仓页分组筛选
     var homeRefreshTimer = null;     // 首页自动刷新定时器
     var currentRankingType = 'RZDF'; // 当前排行类型
     var currentRankingOrder = 'desc';// 当前排行排序方向
@@ -1253,21 +1255,35 @@
         }
 
         var positions = Store.getAggregatedPositions();
+        var groups = Store.getPortfolioGroups();
+        portfolioSelectedCodes = [];
+
+        // 构建分组筛选下拉
+        var groupOptions = '<option value="">全部分组</option>';
+        groups.forEach(function (g) {
+            groupOptions += '<option value="' + escapeHtml(g) + '"' + (portfolioGroupFilter === g ? ' selected' : '') + '>' + escapeHtml(g) + '</option>';
+        });
 
         app.innerHTML = `
             <div class="favorites-header">
                 <h2 style="font-size: 20px;">💼 我的持仓</h2>
                 <div class="portfolio-toolbar">
-                    <span class="refresh-info" id="refreshInfo">
-                        <span class="refresh-dot"></span>
-                        <span id="refreshStatus">加载中...</span>
-                    </span>
+                    <select class="portfolio-group-filter" id="portfolioGroupFilter" title="按分组筛选">
+                        ${groupOptions}
+                    </select>
                     <button class="refresh-btn" id="manualRefreshBtn" title="手动刷新">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
                         刷新
                     </button>
                 </div>
                 <button class="add-holding-btn" id="addHoldingBtn">+ 添加持仓</button>
+            </div>
+            <div class="batch-action-bar" id="batchActionBar" style="display:none;">
+                <span class="batch-info" id="batchInfo">已选择 0 只基金</span>
+                <button class="batch-btn batch-add" id="batchAddBtn">📈 批量加仓</button>
+                <button class="batch-btn batch-reduce" id="batchReduceBtn">📉 批量减仓</button>
+                <button class="batch-btn batch-group" id="batchGroupBtn">📁 设置分组</button>
+                <button class="batch-btn batch-cancel" id="batchCancelBtn">取消选择</button>
             </div>
             <div id="portfolioContent">
                 <div style="padding: 40px; text-align: center;">
@@ -1287,6 +1303,42 @@
             refreshPortfolioData();
         });
 
+        // 绑定分组筛选
+        var groupFilter = document.getElementById('portfolioGroupFilter');
+        if (groupFilter) {
+            groupFilter.addEventListener('change', function () {
+                portfolioGroupFilter = this.value;
+                loadPortfolioData(Store.getAggregatedPositions());
+            });
+        }
+
+        // 绑定批量操作按钮
+        document.getElementById('batchAddBtn').addEventListener('click', function () {
+            var selected = positions.filter(function (p) {
+                return portfolioSelectedCodes.indexOf(p.code) !== -1;
+            });
+            if (selected.length === 0) { showToast('请先选择基金', 'warning'); return; }
+            showBatchAddForm(selected);
+        });
+
+        document.getElementById('batchReduceBtn').addEventListener('click', function () {
+            var selected = positions.filter(function (p) {
+                return portfolioSelectedCodes.indexOf(p.code) !== -1 && !p.isCleared;
+            });
+            if (selected.length === 0) { showToast('请选择有持仓的基金', 'warning'); return; }
+            showBatchReduceForm(selected);
+        });
+
+        document.getElementById('batchGroupBtn').addEventListener('click', function () {
+            if (portfolioSelectedCodes.length === 0) { showToast('请先选择基金', 'warning'); return; }
+            showSetGroupForm(portfolioSelectedCodes, groups);
+        });
+
+        document.getElementById('batchCancelBtn').addEventListener('click', function () {
+            portfolioSelectedCodes = [];
+            loadPortfolioData(Store.getAggregatedPositions());
+        });
+
         loadPortfolioData(positions);
     }
 
@@ -1294,7 +1346,15 @@
         var container = document.getElementById('portfolioContent');
         if (!container) return;
 
-        if (positions.length === 0) {
+        // 分组筛选
+        var filteredPositions = positions;
+        if (portfolioGroupFilter) {
+            filteredPositions = positions.filter(function (p) {
+                return p.group === portfolioGroupFilter;
+            });
+        }
+
+        if (filteredPositions.length === 0 && positions.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
                     <div class="icon">💼</div>
@@ -1311,6 +1371,19 @@
             }
             return;
         }
+
+        if (filteredPositions.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="icon">📂</div>
+                    <h3>该分组下暂无持仓</h3>
+                    <p>切换分组或添加持仓到该分组</p>
+                </div>
+            `;
+            return;
+        }
+
+        positions = filteredPositions;
 
         // 获取所有持仓基金的实时估值
         var codes = positions.map(function (p) { return p.code; });
@@ -1372,6 +1445,7 @@
                 <table class="fund-table portfolio-table">
                     <thead>
                         <tr>
+                            <th class="th-checkbox"><input type="checkbox" id="selectAllCheckbox" title="全选"></th>
                             <th>基金名称</th>
                             <th class="text-right">持有份额</th>
                             <th class="text-right">成本价</th>
@@ -1392,11 +1466,14 @@
                             var est = estimates.find(function (e) { return e.fundcode === p.code; });
                             var displayName = (est && est.name) || p.name;
                             var clearedBadge = p.isCleared ? '<span class="cleared-badge">已清仓</span>' : '';
+                            var groupBadge = p.group ? '<span class="group-badge">' + escapeHtml(p.group) + '</span>' : '';
+                            var isChecked = portfolioSelectedCodes.indexOf(p.code) !== -1;
                             return `
                                 <tr data-code="${p.code}">
+                                    <td class="col-checkbox"><input type="checkbox" class="row-checkbox" data-code="${p.code}" ${isChecked ? 'checked' : ''}></td>
                                     <td class="col-name">
                                         <div class="fund-name-cell">
-                                            <span class="name">${displayName} ${clearedBadge}</span>
+                                            <span class="name">${displayName} ${clearedBadge} ${groupBadge}</span>
                                             <span class="code">${p.code} · ${p.type || ''} · ${p.transactionCount}笔交易</span>
                                         </div>
                                     </td>
@@ -1413,6 +1490,7 @@
                                     <td class="action-cell">
                                         <button class="action-btn add-position" data-action="add-position" data-code="${p.code}">加仓</button>
                                         ${p.isCleared ? '' : '<button class="action-btn sell-position" data-action="reduce-position" data-code="' + p.code + '">减仓</button>'}
+                                        <button class="action-btn" data-action="set-group" data-code="${p.code}">分组</button>
                                         <button class="action-btn" data-action="delete-fund" data-code="${p.code}">删除</button>
                                     </td>
                                 </tr>
@@ -1423,10 +1501,61 @@
             </div>
         `;
 
-        // 绑定行点击事件
+        // 绑定全选复选框
+        var selectAll = document.getElementById('selectAllCheckbox');
+        if (selectAll) {
+            selectAll.addEventListener('change', function () {
+                var checked = this.checked;
+                container.querySelectorAll('.row-checkbox').forEach(function (cb) {
+                    cb.checked = checked;
+                    var code = cb.dataset.code;
+                    if (checked && portfolioSelectedCodes.indexOf(code) === -1) {
+                        portfolioSelectedCodes.push(code);
+                    } else if (!checked) {
+                        portfolioSelectedCodes = portfolioSelectedCodes.filter(function (c) { return c !== code; });
+                    }
+                });
+                updateBatchBar();
+            });
+        }
+
+        // 绑定行复选框
+        container.querySelectorAll('.row-checkbox').forEach(function (cb) {
+            cb.addEventListener('change', function () {
+                var code = this.dataset.code;
+                if (this.checked && portfolioSelectedCodes.indexOf(code) === -1) {
+                    portfolioSelectedCodes.push(code);
+                } else if (!this.checked) {
+                    portfolioSelectedCodes = portfolioSelectedCodes.filter(function (c) { return c !== code; });
+                }
+                updateBatchBar();
+            });
+        });
+
+        // 更新批量操作栏
+        function updateBatchBar() {
+            var bar = document.getElementById('batchActionBar');
+            var info = document.getElementById('batchInfo');
+            if (!bar) return;
+            if (portfolioSelectedCodes.length > 0) {
+                bar.style.display = 'flex';
+                if (info) info.textContent = '已选择 ' + portfolioSelectedCodes.length + ' 只基金';
+            } else {
+                bar.style.display = 'none';
+            }
+            // 更新全选状态
+            var allCbs = container.querySelectorAll('.row-checkbox');
+            if (selectAll && allCbs.length > 0) {
+                selectAll.checked = portfolioSelectedCodes.length === allCbs.length;
+            }
+        }
+        updateBatchBar();
+
+        // 绑定行点击事件（排除复选框和按钮）
         container.querySelectorAll('tr[data-code]').forEach(function (tr) {
             tr.addEventListener('click', function (e) {
                 if (e.target.classList.contains('action-btn')) return;
+                if (e.target.type === 'checkbox') return;
                 openDetail(this.dataset.code);
             });
         });
@@ -1470,6 +1599,16 @@
                         renderPortfolio();
                     }
                 }
+            });
+        });
+
+        // 绑定单个分组按钮
+        container.querySelectorAll('.action-btn[data-action="set-group"]').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var code = this.dataset.code;
+                var groups = Store.getPortfolioGroups();
+                showSetGroupForm([code], groups);
             });
         });
 
@@ -2093,6 +2232,338 @@
                     holdingModal.classList.remove('active');
                     renderPortfolio();
                 }
+            }
+        });
+    }
+
+    // ========== 批量加仓表单 ==========
+    function showBatchAddForm(selectedPositions) {
+        var holdingModal = document.getElementById('holdingModal');
+        var holdingFormContent = document.getElementById('holdingFormContent');
+
+        var fundListHtml = selectedPositions.map(function (p) {
+            return '<div class="batch-fund-item"><span>' + escapeHtml(p.name || p.code) + '</span><span class="batch-fund-code">' + p.code + '</span></div>';
+        }).join('');
+
+        holdingFormContent.innerHTML = `
+            <div class="form-header">
+                <h3>📈 批量加仓 · ${selectedPositions.length} 只基金</h3>
+            </div>
+            <div class="form-body">
+                <div class="batch-fund-list">${fundListHtml}</div>
+                <div class="form-group">
+                    <label class="form-label">每只基金加仓金额(元) <span class="required">*</span></label>
+                    <input type="number" class="form-input" id="batchAddAmount" value="" step="0.01" placeholder="如 1000（每只基金加仓相同金额）">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">买入日期</label>
+                    <input type="date" class="form-input" id="batchAddDate" value="">
+                </div>
+                <div class="form-preview" id="batchAddPreview" style="display:none;">
+                    <div class="preview-row"><span>预计总投入</span><span id="batchAddTotal" class="preview-value">--</span></div>
+                </div>
+                <div class="form-actions">
+                    <button class="form-cancel" id="batchAddCancelBtn">取消</button>
+                    <button class="form-submit" id="batchAddSubmitBtn">确认批量加仓</button>
+                </div>
+            </div>
+        `;
+
+        holdingModal.classList.add('active');
+
+        // 设置默认日期
+        var today = new Date();
+        var dateStr = today.getFullYear() + '-' +
+            String(today.getMonth() + 1).padStart(2, '0') + '-' +
+            String(today.getDate()).padStart(2, '0');
+        document.getElementById('batchAddDate').value = dateStr;
+
+        // 更新预览
+        function updatePreview() {
+            var amount = parseFloat(document.getElementById('batchAddAmount').value) || 0;
+            var preview = document.getElementById('batchAddPreview');
+            if (amount > 0) {
+                document.getElementById('batchAddTotal').textContent = '¥' + (amount * selectedPositions.length).toFixed(2);
+                preview.style.display = 'block';
+            } else {
+                preview.style.display = 'none';
+            }
+        }
+        document.getElementById('batchAddAmount').addEventListener('input', updatePreview);
+
+        // 取消按钮
+        document.getElementById('batchAddCancelBtn').addEventListener('click', function () {
+            holdingModal.classList.remove('active');
+        });
+
+        // 提交按钮
+        document.getElementById('batchAddSubmitBtn').addEventListener('click', function () {
+            var amount = parseFloat(document.getElementById('batchAddAmount').value);
+            var buyDate = document.getElementById('batchAddDate').value;
+
+            if (!amount || amount <= 0) {
+                showToast('请输入有效的加仓金额', 'warning');
+                return;
+            }
+
+            var submitBtn = this;
+            submitBtn.disabled = true;
+            submitBtn.textContent = '获取净值中...';
+
+            // 获取所有基金的当前净值
+            var codes = selectedPositions.map(function (p) { return p.code; });
+            FundAPI.batchRealtimeEstimate(codes).then(function (estimates) {
+                var items = [];
+                var failCount = 0;
+                selectedPositions.forEach(function (p) {
+                    var est = estimates.find(function (e) { return e.fundcode === p.code; });
+                    var nav = est ? (est.gsz || est.dwjz) : 0;
+                    if (nav && parseFloat(nav) > 0) {
+                        items.push({
+                            code: p.code,
+                            name: p.name || p.code,
+                            type: p.type || '',
+                            amount: amount,
+                            buyPrice: parseFloat(nav),
+                            buyDate: buyDate,
+                            group: p.group || ''
+                        });
+                    } else {
+                        failCount++;
+                    }
+                });
+
+                if (items.length === 0) {
+                    showToast('无法获取任何基金净值，请稍后重试', 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '确认批量加仓';
+                    return;
+                }
+
+                var result = Store.batchAddPosition(items);
+                showToast(result.message, result.success ? 'success' : 'error');
+                if (result.success) {
+                    syncToServer('holdings');
+                    holdingModal.classList.remove('active');
+                    portfolioSelectedCodes = [];
+                    renderPortfolio();
+                } else {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '确认批量加仓';
+                }
+            }).catch(function () {
+                showToast('获取净值失败，请稍后重试', 'error');
+                submitBtn.disabled = false;
+                submitBtn.textContent = '确认批量加仓';
+            });
+        });
+    }
+
+    // ========== 批量减仓表单 ==========
+    function showBatchReduceForm(selectedPositions) {
+        var holdingModal = document.getElementById('holdingModal');
+        var holdingFormContent = document.getElementById('holdingFormContent');
+
+        var fundListHtml = selectedPositions.map(function (p) {
+            return '<div class="batch-fund-item"><span>' + escapeHtml(p.name || p.code) + '</span><span class="batch-fund-code">' + p.currentShares.toFixed(2) + ' 份</span></div>';
+        }).join('');
+
+        holdingFormContent.innerHTML = `
+            <div class="form-header">
+                <h3>📉 批量减仓 · ${selectedPositions.length} 只基金</h3>
+            </div>
+            <div class="form-body">
+                <div class="batch-fund-list">${fundListHtml}</div>
+                <div class="form-group">
+                    <label class="form-label">减仓比例 <span class="required">*</span></label>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <input type="number" class="form-input" id="batchReducePercent" value="50" min="1" max="100" step="1" style="flex:1;">
+                        <span style="white-space:nowrap; color: var(--text-secondary);">%</span>
+                    </div>
+                    <div class="quick-percent-btns">
+                        <button class="quick-percent-btn" data-percent="25">25%</button>
+                        <button class="quick-percent-btn" data-percent="50">50%</button>
+                        <button class="quick-percent-btn" data-percent="75">75%</button>
+                        <button class="quick-percent-btn" data-percent="100">全部</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">赎回日期</label>
+                    <input type="date" class="form-input" id="batchReduceDate" value="">
+                </div>
+                <div class="form-actions">
+                    <button class="form-cancel" id="batchReduceCancelBtn">取消</button>
+                    <button class="form-submit" id="batchReduceSubmitBtn">确认批量减仓</button>
+                </div>
+            </div>
+        `;
+
+        holdingModal.classList.add('active');
+
+        // 设置默认日期
+        var today = new Date();
+        var dateStr = today.getFullYear() + '-' +
+            String(today.getMonth() + 1).padStart(2, '0') + '-' +
+            String(today.getDate()).padStart(2, '0');
+        document.getElementById('batchReduceDate').value = dateStr;
+
+        // 快捷比例按钮
+        holdingFormContent.querySelectorAll('.quick-percent-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                document.getElementById('batchReducePercent').value = this.dataset.percent;
+            });
+        });
+
+        // 取消按钮
+        document.getElementById('batchReduceCancelBtn').addEventListener('click', function () {
+            holdingModal.classList.remove('active');
+        });
+
+        // 提交按钮
+        document.getElementById('batchReduceSubmitBtn').addEventListener('click', function () {
+            var percent = parseFloat(document.getElementById('batchReducePercent').value);
+            var sellDate = document.getElementById('batchReduceDate').value;
+
+            if (!percent || percent <= 0 || percent > 100) {
+                showToast('请输入有效的减仓比例（1-100）', 'warning');
+                return;
+            }
+
+            var submitBtn = this;
+            submitBtn.disabled = true;
+            submitBtn.textContent = '获取净值中...';
+
+            // 获取所有基金的当前净值
+            var codes = selectedPositions.map(function (p) { return p.code; });
+            FundAPI.batchRealtimeEstimate(codes).then(function (estimates) {
+                var items = [];
+                selectedPositions.forEach(function (p) {
+                    var est = estimates.find(function (e) { return e.fundcode === p.code; });
+                    var nav = est ? (est.gsz || est.dwjz) : 0;
+                    items.push({
+                        code: p.code,
+                        name: p.name || p.code,
+                        type: p.type || '',
+                        percent: percent,
+                        price: parseFloat(nav) || 0,
+                        date: sellDate
+                    });
+                });
+
+                var result = Store.batchReducePosition(items);
+                showToast(result.message, result.success ? 'success' : 'error');
+                if (result.success) {
+                    syncToServer('holdings');
+                    holdingModal.classList.remove('active');
+                    portfolioSelectedCodes = [];
+                    renderPortfolio();
+                } else {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '确认批量减仓';
+                }
+            }).catch(function () {
+                showToast('获取净值失败，请稍后重试', 'error');
+                submitBtn.disabled = false;
+                submitBtn.textContent = '确认批量减仓';
+            });
+        });
+    }
+
+    // ========== 设置分组表单 ==========
+    function showSetGroupForm(codes, existingGroups) {
+        var holdingModal = document.getElementById('holdingModal');
+        var holdingFormContent = document.getElementById('holdingFormContent');
+        var isSingle = codes.length === 1;
+
+        // 如果是单个基金，预填当前分组
+        var currentGroup = '';
+        if (isSingle) {
+            var pos = Store.getAggregatedPosition(codes[0]);
+            currentGroup = (pos && pos.group) || '';
+        }
+
+        // 构建 datalist
+        var dataListHtml = existingGroups.map(function (g) {
+            return '<option value="' + escapeHtml(g) + '">';
+        }).join('');
+
+        holdingFormContent.innerHTML = `
+            <div class="form-header">
+                <h3>📁 ${isSingle ? '设置分组' : '批量设置分组'} · ${codes.length} 只基金</h3>
+            </div>
+            <div class="form-body">
+                <div class="form-group">
+                    <label class="form-label">分组名称</label>
+                    <input type="text" class="form-input" id="setGroupInput" value="${escapeHtml(currentGroup)}" placeholder="输入分组名称，如：股票型、债券型、定投" list="groupList" autocomplete="off">
+                    <datalist id="groupList">${dataListHtml}</datalist>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">已有分组</label>
+                    <div class="group-tag-list">
+                        ${existingGroups.length > 0 ? existingGroups.map(function (g) {
+                            return '<span class="group-tag-option" data-group="' + escapeHtml(g) + '">' + escapeHtml(g) + '</span>';
+                        }).join('') : '<span style="color: var(--text-tertiary); font-size: 13px;">暂无分组</span>'}
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="form-cancel" id="setGroupCancelBtn">取消</button>
+                    <button class="form-danger" id="setGroupRemoveBtn" style="${currentGroup ? '' : 'display:none;'}">移出分组</button>
+                    <button class="form-submit" id="setGroupSubmitBtn">确认</button>
+                </div>
+            </div>
+        `;
+
+        holdingModal.classList.add('active');
+
+        // 点击已有分组标签自动填充
+        holdingFormContent.querySelectorAll('.group-tag-option').forEach(function (tag) {
+            tag.addEventListener('click', function () {
+                document.getElementById('setGroupInput').value = this.dataset.group;
+            });
+        });
+
+        // 取消按钮
+        document.getElementById('setGroupCancelBtn').addEventListener('click', function () {
+            holdingModal.classList.remove('active');
+        });
+
+        // 移出分组按钮
+        var removeBtn = document.getElementById('setGroupRemoveBtn');
+        if (removeBtn) {
+            removeBtn.addEventListener('click', function () {
+                var result;
+                if (isSingle) {
+                    result = Store.setHoldingGroup(codes[0], '');
+                } else {
+                    result = Store.batchSetGroup(codes, '');
+                }
+                showToast(result.message, result.success ? 'success' : 'error');
+                if (result.success) {
+                    syncToServer('holdings');
+                    holdingModal.classList.remove('active');
+                    renderPortfolio();
+                }
+            });
+        }
+
+        // 确认按钮
+        document.getElementById('setGroupSubmitBtn').addEventListener('click', function () {
+            var groupName = document.getElementById('setGroupInput').value.trim();
+            if (!groupName) {
+                showToast('请输入分组名称', 'warning');
+                return;
+            }
+            var result;
+            if (isSingle) {
+                result = Store.setHoldingGroup(codes[0], groupName);
+            } else {
+                result = Store.batchSetGroup(codes, groupName);
+            }
+            showToast(result.message, result.success ? 'success' : 'error');
+            if (result.success) {
+                syncToServer('holdings');
+                holdingModal.classList.remove('active');
+                renderPortfolio();
             }
         });
     }

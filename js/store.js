@@ -265,6 +265,7 @@ const Store = (function () {
                 buyPrice: buyPrice,
                 shares: shares,
                 buyDate: holding.buyDate || '',
+                group: holding.group || '',
                 addTime: Date.now()
             };
             holdings.push(record);
@@ -316,6 +317,7 @@ const Store = (function () {
                 price: sellPrice,
                 shares: sellShares,
                 date: data.date || '',
+                group: data.group || '',
                 addTime: Date.now()
             };
             holdings.push(record);
@@ -487,12 +489,14 @@ const Store = (function () {
                         code: h.code,
                         name: h.name || '',
                         type: h.type || '',
+                        group: '',
                         transactions: []
                     };
                 }
                 grouped[h.code].transactions.push(h);
                 if (!grouped[h.code].name && h.name) grouped[h.code].name = h.name;
                 if (!grouped[h.code].type && h.type) grouped[h.code].type = h.type;
+                if (h.group) grouped[h.code].group = h.group;
             });
 
             var positions = [];
@@ -517,6 +521,7 @@ const Store = (function () {
                     code: group.code,
                     name: group.name,
                     type: group.type,
+                    group: group.group,
                     totalBuyAmount: totalBuyAmount,
                     totalBuyShares: totalBuyShares,
                     totalSellAmount: totalSellAmount,
@@ -724,6 +729,187 @@ const Store = (function () {
         }
     }
 
+    // ========== 持仓分组管理 ==========
+
+    /**
+     * 获取所有持仓分组（从持仓记录中提取唯一分组）
+     */
+    function getPortfolioGroups() {
+        try {
+            var holdings = getHoldings();
+            var groups = {};
+            holdings.forEach(function (h) {
+                if (h.group && !groups[h.group]) {
+                    groups[h.group] = true;
+                }
+            });
+            return Object.keys(groups);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    /**
+     * 设置基金持仓的分组
+     */
+    function setHoldingGroup(code, group) {
+        try {
+            var holdings = getHoldings();
+            var updated = false;
+            holdings.forEach(function (h) {
+                if (h.code === code) {
+                    h.group = group || '';
+                    updated = true;
+                }
+            });
+            if (!updated) {
+                return { success: false, message: '未找到该基金持仓' };
+            }
+            var saved = saveHoldings(holdings);
+            return saved
+                ? { success: true, message: '分组设置成功' }
+                : { success: false, message: '保存失败' };
+        } catch (e) {
+            return { success: false, message: '设置分组失败: ' + e.message };
+        }
+    }
+
+    /**
+     * 批量设置分组
+     */
+    function batchSetGroup(codes, group) {
+        try {
+            var holdings = getHoldings();
+            var count = 0;
+            holdings.forEach(function (h) {
+                if (codes.indexOf(h.code) !== -1) {
+                    h.group = group || '';
+                    count++;
+                }
+            });
+            var saved = saveHoldings(holdings);
+            return saved
+                ? { success: true, message: '已设置 ' + count + ' 条记录的分组', count: count }
+                : { success: false, message: '保存失败' };
+        } catch (e) {
+            return { success: false, message: '批量设置分组失败: ' + e.message };
+        }
+    }
+
+    /**
+     * 批量加仓
+     * @param {Array} items - [{code, name, type, amount, buyPrice, buyDate}]
+     */
+    function batchAddPosition(items) {
+        try {
+            var successCount = 0;
+            var failCount = 0;
+            var holdings = getHoldings();
+            items.forEach(function (item) {
+                if (!item.code || !item.amount || item.amount <= 0 || !item.buyPrice || item.buyPrice <= 0) {
+                    failCount++;
+                    return;
+                }
+                var amount = Number(item.amount);
+                var buyPrice = Number(item.buyPrice);
+                var shares = amount / buyPrice;
+                holdings.push({
+                    code: item.code,
+                    name: item.name || '',
+                    type: item.type || '',
+                    amount: amount,
+                    buyPrice: buyPrice,
+                    shares: shares,
+                    buyDate: item.buyDate || '',
+                    group: item.group || '',
+                    addTime: Date.now() + successCount
+                });
+                successCount++;
+            });
+            var saved = saveHoldings(holdings);
+            if (!saved) {
+                return { success: false, message: '保存失败', successCount: 0, failCount: items.length };
+            }
+            return {
+                success: true,
+                message: '批量加仓完成，成功 ' + successCount + ' 只' + (failCount > 0 ? '，失败 ' + failCount + ' 只' : ''),
+                successCount: successCount,
+                failCount: failCount
+            };
+        } catch (e) {
+            return { success: false, message: '批量加仓失败: ' + e.message, successCount: 0, failCount: items.length };
+        }
+    }
+
+    /**
+     * 批量减仓（按百分比减仓）
+     * @param {Array} items - [{code, name, type, percent, price, date}]
+     */
+    function batchReducePosition(items) {
+        try {
+            var successCount = 0;
+            var failCount = 0;
+            var holdings = getHoldings();
+            var failMessages = [];
+            var positionSnapshots = {};
+            var allPositions = getAggregatedPositions();
+            allPositions.forEach(function (p) {
+                positionSnapshots[p.code] = p;
+            });
+
+            items.forEach(function (item) {
+                if (!item.code) { failCount++; return; }
+                var position = positionSnapshots[item.code];
+                if (!position || position.currentShares <= 0.0001) {
+                    failCount++;
+                    failMessages.push((item.name || item.code) + '：无持仓');
+                    return;
+                }
+                var percent = Number(item.percent) || 0;
+                if (percent <= 0 || percent > 100) {
+                    failCount++;
+                    failMessages.push((item.name || item.code) + '：比例无效');
+                    return;
+                }
+                var sellShares = position.currentShares * (percent / 100);
+                var sellPrice = Number(item.price) || 0;
+                if (sellPrice <= 0) {
+                    failCount++;
+                    failMessages.push((item.name || item.code) + '：净值无效');
+                    return;
+                }
+                holdings.push({
+                    code: item.code,
+                    name: item.name || position.name || '',
+                    type: item.type || position.type || '',
+                    opType: 'sell',
+                    amount: sellShares * sellPrice,
+                    price: sellPrice,
+                    shares: sellShares,
+                    date: item.date || '',
+                    group: position.group || '',
+                    addTime: Date.now() + successCount
+                });
+                successCount++;
+            });
+
+            var saved = saveHoldings(holdings);
+            if (!saved) {
+                return { success: false, message: '保存失败', successCount: 0, failCount: items.length };
+            }
+            var msg = '批量减仓完成，成功 ' + successCount + ' 只';
+            if (failCount > 0) {
+                msg += '，失败 ' + failCount + ' 只';
+                if (failMessages.length > 0) {
+                    msg += '（' + failMessages.join('；') + '）';
+                }
+            }
+            return { success: true, message: msg, successCount: successCount, failCount: failCount };
+        } catch (e) {
+            return { success: false, message: '批量减仓失败: ' + e.message, successCount: 0, failCount: items.length };
+        }
+    }
+
     return {
         DEFAULT_GROUP: DEFAULT_GROUP,
         // 自选基金
@@ -758,6 +944,12 @@ const Store = (function () {
         calcHoldingProfit: calcHoldingProfit,
         calcTotalProfit: calcTotalProfit,
         calcPositionProfit: calcPositionProfit,
-        calcTotalAggregatedProfit: calcTotalAggregatedProfit
+        calcTotalAggregatedProfit: calcTotalAggregatedProfit,
+        // 持仓分组管理
+        getPortfolioGroups: getPortfolioGroups,
+        setHoldingGroup: setHoldingGroup,
+        batchSetGroup: batchSetGroup,
+        batchAddPosition: batchAddPosition,
+        batchReducePosition: batchReducePosition
     };
 })();
