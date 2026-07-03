@@ -23,6 +23,7 @@
     var searchTimer = null;          // 搜索防抖定时器
     var realtimeTimer = null;        // 实时更新定时器
     var currentDetailCode = null;    // 当前查看的基金代码
+    var detailActualNavFound = false; // 详情页当日实际净值是否已出现
     var portfolioTimer = null;       // 持仓页自动刷新定时器
     var portfolioRefreshCountdown = null; // 倒计时定时器
     var portfolioSelectedCodes = []; // 持仓页选中的基金代码
@@ -3151,8 +3152,43 @@
     }
 
     // ========== 基金详情弹窗 ==========
+
+    // 检查历史净值表首行是否为当日实际净值
+    // 返回 { change, dwjz, date } 或 null
+    function checkTodayActualNav(historyResult, estimate) {
+        if (!historyResult || !historyResult.list || historyResult.list.length === 0) return null;
+        var firstRow = historyResult.list[0];
+        // 获取当日日期字符串
+        var todayStr = '';
+        if (estimate && estimate.gztime) {
+            todayStr = estimate.gztime.substring(0, 10); // "2026-07-03 15:00" -> "2026-07-03"
+        } else {
+            var now = new Date();
+            todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+        }
+        if (firstRow.date === todayStr) {
+            return { change: firstRow.change, dwjz: firstRow.dwjz, date: firstRow.date };
+        }
+        return null;
+    }
+
+    // 更新详情头部的日涨跌幅
+    function updateDetailChangeRate(changeVal) {
+        var metrics = detailContent.querySelectorAll('.metric-item');
+        if (metrics.length >= 5) {
+            var changeItem = metrics[4]; // 第5个metric是日涨跌幅
+            var changeValueEl = changeItem.querySelector('.metric-value');
+            var changeClass = FundAPI.getChangeClass(changeVal);
+            if (changeValueEl) {
+                changeValueEl.textContent = FundAPI.formatChange(changeVal);
+                changeValueEl.className = 'metric-value ' + changeClass;
+            }
+        }
+    }
+
     async function openDetail(fundCode) {
         currentDetailCode = fundCode;
+        detailActualNavFound = false; // 重置状态
         detailModal.classList.add('active');
         detailContent.innerHTML = `
             <div style="padding: 80px; text-align: center;">
@@ -3161,12 +3197,19 @@
             </div>
         `;
 
-        // 并行获取数据
-        var [detail, estimate, trend] = await Promise.all([
+        // 并行获取数据（含历史净值首行，用于判断当日实际净值是否已公布）
+        var [detail, estimate, trend, historyResult] = await Promise.all([
             FundAPI.getFundDetail(fundCode),
             FundAPI.getRealtimeEstimate(fundCode),
-            FundAPI.getNavTrend(fundCode)
+            FundAPI.getNavTrend(fundCode),
+            FundAPI.getHistoryNav(fundCode, 1, 1)
         ]);
+
+        // 检查历史净值表是否已出现当日实际净值
+        var actualToday = checkTodayActualNav(historyResult, estimate);
+        if (actualToday) {
+            detailActualNavFound = true;
+        }
 
         // 如果详情为空,用估值数据兜底
         if (!detail && estimate) {
@@ -3215,7 +3258,9 @@
         }
 
         var isFav = Store.isFavorite(fundCode);
-        var changeClass = FundAPI.getChangeClass(estimate ? estimate.gszzl : detail.change);
+        // 日涨跌幅：如果当日实际净值已公布，用实际值；否则用实时估值
+        var displayChange = actualToday ? actualToday.change : (estimate ? estimate.gszzl : detail.change);
+        var changeClass = FundAPI.getChangeClass(displayChange);
         var typeColor = FundAPI.getTypeColor(detail.typeDesc);
 
         // 渲染详情头部
@@ -3256,7 +3301,7 @@
                     </div>
                     <div class="metric-item">
                         <div class="metric-label">日涨跌幅</div>
-                        <div class="metric-value ${changeClass}">${FundAPI.formatChange(estimate ? estimate.gszzl : detail.change)}</div>
+                        <div class="metric-value ${changeClass}">${FundAPI.formatChange(displayChange)}</div>
                     </div>
                 </div>
             </div>
@@ -3527,6 +3572,14 @@
             return;
         }
 
+        // 检查历史净值表首行是否为当日实际净值，如果是则同步更新头部日涨跌幅
+        var est = await FundAPI.getRealtimeEstimate(fundCode);
+        var actualToday = checkTodayActualNav(result, est);
+        if (actualToday && !detailActualNavFound) {
+            detailActualNavFound = true;
+            updateDetailChangeRate(actualToday.change);
+        }
+
         wrap.innerHTML = `
             <table class="fund-table" style="min-width: auto;">
                 <thead>
@@ -3625,8 +3678,10 @@
     }
 
     // 实时更新详情中的估值
+    var realtimeUpdateCount = 0; // 更新计数，用于控制历史净值检查频率
     function startRealtimeUpdate(fundCode) {
         if (realtimeTimer) clearInterval(realtimeTimer);
+        realtimeUpdateCount = 0;
         realtimeTimer = setInterval(async function () {
             if (!detailModal.classList.contains('active') || currentDetailCode !== fundCode) {
                 clearInterval(realtimeTimer);
@@ -3636,7 +3691,7 @@
             var est = await FundAPI.getRealtimeEstimate(fundCode);
             if (!est) return;
 
-            // 更新估值显示
+            // 更新估值显示（盘中估值）
             var metrics = detailContent.querySelectorAll('.metric-item');
             if (metrics.length >= 2) {
                 var estItem = metrics[1];
@@ -3653,14 +3708,23 @@
                 }
             }
 
-            // 更新日涨跌幅
-            if (metrics.length >= 5) {
-                var changeItem = metrics[4];
-                var changeValueEl = changeItem.querySelector('.metric-value');
-                if (changeValueEl) {
-                    changeValueEl.textContent = FundAPI.formatChange(est.gszzl);
-                    changeValueEl.className = 'metric-value ' + changeClass;
+            // 每60秒（12次×5秒）检查一次历史净值表，看当日实际净值是否已公布
+            realtimeUpdateCount++;
+            if (!detailActualNavFound && realtimeUpdateCount % 12 === 0) {
+                var histResult = await FundAPI.getHistoryNav(fundCode, 1, 1);
+                var actualToday = checkTodayActualNav(histResult, est);
+                if (actualToday) {
+                    detailActualNavFound = true;
+                    // 用实际涨跌幅更新头部日涨跌幅
+                    updateDetailChangeRate(actualToday.change);
+                    // 刷新历史净值表，显示最新数据
+                    loadHistoryTable(fundCode);
                 }
+            }
+
+            // 只有当日实际净值尚未公布时，才用实时估值更新日涨跌幅
+            if (!detailActualNavFound) {
+                updateDetailChangeRate(est.gszzl);
             }
         }, 5000); // 每5秒更新
     }
