@@ -1723,7 +1723,6 @@ ul, ol { list-style: none; }
     padding: 16px 14px;
     transition: transform 0.25s var(--ease-out), background 0.25s var(--ease);
     min-width: 0;
-    overflow: hidden;
 }
 
 .summary-item:hover {
@@ -1745,9 +1744,7 @@ ul, ol { list-style: none; }
     letter-spacing: 0.5px;
     line-height: 1.2;
     transition: color 0.3s var(--ease);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    word-break: break-all;
 }
 
 .summary-item .summary-sub {
