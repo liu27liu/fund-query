@@ -1059,7 +1059,7 @@ def api_sectors():
     elif category == '海外QDII':
         results = _fetch_fund_type_sectors('qdii', QDII_SECTORS)
     elif category == '货币理财':
-        results = _fetch_fund_type_sectors('hh', MONEY_SECTORS)
+        results = _fetch_money_sectors(MONEY_SECTORS)
     else:
         results = []
 
@@ -1339,9 +1339,101 @@ def _fetch_fund_type_sectors(fund_type, sector_defs):
             'upCount': up_count,
             'downCount': down_count,
             'fundCount': len(matched),
-            'type': '债券板块' if fund_type == 'zq' else ('海外QDII' if fund_type == 'qdii' else '货币理财'),
-            'category': '债券板块' if fund_type == 'zq' else ('海外QDII' if fund_type == 'qdii' else '货币理财')
+            'type': '债券板块' if fund_type == 'zq' else '海外QDII',
+            'category': '债券板块' if fund_type == 'zq' else '海外QDII'
         })
+    return results
+
+
+def _fetch_money_sectors(sector_defs):
+    """采集货币理财板块 - 货币基金用代表性基金代码获取7日年化, 同业存单从债券基金中匹配"""
+    results = []
+    # 先从债券基金中找同业存单
+    bond_funds = []
+    try:
+        url = 'https://fund.eastmoney.com/data/rankhandler.aspx'
+        params = {'op': 'ph', 'dt': 'kf', 'ft': 'zq', 'rs': '', 'gs': 0, 'sc': 'rzdf', 'st': 'desc', 'pi': 1, 'pn': 500, 'dx': 1}
+        rank_headers = {
+            'User-Agent': HEADERS['User-Agent'],
+            'Referer': 'https://fund.eastmoney.com/data/fundranking.html'
+        }
+        resp = SESSION.get(url, params=params, headers=rank_headers, timeout=15)
+        text = resp.text
+        match = re.search(r'datas:\[(.+?)\]', text, re.DOTALL)
+        if match:
+            raw_items = match.group(1).split('","')
+            for raw in raw_items:
+                raw = raw.strip('"').strip()
+                if raw:
+                    parts = raw.split(',')
+                    if len(parts) >= 7:
+                        bond_funds.append({'name': parts[1], 'change': safe_float(parts[6])})
+    except Exception as e:
+        print(f'[货币理财-债券基金] 异常: {e}', flush=True)
+
+    for sec_def in sector_defs:
+        sec_name = sec_def['name']
+        keywords = sec_def.get('keywords', [])
+        rep_codes = sec_def.get('rep_codes', [])
+
+        if rep_codes:
+            # 货币基金: 用代表性基金代码获取7日年化收益率
+            avg_yield = 0
+            valid_count = 0
+            for code in rep_codes:
+                try:
+                    # 货币基金的7日年化收益率从fundgz API获取
+                    url = f'https://fundgz.1234567.com.cn/js/{code}.js'
+                    resp = SESSION.get(url, params={'rt': int(time.time() * 1000)}, timeout=8)
+                    text = resp.text.strip()
+                    m = re.search(r'jsonpgz\((.+)\)', text)
+                    if m:
+                        data = json.loads(m.group(1))
+                        # 货币基金的gszzl是7日年化收益率
+                        yld = safe_float(data.get('gszzl', 0))
+                        if yld > 0:
+                            avg_yield += yld
+                            valid_count += 1
+                except Exception as e:
+                    pass
+            if valid_count > 0:
+                avg_yield = round(avg_yield / valid_count, 4)
+            results.append({
+                'code': '',
+                'name': sec_name,
+                'price': 0,
+                'changePercent': avg_yield,
+                'change': 0,
+                'upCount': 0,
+                'downCount': 0,
+                'fundCount': valid_count,
+                'type': '货币理财',
+                'category': '货币理财',
+                'yieldType': '7日年化'
+            })
+        else:
+            # 同业存单: 从债券基金中按关键词匹配
+            matched = [f for f in bond_funds if any(kw in f['name'] for kw in keywords)]
+            if matched:
+                avg_change = sum(f['change'] for f in matched) / len(matched)
+                up_count = sum(1 for f in matched if f['change'] > 0)
+                down_count = sum(1 for f in matched if f['change'] < 0)
+            else:
+                avg_change = 0
+                up_count = 0
+                down_count = 0
+            results.append({
+                'code': '',
+                'name': sec_name,
+                'price': 0,
+                'changePercent': round(avg_change, 2),
+                'change': 0,
+                'upCount': up_count,
+                'downCount': down_count,
+                'fundCount': len(matched),
+                'type': '货币理财',
+                'category': '货币理财'
+            })
     return results
 
 
