@@ -780,11 +780,13 @@
             </div>
         `;
 
-        // 1. 从全市场拉取候选基金（日涨幅前100，覆盖足够范围）
-        var candidates = await Promise.race([
-            FundAPI.getFundRanking(sortType, 100, order, fundType),
-            new Promise(function (resolve) { setTimeout(function () { resolve([]); }, 15000); })
+        // 1. 从全市场拉取候选基金（取前300只作为候选池，覆盖全市场近2万只基金）
+        var rankingData = await Promise.race([
+            FundAPI.getFundRankingWithTotal(sortType, 300, order, fundType),
+            new Promise(function (resolve) { setTimeout(function () { resolve({ funds: [], total: 0 }); }, 15000); })
         ]);
+        var candidates = rankingData.funds || [];
+        var totalCount = rankingData.total || candidates.length;
 
         if (!candidates || candidates.length === 0) {
             if (myRequestId !== rankingRequestId) return; // 已有新请求，放弃渲染
@@ -799,11 +801,11 @@
             return;
         }
 
-        // 2. 获取这些基金的实时估值（服务端并发请求）
+        // 2. 获取这些基金的实时估值（服务端30线程并发请求）
         var codes = candidates.map(function (f) { return f.code; });
         var estimates = await Promise.race([
             FundAPI.batchRealtimeEstimate(codes),
-            new Promise(function (resolve) { setTimeout(function () { resolve([]); }, 12000); })
+            new Promise(function (resolve) { setTimeout(function () { resolve([]); }, 15000); })
         ]);
 
         // 竞态保护：如果有新请求了，放弃当前渲染
@@ -818,18 +820,11 @@
             return f;
         });
 
-        // 如果实时估值获取失败（estimates为空），用API原始涨跌幅排序
-        if (estimates.length === 0) {
-            ranking.sort(function (a, b) {
-                if (order === 'desc') return (b.change || 0) - (a.change || 0);
-                return (a.change || 0) - (b.change || 0);
-            });
-        } else {
-            ranking.sort(function (a, b) {
-                if (order === 'desc') return (b.realtimeChange || 0) - (a.realtimeChange || 0);
-                return (a.realtimeChange || 0) - (b.realtimeChange || 0);
-            });
-        }
+        // 按实时估值涨跌幅排序
+        ranking.sort(function (a, b) {
+            if (order === 'desc') return (b.realtimeChange || 0) - (a.realtimeChange || 0);
+            return (a.realtimeChange || 0) - (b.realtimeChange || 0);
+        });
 
         // 取前20
         ranking = ranking.slice(0, 20);
@@ -839,7 +834,7 @@
         // 渲染表格
         container.innerHTML = `
             <div class="ranking-info-bar">
-                <span>共筛选 <strong>${candidates.length}</strong> 只基金，展示${order === 'desc' ? '涨幅' : '跌幅'}前 <strong>20</strong> 只</span>
+                <span>全市场共 <strong>${totalCount}</strong> 只基金，展示${order === 'desc' ? '涨幅' : '跌幅'}前 <strong>20</strong> 只（实时估值排序）</span>
                 <span class="ranking-scroll-hint">⏱ 每15分钟自动更新</span>
             </div>
             <div class="ranking-table-fixed">

@@ -221,11 +221,29 @@ const FundAPI = (function () {
         fundType = fundType || 'all';
         try {
             const data = await fetchJSON('/api/ranking?sort=' + sortType + '&size=' + pageSize + '&order=' + order + '&type=' + fundType);
+            // 兼容新旧格式：新格式{funds:[], total:N}，旧格式[]
+            if (data && data.funds) return data.funds;
             if (Array.isArray(data)) return data;
             return [];
         } catch (e) {
             console.warn('基金排行接口异常:', e);
             return [];
+        }
+    }
+
+    async function getFundRankingWithTotal(sortType, pageSize, order, fundType) {
+        sortType = sortType || 'RZDF';
+        pageSize = pageSize || 10;
+        order = order || 'desc';
+        fundType = fundType || 'all';
+        try {
+            const data = await fetchJSON('/api/ranking?sort=' + sortType + '&size=' + pageSize + '&order=' + order + '&type=' + fundType);
+            if (data && data.funds) return { funds: data.funds, total: data.total || 0 };
+            if (Array.isArray(data)) return { funds: data, total: data.length };
+            return { funds: [], total: 0 };
+        } catch (e) {
+            console.warn('基金排行接口异常:', e);
+            return { funds: [], total: 0 };
         }
     }
 
@@ -451,6 +469,7 @@ const FundAPI = (function () {
         getNavTrend: getNavTrend,
         getFundDetail: getFundDetail,
         getFundRanking: getFundRanking,
+        getFundRankingWithTotal: getFundRankingWithTotal,
         getHotFunds: getHotFunds,
         getHotKeywords: getHotKeywords,
         getNews: getNews,

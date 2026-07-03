@@ -348,7 +348,7 @@ def api_estimate_batch():
 
     # 使用线程池并发请求
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    with ThreadPoolExecutor(max_workers=20) as executor:
+    with ThreadPoolExecutor(max_workers=30) as executor:
         future_to_code = {executor.submit(fetch_one, code): code for code in code_list}
         for future in as_completed(future_to_code, timeout=12):
             try:
@@ -736,10 +736,16 @@ def api_ranking():
         resp = SESSION.get(url, params=params, headers=rank_headers, timeout=10)
         text = resp.text
 
+        # 提取总记录数
+        total_count = 0
+        count_match = re.search(r'allRecords:(\d+)', text)
+        if count_match:
+            total_count = int(count_match.group(1))
+
         # 解析 var rankData = {datas:[...], ...}
         match = re.search(r'datas:\[(.+?)\]', text, re.DOTALL)
         if not match:
-            return jsonify([])
+            return jsonify({'funds': [], 'total': total_count})
 
         raw_items = match.group(1).split('","')
         results = []
@@ -760,7 +766,7 @@ def api_ranking():
                     'monthChange': safe_float(parts[8]) if len(parts) > 8 else 0,
                     'yearChange': safe_float(parts[11]) if len(parts) > 11 else 0,
                 })
-        return jsonify(results)
+        return jsonify({'funds': results, 'total': total_count})
     except Exception as e:
         print(f'[排行异常]: {e}')
         return jsonify([])
