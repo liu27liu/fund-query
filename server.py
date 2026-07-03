@@ -1032,7 +1032,7 @@ def api_sectors():
     # 内存缓存：120秒内复用上次结果
     cache_key = 'sectors_' + board_type + '_' + category_filter
     cached = _sector_cache.get(cache_key)
-    if cached and time.time() - cached['time'] < 120:
+    if cached and time.time() - cached['time'] < 300:
         return jsonify(cached['data'])
 
     sector_headers = {
@@ -1049,7 +1049,7 @@ def api_sectors():
             'Referer': 'https://quote.eastmoney.com/center/boardlist.html',
             'Accept': '*/*',
         }
-        for attempt in range(3):
+        for attempt in range(5):
             ts = str(int(time.time() * 1000))
             full_url = (base_url + '?pn=1&pz=500&po=1&np=1'
                         '&ut=bd1d9ddb04089700cf9c27f6f7426281'
@@ -1058,7 +1058,7 @@ def api_sectors():
                         '&fields=f12,f14,f2,f3,f4,f104,f105'
                         '&_=' + ts)
             try:
-                resp = SESSION.get(full_url, headers=sector_headers, timeout=12)
+                resp = SESSION.get(full_url, headers=sector_headers, timeout=15)
                 data = resp.json()
                 if data.get('data') and data['data'].get('diff'):
                     for item in data['data']['diff']:
@@ -1077,11 +1077,14 @@ def api_sectors():
                             'type': label,
                             'category': get_sector_category(name)
                         })
+                    print(f'[板块-{label}] 采集到 {len(results)} 个板块', flush=True)
                     return results
+                else:
+                    print(f'[板块-{label}] 尝试{attempt+1}无数据: {str(data)[:150]}', flush=True)
             except Exception as e:
                 print(f'[板块异常-{label}] 尝试{attempt+1}: {e}', flush=True)
-            if attempt < 2:
-                time.sleep(1)
+            if attempt < 4:
+                time.sleep(2)
         return results
 
     # 请求行业+概念板块（顺序请求，保证稳定性）
