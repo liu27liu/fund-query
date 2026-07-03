@@ -36,24 +36,26 @@
     ],
     "holdings": [
       {
+        "addTime": 1783063559567,
+        "amount": 1000,
+        "buyDate": "2026-07-03",
+        "buyPrice": 0.5118,
         "code": "161725",
         "name": "招商中证白酒指数(LOF)A",
-        "type": "指数型",
-        "amount": 1000,
-        "buyPrice": 0.5118,
         "shares": 1953.8882375928097,
-        "buyDate": "2026-07-03",
-        "addTime": 1783063559567
+        "type": "指数型",
+        "group": "定投"
       },
       {
+        "addTime": 1783063608236,
+        "amount": 2000,
+        "buyDate": "2026-07-03",
+        "buyPrice": 3.9564,
         "code": "110011",
         "name": "易方达优质精选混合(QDII)",
-        "type": "QDII",
-        "amount": 2000,
-        "buyPrice": 3.9564,
         "shares": 505.51005965018703,
-        "buyDate": "2026-07-03",
-        "addTime": 1783063608236
+        "type": "QDII",
+        "group": "定投"
       }
     ],
     "createTime": 1783063517.4455147
