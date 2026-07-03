@@ -808,6 +808,7 @@
             html += '<span class="sector-fund-year ' + yearClass + '">近1年 ' + yearStr + '</span>';
             html += '</div>';
             html += '<button class="sf-fav-btn ' + favClass + '" data-action="' + favAction + '" data-code="' + f.code + '" data-name="' + f.name + '" data-type="' + (f.type || '') + '" title="' + (isFav ? '移除自选' : '添加自选') + '">' + favText + '</button>';
+            html += '<span class="sf-detail-arrow">›</span>';
             html += '</div>';
         });
         html += '</div>';
@@ -833,7 +834,10 @@
             item.addEventListener('click', function (e) {
                 if (e.target.classList.contains('sf-fav-btn')) return;
                 var code = this.dataset.code;
-                if (code) navigate('/fund/' + code);
+                if (code) {
+                    document.getElementById('sectorFundsModal').style.display = 'none';
+                    navigate('/fund/' + code);
+                }
             });
         });
 
