@@ -955,6 +955,37 @@ ul, ol { list-style: none; }
     border: 1px solid var(--border-light);
 }
 
+/* 基金榜单自动滚动容器 */
+.ranking-scroll-wrap {
+    max-height: 480px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--card-shadow);
+    border: 1px solid var(--border-light);
+}
+
+.ranking-scroll-wrap::-webkit-scrollbar {
+    width: 6px;
+}
+
+.ranking-scroll-wrap::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.ranking-scroll-wrap table {
+    margin: 0;
+}
+
+.ranking-scroll-wrap thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--card-bg);
+}
+
 .fund-table {
     width: 100%;
     border-collapse: collapse;
