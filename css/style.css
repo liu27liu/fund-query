@@ -2895,6 +2895,44 @@ select.form-input {
     animation: numPop 0.4s var(--ease);
 }
 
+/* ========== 减仓模式切换标签 ========== */
+.reduce-mode-tabs {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+.reduce-mode-tab {
+    flex: 1;
+    padding: 8px 12px;
+    background: var(--card-bg);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    border: none;
+    border-right: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.2s var(--ease);
+}
+.reduce-mode-tab:last-child { border-right: none; }
+.reduce-mode-tab:hover {
+    background: var(--primary-light);
+    color: var(--primary);
+}
+.reduce-mode-tab.active {
+    background: var(--primary-gradient);
+    color: #fff;
+}
+
+/* 表单提示文字 */
+.form-hint {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    margin-top: 6px;
+    line-height: 1.5;
+}
+
 /* ========== 持仓批量操作 & 分组 ========== */
 
 /* 分组筛选下拉 */

@@ -2108,10 +2108,24 @@
                     <input type="text" class="form-input" id="reducePosNav" value="获取中..." readonly style="background: #f5f7fa;">
                 </div>
                 <div class="form-group">
+                    <label class="form-label">减仓方式</label>
+                    <div class="reduce-mode-tabs">
+                        <button class="reduce-mode-tab active" data-mode="shares">按份额</button>
+                        <button class="reduce-mode-tab" data-mode="amount">按金额</button>
+                    </div>
+                </div>
+                <div class="form-group" id="reduceBySharesGroup">
                     <label class="form-label">赎回份额 <span class="required">*</span></label>
                     <div style="display:flex; gap:8px;">
                         <input type="number" class="form-input" id="reducePosShares" value="" step="0.01" placeholder="输入赎回份额" style="flex:1;">
                         <button class="form-submit" id="reduceAllBtn" style="white-space:nowrap; padding:8px 16px;">全部</button>
+                    </div>
+                </div>
+                <div class="form-group" id="reduceByAmountGroup" style="display:none;">
+                    <label class="form-label">赎回金额 <span class="required">*</span></label>
+                    <div style="display:flex; gap:8px;">
+                        <input type="number" class="form-input" id="reducePosAmount" value="" step="0.01" placeholder="输入赎回金额（元）" style="flex:1;">
+                        <button class="form-submit" id="reduceAllAmountBtn" style="white-space:nowrap; padding:8px 16px;">全部</button>
                     </div>
                 </div>
                 <div class="form-group">
@@ -2119,8 +2133,10 @@
                     <input type="date" class="form-input" id="reducePosDate" value="">
                 </div>
                 <div class="form-preview" id="reducePreview" style="display:none;">
+                    <div class="preview-row"><span>实际赎回份额</span><span id="previewShares" class="preview-value">--</span></div>
                     <div class="preview-row"><span>预计到账金额</span><span id="previewAmount" class="preview-value">--</span></div>
                     <div class="preview-row"><span>预计收益</span><span id="previewProfit" class="preview-value">--</span></div>
+                    <div class="preview-row"><span>赎回后剩余份额</span><span id="previewRemaining" class="preview-value">--</span></div>
                 </div>
                 <div class="form-actions">
                     <button class="form-cancel" id="reducePosCancelBtn">取消</button>
@@ -2131,8 +2147,10 @@
 
         holdingModal.classList.add('active');
 
-        // 获取当前净值作为赎回价
+        var currentMode = 'shares'; // 'shares' or 'amount'
         var currentNav = '';
+
+        // 获取当前净值作为赎回价
         FundAPI.getRealtimeEstimate(position.code).then(function (est) {
             if (est) {
                 currentNav = est.gsz || est.dwjz || '';
@@ -2154,32 +2172,74 @@
             String(today.getDate()).padStart(2, '0');
         document.getElementById('reducePosDate').value = dateStr;
 
+        // 模式切换
+        holdingFormContent.querySelectorAll('.reduce-mode-tab').forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                currentMode = this.dataset.mode;
+                holdingFormContent.querySelectorAll('.reduce-mode-tab').forEach(function (t) { t.classList.remove('active'); });
+                this.classList.add('active');
+                if (currentMode === 'shares') {
+                    document.getElementById('reduceBySharesGroup').style.display = 'block';
+                    document.getElementById('reduceByAmountGroup').style.display = 'none';
+                } else {
+                    document.getElementById('reduceBySharesGroup').style.display = 'none';
+                    document.getElementById('reduceByAmountGroup').style.display = 'block';
+                }
+                updatePreview();
+            });
+        });
+
         // 更新预览
         function updatePreview() {
-            var sharesInput = document.getElementById('reducePosShares');
-            var shares = parseFloat(sharesInput.value) || 0;
             var preview = document.getElementById('reducePreview');
+            var shares = 0;
+            var amount = 0;
+
+            if (currentMode === 'shares') {
+                shares = parseFloat(document.getElementById('reducePosShares').value) || 0;
+            } else {
+                amount = parseFloat(document.getElementById('reducePosAmount').value) || 0;
+                if (amount > 0 && currentNav && parseFloat(currentNav) > 0) {
+                    shares = amount / parseFloat(currentNav);
+                }
+            }
+
             if (shares > 0 && currentNav && parseFloat(currentNav) > 0) {
                 var nav = parseFloat(currentNav);
-                var amount = shares * nav;
+                amount = shares * nav;
                 var profit = shares * (nav - position.costPrice);
                 var profitStr = (profit >= 0 ? '+' : '') + profit.toFixed(2);
+                var remaining = position.currentShares - shares;
+                document.getElementById('previewShares').textContent = shares.toFixed(2) + ' 份';
                 document.getElementById('previewAmount').textContent = '¥' + amount.toFixed(2);
                 document.getElementById('previewProfit').textContent = profitStr;
                 document.getElementById('previewProfit').style.color = profit >= 0 ? '#f5222d' : '#52c41a';
+                document.getElementById('previewRemaining').textContent = remaining.toFixed(2) + ' 份';
                 preview.style.display = 'block';
             } else {
                 preview.style.display = 'none';
             }
         }
 
-        // 份额输入时更新预览
+        // 输入时更新预览
         document.getElementById('reducePosShares').addEventListener('input', updatePreview);
+        document.getElementById('reducePosAmount').addEventListener('input', updatePreview);
 
-        // 全部按钮
+        // 全部按钮 - 按份额
         document.getElementById('reduceAllBtn').addEventListener('click', function () {
             document.getElementById('reducePosShares').value = position.currentShares.toFixed(2);
             updatePreview();
+        });
+
+        // 全部按钮 - 按金额
+        document.getElementById('reduceAllAmountBtn').addEventListener('click', function () {
+            if (currentNav && parseFloat(currentNav) > 0) {
+                var totalAmount = position.currentShares * parseFloat(currentNav);
+                document.getElementById('reducePosAmount').value = totalAmount.toFixed(2);
+                updatePreview();
+            } else {
+                showToast('正在获取净值，请稍后', 'warning');
+            }
         });
 
         // 取消按钮
@@ -2189,13 +2249,23 @@
 
         // 提交按钮
         document.getElementById('reducePosSubmitBtn').addEventListener('click', function () {
-            var shares = parseFloat(document.getElementById('reducePosShares').value);
-            var sellDate = document.getElementById('reducePosDate').value;
+            var shares = 0;
 
-            if (!shares || shares <= 0) {
-                showToast('请输入有效的赎回份额', 'warning');
-                return;
+            if (currentMode === 'shares') {
+                shares = parseFloat(document.getElementById('reducePosShares').value);
+                if (!shares || shares <= 0) {
+                    showToast('请输入有效的赎回份额', 'warning');
+                    return;
+                }
+            } else {
+                var amount = parseFloat(document.getElementById('reducePosAmount').value);
+                if (!amount || amount <= 0) {
+                    showToast('请输入有效的赎回金额', 'warning');
+                    return;
+                }
             }
+
+            var sellDate = document.getElementById('reducePosDate').value;
 
             if (shares > position.currentShares + 0.0001) {
                 showToast('赎回份额不能超过持有份额（' + position.currentShares.toFixed(2) + '份）', 'warning');
@@ -2207,12 +2277,18 @@
                 FundAPI.getRealtimeEstimate(position.code).then(function (est) {
                     if (est && (est.gsz || est.dwjz)) {
                         currentNav = est.gsz || est.dwjz;
+                        if (currentMode === 'amount') {
+                            shares = parseFloat(document.getElementById('reducePosAmount').value) / parseFloat(currentNav);
+                        }
                         doReducePosition();
                     } else {
                         showToast('无法获取基金净值，请稍后重试', 'error');
                     }
                 });
             } else {
+                if (currentMode === 'amount') {
+                    shares = parseFloat(document.getElementById('reducePosAmount').value) / parseFloat(currentNav);
+                }
                 doReducePosition();
             }
 
@@ -2375,6 +2451,14 @@
             <div class="form-body">
                 <div class="batch-fund-list">${fundListHtml}</div>
                 <div class="form-group">
+                    <label class="form-label">减仓方式</label>
+                    <div class="reduce-mode-tabs">
+                        <button class="reduce-mode-tab active" data-mode="percent">按比例</button>
+                        <button class="reduce-mode-tab" data-mode="shares">按份额</button>
+                        <button class="reduce-mode-tab" data-mode="amount">按金额</button>
+                    </div>
+                </div>
+                <div class="form-group" id="batchReducePercentGroup">
                     <label class="form-label">减仓比例 <span class="required">*</span></label>
                     <div style="display:flex; gap:8px; align-items:center;">
                         <input type="number" class="form-input" id="batchReducePercent" value="50" min="1" max="100" step="1" style="flex:1;">
@@ -2386,6 +2470,16 @@
                         <button class="quick-percent-btn" data-percent="75">75%</button>
                         <button class="quick-percent-btn" data-percent="100">全部</button>
                     </div>
+                </div>
+                <div class="form-group" id="batchReduceSharesGroup" style="display:none;">
+                    <label class="form-label">每只基金赎回份额 <span class="required">*</span></label>
+                    <input type="number" class="form-input" id="batchReduceShares" value="" step="0.01" placeholder="每只基金赎回相同份额">
+                    <div class="form-hint">注：各基金份额独立计算，不足时按实际持有量赎回</div>
+                </div>
+                <div class="form-group" id="batchReduceAmountGroup" style="display:none;">
+                    <label class="form-label">每只基金赎回金额 <span class="required">*</span></label>
+                    <input type="number" class="form-input" id="batchReduceAmount" value="" step="0.01" placeholder="每只基金赎回相同金额（元）">
+                    <div class="form-hint">注：按当前净值折算份额，各基金实际份额不同</div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">赎回日期</label>
@@ -2400,12 +2494,26 @@
 
         holdingModal.classList.add('active');
 
+        var batchReduceMode = 'percent'; // 'percent', 'shares', 'amount'
+
         // 设置默认日期
         var today = new Date();
         var dateStr = today.getFullYear() + '-' +
             String(today.getMonth() + 1).padStart(2, '0') + '-' +
             String(today.getDate()).padStart(2, '0');
         document.getElementById('batchReduceDate').value = dateStr;
+
+        // 模式切换
+        holdingFormContent.querySelectorAll('.reduce-mode-tab').forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                batchReduceMode = this.dataset.mode;
+                holdingFormContent.querySelectorAll('.reduce-mode-tab').forEach(function (t) { t.classList.remove('active'); });
+                this.classList.add('active');
+                document.getElementById('batchReducePercentGroup').style.display = batchReduceMode === 'percent' ? 'block' : 'none';
+                document.getElementById('batchReduceSharesGroup').style.display = batchReduceMode === 'shares' ? 'block' : 'none';
+                document.getElementById('batchReduceAmountGroup').style.display = batchReduceMode === 'amount' ? 'block' : 'none';
+            });
+        });
 
         // 快捷比例按钮
         holdingFormContent.querySelectorAll('.quick-percent-btn').forEach(function (btn) {
@@ -2421,12 +2529,27 @@
 
         // 提交按钮
         document.getElementById('batchReduceSubmitBtn').addEventListener('click', function () {
-            var percent = parseFloat(document.getElementById('batchReducePercent').value);
             var sellDate = document.getElementById('batchReduceDate').value;
 
-            if (!percent || percent <= 0 || percent > 100) {
-                showToast('请输入有效的减仓比例（1-100）', 'warning');
-                return;
+            // 验证输入
+            if (batchReduceMode === 'percent') {
+                var percent = parseFloat(document.getElementById('batchReducePercent').value);
+                if (!percent || percent <= 0 || percent > 100) {
+                    showToast('请输入有效的减仓比例（1-100）', 'warning');
+                    return;
+                }
+            } else if (batchReduceMode === 'shares') {
+                var shares = parseFloat(document.getElementById('batchReduceShares').value);
+                if (!shares || shares <= 0) {
+                    showToast('请输入有效的赎回份额', 'warning');
+                    return;
+                }
+            } else if (batchReduceMode === 'amount') {
+                var amount = parseFloat(document.getElementById('batchReduceAmount').value);
+                if (!amount || amount <= 0) {
+                    showToast('请输入有效的赎回金额', 'warning');
+                    return;
+                }
             }
 
             var submitBtn = this;
@@ -2437,29 +2560,115 @@
             var codes = selectedPositions.map(function (p) { return p.code; });
             FundAPI.batchRealtimeEstimate(codes).then(function (estimates) {
                 var items = [];
+                var failCount = 0;
                 selectedPositions.forEach(function (p) {
                     var est = estimates.find(function (e) { return e.fundcode === p.code; });
                     var nav = est ? (est.gsz || est.dwjz) : 0;
-                    items.push({
-                        code: p.code,
-                        name: p.name || p.code,
-                        type: p.type || '',
-                        percent: percent,
-                        price: parseFloat(nav) || 0,
-                        date: sellDate
-                    });
+                    var navNum = parseFloat(nav) || 0;
+
+                    if (batchReduceMode === 'percent') {
+                        items.push({
+                            code: p.code,
+                            name: p.name || p.code,
+                            type: p.type || '',
+                            percent: parseFloat(document.getElementById('batchReducePercent').value),
+                            price: navNum,
+                            date: sellDate
+                        });
+                    } else if (batchReduceMode === 'shares') {
+                        var reqShares = parseFloat(document.getElementById('batchReduceShares').value);
+                        // 限制不超过持有份额
+                        if (reqShares > p.currentShares) {
+                            reqShares = p.currentShares;
+                        }
+                        items.push({
+                            code: p.code,
+                            name: p.name || p.code,
+                            type: p.type || '',
+                            shares: reqShares,
+                            price: navNum,
+                            date: sellDate
+                        });
+                    } else if (batchReduceMode === 'amount') {
+                        var reqAmount = parseFloat(document.getElementById('batchReduceAmount').value);
+                        if (navNum <= 0) {
+                            failCount++;
+                            return;
+                        }
+                        var calcShares = reqAmount / navNum;
+                        // 限制不超过持有份额
+                        if (calcShares > p.currentShares) {
+                            calcShares = p.currentShares;
+                        }
+                        items.push({
+                            code: p.code,
+                            name: p.name || p.code,
+                            type: p.type || '',
+                            shares: calcShares,
+                            price: navNum,
+                            date: sellDate
+                        });
+                    }
                 });
 
-                var result = Store.batchReducePosition(items);
-                showToast(result.message, result.success ? 'success' : 'error');
-                if (result.success) {
-                    syncToServer('holdings');
-                    holdingModal.classList.remove('active');
-                    portfolioSelectedCodes = [];
-                    renderPortfolio();
-                } else {
+                if (items.length === 0) {
+                    showToast('无法获取基金净值，请稍后重试', 'error');
                     submitBtn.disabled = false;
                     submitBtn.textContent = '确认批量减仓';
+                    return;
+                }
+
+                // 按份额/金额模式直接调用 addSellTransaction
+                if (batchReduceMode === 'shares' || batchReduceMode === 'amount') {
+                    var successCount = 0;
+                    var failMessages = [];
+                    items.forEach(function (item) {
+                        if (item.price <= 0 || !item.shares || item.shares <= 0) {
+                            failMessages.push((item.name || item.code) + '：净值或份额无效');
+                            return;
+                        }
+                        var result = Store.addSellTransaction({
+                            code: item.code,
+                            name: item.name,
+                            type: item.type,
+                            shares: item.shares,
+                            price: item.price,
+                            date: item.date
+                        });
+                        if (result.success) {
+                            successCount++;
+                        } else {
+                            failMessages.push((item.name || item.code) + '：' + result.message);
+                        }
+                    });
+
+                    var msg = '批量减仓完成，成功 ' + successCount + ' 只';
+                    if (failMessages.length > 0) {
+                        msg += '，失败 ' + failMessages.length + ' 只（' + failMessages.join('；') + '）';
+                    }
+                    showToast(msg, successCount > 0 ? 'success' : 'error');
+                    if (successCount > 0) {
+                        syncToServer('holdings');
+                        holdingModal.classList.remove('active');
+                        portfolioSelectedCodes = [];
+                        renderPortfolio();
+                    } else {
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = '确认批量减仓';
+                    }
+                } else {
+                    // 按比例模式
+                    var result = Store.batchReducePosition(items);
+                    showToast(result.message, result.success ? 'success' : 'error');
+                    if (result.success) {
+                        syncToServer('holdings');
+                        holdingModal.classList.remove('active');
+                        portfolioSelectedCodes = [];
+                        renderPortfolio();
+                    } else {
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = '确认批量减仓';
+                    }
                 }
             }).catch(function () {
                 showToast('获取净值失败，请稍后重试', 'error');
