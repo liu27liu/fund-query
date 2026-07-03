@@ -506,6 +506,32 @@ ul, ol { list-style: none; }
     scroll-margin-top: 80px;
 }
 
+/* ========== 门户区块（默认隐藏，点击卡片后显示） ========== */
+.portal-section {
+    display: none;
+}
+
+.portal-section.active {
+    display: block;
+    animation: fadeInUp 0.35s var(--ease-out);
+}
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* 激活的门户卡片高亮 */
+.portal-card.active {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.15), var(--card-shadow-hover);
+}
+
+.portal-card.active .portal-arrow {
+    color: var(--primary);
+    transform: translateX(4px);
+}
+
 /* ========== 可折叠标题 ========== */
 .collapsible-header {
     cursor: pointer;

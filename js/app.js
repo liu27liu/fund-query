@@ -195,145 +195,138 @@
                 </div>
             </div>
 
-            <div class="hot-search-list" id="hotKeywordList"></div>
-
             <!-- 大盘指数 -->
-            <div class="section-anchor" id="marketSection"></div>
-            <div class="section-title collapsible-header" data-target="marketDashboard">
-                <span class="pulse-dot"></span>
-                大盘指数实时看板
-                <span class="collapse-icon">▾</span>
-            </div>
-            <div class="market-dashboard" id="marketDashboard">
-                <div class="market-card skeleton" style="height: 90px;"></div>
-                <div class="market-card skeleton" style="height: 90px;"></div>
-                <div class="market-card skeleton" style="height: 90px;"></div>
-                <div class="market-card skeleton" style="height: 90px;"></div>
+            <div class="portal-section" id="marketSection" data-loaded="false">
+                <div class="section-title collapsible-header" data-target="marketDashboard">
+                    <span class="pulse-dot"></span>
+                    大盘指数实时看板
+                    <span class="collapse-icon">▾</span>
+                </div>
+                <div class="market-dashboard" id="marketDashboard">
+                    <div class="market-card skeleton" style="height: 90px;"></div>
+                    <div class="market-card skeleton" style="height: 90px;"></div>
+                    <div class="market-card skeleton" style="height: 90px;"></div>
+                    <div class="market-card skeleton" style="height: 90px;"></div>
+                </div>
             </div>
 
             <!-- 行业板块 -->
-            <div class="section-anchor" id="sectorSection"></div>
-            <div class="section-title collapsible-header" data-target="sectorDashboard">
-                <span class="pulse-dot"></span>
-                赛道行业板块实时行情
-                <div class="sector-filter-bar">
-                    <span class="sector-tab active" data-board="all">全部板块</span>
-                    <span class="sector-tab" data-board="industry">行业板块</span>
-                    <span class="sector-tab" data-board="concept">概念板块</span>
+            <div class="portal-section" id="sectorSection" data-loaded="false">
+                <div class="section-title collapsible-header" data-target="sectorDashboard">
+                    <span class="pulse-dot"></span>
+                    赛道行业板块实时行情
+                    <div class="sector-filter-bar">
+                        <span class="sector-tab active" data-board="all">全部板块</span>
+                        <span class="sector-tab" data-board="industry">行业板块</span>
+                        <span class="sector-tab" data-board="concept">概念板块</span>
+                    </div>
+                    <span class="collapse-icon">▾</span>
                 </div>
-                <span class="collapse-icon">▾</span>
-            </div>
-            <div class="sector-dashboard" id="sectorDashboard">
-                <div class="sector-card skeleton" style="height: 72px;"></div>
-                <div class="sector-card skeleton" style="height: 72px;"></div>
-                <div class="sector-card skeleton" style="height: 72px;"></div>
-                <div class="sector-card skeleton" style="height: 72px;"></div>
-                <div class="sector-card skeleton" style="height: 72px;"></div>
-                <div class="sector-card skeleton" style="height: 72px;"></div>
+                <div class="sector-dashboard" id="sectorDashboard">
+                    <div class="sector-card skeleton" style="height: 72px;"></div>
+                    <div class="sector-card skeleton" style="height: 72px;"></div>
+                    <div class="sector-card skeleton" style="height: 72px;"></div>
+                    <div class="sector-card skeleton" style="height: 72px;"></div>
+                    <div class="sector-card skeleton" style="height: 72px;"></div>
+                    <div class="sector-card skeleton" style="height: 72px;"></div>
+                </div>
             </div>
 
             <!-- 基金榜单 -->
-            <div class="section-anchor" id="rankingSection"></div>
-            <div class="ranking-tabs-section">
-                <div class="section-title no-margin collapsible-header" data-target="rankingTable">
-                    <span>📊</span>
-                    基金榜单
-                    <span class="collapse-icon">▾</span>
+            <div class="portal-section" id="rankingSection" data-loaded="false">
+                <div class="ranking-tabs-section">
+                    <div class="section-title no-margin collapsible-header" data-target="rankingTable">
+                        <span>📊</span>
+                        基金榜单
+                        <span class="collapse-icon">▾</span>
+                    </div>
+                    <div class="ranking-tabs" id="rankingTabs">
+                        <span class="ranking-tab active" data-type="RZDF" data-order="desc" data-ft="all">日涨幅榜</span>
+                        <span class="ranking-tab" data-type="RZDF" data-order="asc" data-ft="all">日跌幅榜</span>
+                        <span class="ranking-tab" data-type="ZZF" data-order="desc" data-ft="all">周涨幅榜</span>
+                        <span class="ranking-tab" data-type="1NZF" data-order="desc" data-ft="all">近1年涨幅</span>
+                    </div>
+                    <div class="ranking-type-filter" id="rankingTypeFilter">
+                        <span class="type-tab active" data-ft="all">全部</span>
+                        <span class="type-tab" data-ft="gp">股票型</span>
+                        <span class="type-tab" data-ft="hh">混合型</span>
+                        <span class="type-tab" data-ft="zq">债券型</span>
+                        <span class="type-tab" data-ft="zs">指数型</span>
+                        <span class="type-tab" data-ft="qdii">QDII</span>
+                        <span class="type-tab" data-ft="fof">FOF</span>
+                    </div>
+                    <div class="ranking-refresh-bar">
+                        <span class="refresh-info">
+                            <span class="refresh-dot"></span>
+                            <span id="rankingRefreshStatus">加载中...</span>
+                        </span>
+                    </div>
                 </div>
-                <div class="ranking-tabs" id="rankingTabs">
-                    <span class="ranking-tab active" data-type="RZDF" data-order="desc" data-ft="all">日涨幅榜</span>
-                    <span class="ranking-tab" data-type="RZDF" data-order="asc" data-ft="all">日跌幅榜</span>
-                    <span class="ranking-tab" data-type="ZZF" data-order="desc" data-ft="all">周涨幅榜</span>
-                    <span class="ranking-tab" data-type="1NZF" data-order="desc" data-ft="all">近1年涨幅</span>
-                </div>
-                <div class="ranking-type-filter" id="rankingTypeFilter">
-                    <span class="type-tab active" data-ft="all">全部</span>
-                    <span class="type-tab" data-ft="gp">股票型</span>
-                    <span class="type-tab" data-ft="hh">混合型</span>
-                    <span class="type-tab" data-ft="zq">债券型</span>
-                    <span class="type-tab" data-ft="zs">指数型</span>
-                    <span class="type-tab" data-ft="qdii">QDII</span>
-                    <span class="type-tab" data-ft="fof">FOF</span>
-                </div>
-                <div class="ranking-refresh-bar">
-                    <span class="refresh-info">
-                        <span class="refresh-dot"></span>
-                        <span id="rankingRefreshStatus">加载中...</span>
-                    </span>
-                </div>
-            </div>
-            <div class="fund-table-wrap" id="rankingTable">
-                <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
-                    <div class="loader" style="margin: 0 auto 12px;"></div>
-                    正在加载涨跌排行...
+                <div class="fund-table-wrap" id="rankingTable">
+                    <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
+                        <div class="loader" style="margin: 0 auto 12px;"></div>
+                        正在加载涨跌排行...
+                    </div>
                 </div>
             </div>
 
             <!-- 实时资讯 -->
-            <div class="section-anchor" id="newsSection"></div>
-            <div class="section-title collapsible-header" data-target="newsFeed">
-                <span class="pulse-dot"></span>
-                7×24 实时财经资讯
-                <span class="news-refresh-info">
-                    <span class="refresh-dot"></span>
-                    <span id="newsRefreshStatus">加载中...</span>
-                </span>
-                <span class="collapse-icon">▾</span>
-            </div>
-            <div class="news-feed" id="newsFeed">
-                <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
-                    <div class="loader" style="margin: 0 auto 12px;"></div>
-                    正在加载实时资讯...
+            <div class="portal-section" id="newsSection" data-loaded="false">
+                <div class="section-title collapsible-header" data-target="newsFeed">
+                    <span class="pulse-dot"></span>
+                    7×24 实时财经资讯
+                    <span class="news-refresh-info">
+                        <span class="refresh-dot"></span>
+                        <span id="newsRefreshStatus">加载中...</span>
+                    </span>
+                    <span class="collapse-icon">▾</span>
                 </div>
-            </div>
-            <div class="news-load-more-wrap">
-                <button class="news-load-more-btn" id="newsLoadMoreBtn" style="display:none;">加载更多资讯</button>
+                <div class="news-feed" id="newsFeed">
+                    <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
+                        <div class="loader" style="margin: 0 auto 12px;"></div>
+                        正在加载实时资讯...
+                    </div>
+                </div>
+                <div class="news-load-more-wrap">
+                    <button class="news-load-more-btn" id="newsLoadMoreBtn" style="display:none;">加载更多资讯</button>
+                </div>
             </div>
         `;
 
-        // 渲染热门关键词
-        var hotKeywords = FundAPI.getHotKeywords();
-        var keywordHtml = hotKeywords.map(function (kw) {
-            return '<span class="hot-search-item" data-keyword="' + kw + '">' + kw + '</span>';
-        }).join('');
-        document.getElementById('hotKeywordList').innerHTML = keywordHtml;
-
-        // 点击热门搜索
-        document.querySelectorAll('.hot-search-item').forEach(function (el) {
-            el.addEventListener('click', function () {
-                var kw = this.dataset.keyword;
-                searchInput.value = kw;
-                navigate('/search?q=' + encodeURIComponent(kw));
-            });
-        });
-
-        // 门户卡片点击跳转
+        // 门户卡片点击：显示对应区块，懒加载数据
         document.querySelectorAll('.portal-card').forEach(function (card) {
             card.addEventListener('click', function () {
                 var targetId = this.dataset.target;
                 var target = document.getElementById(targetId);
-                if (target) {
-                    // 展开对应区块（如果已折叠）
-                    var header = target.nextElementSibling;
-                    if (header && header.classList.contains('collapsible-header') && header.classList.contains('collapsed')) {
-                        toggleCollapse(header);
-                    }
-                    // 平滑滚动到目标位置
-                    var offset = 80; // 导航栏高度偏移
-                    var top = target.getBoundingClientRect().top + window.pageYOffset - offset;
-                    window.scrollTo({ top: top, behavior: 'smooth' });
-                    // 闪烁高亮效果
-                    target.style.transition = 'background 0.3s';
-                    target.style.background = 'rgba(22, 119, 255, 0.08)';
-                    setTimeout(function () { target.style.background = ''; }, 800);
+                if (!target) return;
+
+                // 切换卡片激活状态
+                document.querySelectorAll('.portal-card').forEach(function (c) { c.classList.remove('active'); });
+                this.classList.add('active');
+
+                // 隐藏所有区块，显示目标区块
+                document.querySelectorAll('.portal-section').forEach(function (s) { s.classList.remove('active'); });
+                target.classList.add('active');
+
+                // 首次显示时懒加载数据
+                if (target.dataset.loaded === 'false') {
+                    target.dataset.loaded = 'true';
+                    if (targetId === 'marketSection') loadMarketIndices();
+                    else if (targetId === 'sectorSection') loadSectors('all');
+                    else if (targetId === 'rankingSection') loadRanking(currentRankingType, currentRankingOrder, currentFundType);
+                    else if (targetId === 'newsSection') loadNews(1);
                 }
+
+                // 平滑滚动到区块
+                var offset = 80;
+                var top = target.getBoundingClientRect().top + window.pageYOffset - offset;
+                window.scrollTo({ top: top, behavior: 'smooth' });
             });
         });
 
         // 可折叠区块标题点击
         document.querySelectorAll('.collapsible-header').forEach(function (header) {
             header.addEventListener('click', function (e) {
-                // 不拦截板块筛选和排行榜tab的点击
                 if (e.target.classList.contains('sector-tab') || 
                     e.target.classList.contains('ranking-tab') ||
                     e.target.classList.contains('type-tab') ||
@@ -359,7 +352,6 @@
                 this.classList.add('active');
                 currentRankingType = this.dataset.type;
                 currentRankingOrder = this.dataset.order;
-                // 同步基金类型筛选
                 var activeTypeTab = document.querySelector('.type-tab.active');
                 currentFundType = activeTypeTab ? activeTypeTab.dataset.ft : 'all';
                 loadRanking(currentRankingType, currentRankingOrder, currentFundType);
@@ -376,17 +368,9 @@
             });
         });
 
-        // 加载大盘指数
-        loadMarketIndices();
-        // 加载赛道板块
-        loadSectors('all');
-        // 加载涨跌榜
-        loadRanking(currentRankingType, currentRankingOrder, currentFundType);
         // 加载持仓概览
         loadPortfolioOverview();
-        // 加载实时资讯
-        loadNews(1);
-        // 加载更多资讯按钮
+        // 加载更多资讯按钮（资讯数据在点击卡片时懒加载）
         var newsMoreBtn = document.getElementById('newsLoadMoreBtn');
         if (newsMoreBtn) {
             newsMoreBtn.addEventListener('click', function () {
