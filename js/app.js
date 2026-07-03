@@ -3359,6 +3359,10 @@
             var ratioBar = stock.ratio > 0
                 ? '<div class="ratio-bar"><div class="ratio-fill" style="width:' + Math.min(stock.ratio * 3, 100) + '%"></div></div>'
                 : '';
+            var changeClass = '';
+            var changeText = stock.dayChange || '--';
+            if (changeText.indexOf('-') === 0) changeClass = 'down';
+            else if (changeText !== '--' && (changeText.indexOf('+') === 0 || parseFloat(changeText) > 0)) changeClass = 'up';
 
             return `
                 <tr>
@@ -3377,6 +3381,7 @@
                     </td>
                     <td class="num-cell">${stock.shares || '--'}</td>
                     <td class="num-cell">${stock.value || '--'}</td>
+                    <td class="num-cell ${changeClass}">${changeText}</td>
                 </tr>
             `;
         }).join('');
@@ -3391,6 +3396,7 @@
                         <th class="text-right">占净值</th>
                         <th class="text-right">持股数(万股)</th>
                         <th class="text-right">持仓市值(万元)</th>
+                        <th class="text-right">日涨跌幅</th>
                     </tr>
                 </thead>
                 <tbody>

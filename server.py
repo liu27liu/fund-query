@@ -1248,8 +1248,41 @@ def api_fund_holdings():
                 'ratio': safe_float(ratio_str),
                 'shares': clean_cells[shares_idx] if len(clean_cells) > shares_idx else '--',
                 'value': clean_cells[value_idx] if len(clean_cells) > value_idx else '--',
-                'quarterChange': clean_cells[change_idx] if (change_idx >= 0 and len(clean_cells) > change_idx) else '--'
+                'dayChange': '--'
             })
+
+        # 批量获取股票实时涨跌幅
+        if stocks:
+            try:
+                stock_codes = [s['code'] for s in stocks]
+                secids = []
+                for sc in stock_codes:
+                    if sc.startswith('6') or sc.startswith('9'):
+                        secids.append('1.' + sc)
+                    else:
+                        secids.append('0.' + sc)
+                qurl = 'https://push2.eastmoney.com/api/qt/ulist.np/get'
+                qresp = SESSION.get(qurl, params={
+                    'fltt': '2', 'fields': 'f2,f3,f12,f14',
+                    'secids': ','.join(secids)
+                }, timeout=8)
+                qdata = qresp.json()
+                if qdata and qdata.get('data') and qdata['data'].get('diff'):
+                    price_map = {}
+                    for item in qdata['data']['diff']:
+                        scode = item.get('f12', '')
+                        pct = item.get('f3', 0)
+                        if scode and pct is not None:
+                            price_map[scode] = safe_float(pct)
+                    for s in stocks:
+                        if s['code'] in price_map:
+                            val = price_map[s['code']]
+                            if val > 0:
+                                s['dayChange'] = '+' + f'{val:.2f}%'
+                            else:
+                                s['dayChange'] = f'{val:.2f}%'
+            except Exception as pe:
+                print(f'[重仓股涨跌幅获取异常] {code}: {pe}')
 
         return jsonify({
             'list': stocks,
