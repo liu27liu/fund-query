@@ -14,6 +14,7 @@ import urllib.parse
 from datetime import datetime
 import requests
 from flask import Flask, request, jsonify, send_from_directory, Response
+from allowed_sectors import ALLOWED_SECTORS
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 
@@ -742,9 +743,13 @@ def api_sectors():
                 data = resp.json()
                 if data.get('data') and data['data'].get('diff'):
                     for item in data['data']['diff']:
+                        name = item.get('f14', '')
+                        # 只采集白名单中的板块
+                        if name not in ALLOWED_SECTORS:
+                            continue
                         results.append({
                             'code': item.get('f12', ''),
-                            'name': item.get('f14', ''),
+                            'name': name,
                             'price': safe_float(item.get('f2')),
                             'changePercent': safe_float(item.get('f3')),
                             'change': safe_float(item.get('f4')),
@@ -752,7 +757,7 @@ def api_sectors():
                             'downCount': safe_float(item.get('f105', 0)),
                             'type': label
                         })
-                    print(f'[板块-{label}] 返回 {len(data["data"]["diff"])} 个', flush=True)
+                    print(f'[板块-{label}] 返回 {len(data["data"]["diff"])} 个, 白名单过滤后 {len([i for i in results if i["type"]==label])} 个', flush=True)
                     return
                 else:
                     print(f'[板块-{label}] 尝试{attempt+1}无数据: {str(data)[:150]}', flush=True)
