@@ -1204,6 +1204,15 @@ def _fetch_industry_sectors():
                     'upCount': 0, 'downCount': 0,
                     'type': '行业板块', 'category': '行业板块'
                 }
+
+        # 获取每个板块的基金数量
+        bk_codes = [s['code'] for s in merged.values() if s.get('code')]
+        if bk_codes:
+            counts = _fetch_sector_fund_counts(bk_codes)
+            for s in merged.values():
+                if s.get('code') and s['code'] in counts:
+                    s['fundCount'] = counts[s['code']]
+
         print(f'[行业板块-TTJJ] 映射到 {len(merged)} 个标准板块', flush=True)
         return list(merged.values())
 
@@ -1287,6 +1296,57 @@ def _fetch_ttjj_theme_data():
         if attempt < 2:
             time.sleep(0.5)
     return results
+
+
+def _fetch_sector_fund_counts(bk_codes):
+    """批量获取板块关联基金数量 - 天天基金网GetBKRelTopicFundNew
+    并发请求每个板块, pagesize=1只取TotalCount
+    返回: {bk_code: fund_count}
+    """
+    if not bk_codes:
+        return {}
+
+    def _fetch_one(bk_code):
+        url = 'https://api.fund.eastmoney.com/ZTJJ/GetBKRelTopicFundNew'
+        params = {
+            'callback': 'jQuery',
+            'sort': 'undefined',
+            'sorttype': 'DESC',
+            'pageindex': '1',
+            'pagesize': '1',
+            'tp': bk_code,
+            'isbuy': '1',
+            '_': str(int(time.time() * 1000))
+        }
+        headers = {
+            'User-Agent': HEADERS['User-Agent'],
+            'Referer': 'https://fund.eastmoney.com/ztjj/',
+            'Accept': '*/*',
+        }
+        try:
+            resp = SESSION.get(url, params=params, headers=headers, timeout=8)
+            text = resp.text
+            m = re.search(r'jQuery\((.*)\)', text)
+            if m:
+                data = json.loads(m.group(1))
+                return bk_code, int(data.get('TotalCount', 0))
+        except Exception:
+            pass
+        return bk_code, 0
+
+    counts = {}
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        futures = [executor.submit(_fetch_one, code) for code in bk_codes if code]
+        for future in as_completed(futures, timeout=30):
+            try:
+                bk_code, count = future.result()
+                counts[bk_code] = count
+            except Exception:
+                pass
+
+    print(f'[板块基金数] 获取 {len(counts)} 个板块的基金数量', flush=True)
+    return counts
 
 
 def _fetch_ths_industry_boards():
@@ -1373,6 +1433,15 @@ def _fetch_concept_sectors():
                     'upCount': 0, 'downCount': 0,
                     'type': '概念题材', 'category': '概念题材'
                 }
+
+        # 获取每个板块的基金数量
+        bk_codes = [s['code'] for s in merged.values() if s.get('code')]
+        if bk_codes:
+            counts = _fetch_sector_fund_counts(bk_codes)
+            for s in merged.values():
+                if s.get('code') and s['code'] in counts:
+                    s['fundCount'] = counts[s['code']]
+
         print(f'[概念题材-TTJJ] 映射到 {len(merged)} 个标准板块', flush=True)
         return list(merged.values())
 
