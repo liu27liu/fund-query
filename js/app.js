@@ -2733,7 +2733,18 @@
 
     function clearLoginState() {
         localStorage.removeItem('fund_user');
+        // 退出登录时清除当前显示的持仓和自选数据
+        localStorage.removeItem('fund_favorites');
+        localStorage.removeItem('fund_fav_groups');
+        localStorage.removeItem('fund_holdings');
         updateLoginUI();
+        // 如果当前在持仓或自选页面，跳回首页
+        var hash = location.hash;
+        if (hash.indexOf('/portfolio') !== -1 || hash.indexOf('/favorites') !== -1) {
+            navigate('/');
+        } else {
+            router();
+        }
     }
 
     function isLoggedIn() {
@@ -2752,23 +2763,36 @@
     // 登录后从服务端同步自选和持仓到本地
     function syncFromServer() {
         if (!isLoggedIn()) return;
-        Promise.all([
-            fetch('/api/user/favorites', { headers: getAuthHeaders() }).then(function (r) { return r.json(); }),
-            fetch('/api/user/holdings', { headers: getAuthHeaders() }).then(function (r) { return r.json(); })
-        ]).then(function (results) {
-            var favData = results[0];
-            var holdData = results[1];
-            if (favData.success && favData.favorites) {
-                localStorage.setItem('fund_favorites', JSON.stringify(favData.favorites));
+        // 先验证token是否有效
+        fetch('/api/auth/verify', {
+            method: 'POST',
+            headers: getAuthHeaders()
+        }).then(function (r) { return r.json(); }).then(function (verifyData) {
+            if (!verifyData.success) {
+                // token失效，清除登录状态
+                clearLoginState();
+                showToast('登录已过期，请重新登录', 'warning');
+                return;
             }
-            if (favData.success && favData.groups) {
-                localStorage.setItem('fund_fav_groups', JSON.stringify(favData.groups));
-            }
-            if (holdData.success && holdData.holdings) {
-                localStorage.setItem('fund_holdings', JSON.stringify(holdData.holdings));
-            }
-            // 刷新当前页面
-            if (typeof router === 'function') router();
+            // token有效，同步数据
+            return Promise.all([
+                fetch('/api/user/favorites', { headers: getAuthHeaders() }).then(function (r) { return r.json(); }),
+                fetch('/api/user/holdings', { headers: getAuthHeaders() }).then(function (r) { return r.json(); })
+            ]).then(function (results) {
+                var favData = results[0];
+                var holdData = results[1];
+                if (favData.success && favData.favorites) {
+                    localStorage.setItem('fund_favorites', JSON.stringify(favData.favorites));
+                }
+                if (favData.success && favData.groups) {
+                    localStorage.setItem('fund_fav_groups', JSON.stringify(favData.groups));
+                }
+                if (holdData.success && holdData.holdings) {
+                    localStorage.setItem('fund_holdings', JSON.stringify(holdData.holdings));
+                }
+                // 刷新当前页面
+                if (typeof router === 'function') router();
+            });
         }).catch(function (e) { console.error('同步数据失败:', e); });
     }
 
@@ -2804,7 +2828,6 @@
                 logoutBtn.addEventListener('click', function () {
                     clearLoginState();
                     showToast('已退出登录', 'success');
-                    navigate('/');
                 });
             }
         } else {
@@ -2970,6 +2993,10 @@
     function init() {
         bindEvents();
         updateLoginUI();
+        // 页面加载时如果已登录，从服务端同步数据（确保多设备/版本更新后数据一致）
+        if (isLoggedIn()) {
+            syncFromServer();
+        }
         router();
         updateFooterTime();
         setInterval(updateFooterTime, 1000);

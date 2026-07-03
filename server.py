@@ -31,10 +31,16 @@ _email_codes = {}  # {email: {code, expire_time, attempts}}
 _sector_cache = {}  # {key: {data, time}} - 板块数据缓存，60秒过期
 
 # ========== 用户数据持久化存储 ==========
-# 优先使用 /data (Railway volume)，否则使用项目目录
+# 优先使用 /data (Railway volume)，其次用项目目录
 _DB_DIR = '/data' if os.path.isdir('/data') else os.path.dirname(os.path.abspath(__file__))
+# 确保目录存在
+try:
+    os.makedirs(_DB_DIR, exist_ok=True)
+except Exception:
+    pass
 _USERS_FILE = os.path.join(_DB_DIR, 'users.json')
 _TOKENS = {}  # {token: {username, expire_time}} - 兼容旧令牌（内存）
+# 固定密钥，版本更新不会变化，确保老token仍然有效
 _TOKEN_SECRET = 'fund_query_secret_2026_v1'
 
 def _load_users():
@@ -65,7 +71,10 @@ def _gen_token(username):
     return username + ':' + sign
 
 def _get_user_from_token(req):
-    """从请求中提取用户名（验证无状态token）"""
+    """从请求中提取用户名（验证无状态token）
+    token格式: username:hash
+    签名密钥固定不变，版本更新后老token仍然有效
+    """
     token = req.headers.get('Authorization', '').replace('Bearer ', '')
     if not token or ':' not in token:
         return None
@@ -78,7 +87,18 @@ def _get_user_from_token(req):
     # 验证用户是否存在
     users = _load_users()
     if username not in users:
-        return None
+        # 如果users.json丢失（重新部署），但token签名有效，
+        # 则自动重建用户记录（空数据，密码未知但token仍有效）
+        users[username] = {
+            'password': '',
+            'salt': '',
+            'favorites': [],
+            'groups': ['全部'],
+            'holdings': [],
+            'createTime': time.time(),
+            'recreated': True
+        }
+        _save_users(users)
     return username
 
 def _clean_expired_tokens():
