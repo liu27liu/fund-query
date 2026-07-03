@@ -1050,7 +1050,7 @@ ul, ol { list-style: none; }
 }
 
 .fund-table .action-cell {
-    width: 100px;
+    width: 200px;
     text-align: right;
     white-space: nowrap;
 }
@@ -1093,7 +1093,7 @@ ul, ol { list-style: none; }
 }
 
 .action-btn {
-    padding: 5px 14px;
+    padding: 5px 10px;
     border-radius: var(--radius-xs);
     font-size: 12px;
     font-weight: 500;
@@ -1775,7 +1775,7 @@ ul, ol { list-style: none; }
 .portfolio-table table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 900px;
+    min-width: 1000px;
 }
 
 .portfolio-table th {
