@@ -757,6 +757,7 @@
     }
 
     var rankingRefreshTimer = null;
+    var rankingRequestId = 0;
 
     async function loadRanking(sortType, order, fundType) {
         sortType = sortType || currentRankingType;
@@ -764,6 +765,9 @@
         fundType = fundType || currentFundType;
         var container = document.getElementById('rankingTable');
         if (!container) return;
+
+        // 防止竞态条件：每次调用递增requestId，只渲染最新请求的结果
+        var myRequestId = ++rankingRequestId;
 
         // 停止之前的定时器
         if (rankingRefreshTimer) { clearInterval(rankingRefreshTimer); rankingRefreshTimer = null; }
@@ -783,6 +787,7 @@
         ]);
 
         if (!candidates || candidates.length === 0) {
+            if (myRequestId !== rankingRequestId) return; // 已有新请求，放弃渲染
             container.innerHTML = `
                 <div class="empty-state">
                     <div class="icon">📊</div>
@@ -800,6 +805,9 @@
             FundAPI.batchRealtimeEstimate(codes),
             new Promise(function (resolve) { setTimeout(function () { resolve([]); }, 12000); })
         ]);
+
+        // 竞态保护：如果有新请求了，放弃当前渲染
+        if (myRequestId !== rankingRequestId) return;
 
         // 3. 用实时估值涨幅重新排序
         var ranking = candidates.map(function (f) {
