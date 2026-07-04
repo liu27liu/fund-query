@@ -2093,6 +2093,10 @@
 
         // 绑定分组折叠、行点击、自选等事件(复用loadPortfolioData的事件绑定)
         bindPortfolioGroupEvents(container, positions);
+
+        // 启动自动刷新和刷新状态(与loadPortfolioData一致)
+        updateRefreshStatus(true);
+        startPortfolioAutoRefresh();
     }
 
     // 更新批量操作栏状态
@@ -2185,7 +2189,9 @@
         container.querySelectorAll('.action-btn[data-action="set-group"]').forEach(function (btn) {
             btn.addEventListener('click', function (e) {
                 e.stopPropagation();
-                showGroupForm(this.dataset.code);
+                var code = this.dataset.code;
+                var groups = Store.getPortfolioGroups();
+                showSetGroupForm([code], groups);
             });
         });
         container.querySelectorAll('.action-btn[data-action="delete-fund"]').forEach(function (btn) {
