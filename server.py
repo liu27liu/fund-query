@@ -36,9 +36,14 @@ from admin_api import admin_bp
 app.register_blueprint(admin_bp)
 
 
-# ========== 全局响应头：禁止缓存，确保数据实时 ==========
+# ========== 全局响应头：API禁止缓存,静态资源长缓存 ==========
 @app.after_request
 def add_no_cache_headers(resp):
+    # 静态资源(js/css/图片/字体)启用长缓存,加速二次访问
+    if request.path.startswith('/static/') or request.path.endswith(('.js', '.css', '.jpg', '.jpeg', '.png', '.gif', '.svg', '.ico', '.woff', '.woff2')):
+        resp.headers['Cache-Control'] = 'public, max-age=86400'
+        return resp
+    # API响应禁止缓存,确保数据实时
     resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     resp.headers['Pragma'] = 'no-cache'
     resp.headers['Expires'] = '0'
@@ -566,10 +571,18 @@ def api_estimate():
 
 @app.route('/api/estimate/batch')
 def api_estimate_batch():
-    """批量实时估值 - 并发请求提高速度"""
+    """批量实时估值 - 并发请求提高速度, 带5秒缓存"""
     codes = request.args.get('codes', '').strip()
     if not codes:
         return jsonify([])
+
+    # 5秒缓存:盘中估值变化快但短时间内重复请求可复用
+    cache_key = f'batch_est:{codes}'
+    if len(cache_key) > 500:
+        cache_key = f'batch_est:{hashlib.md5(codes.encode()).hexdigest()}'
+    cached = _get_cache(cache_key, 5)
+    if cached is not None:
+        return jsonify(cached)
 
     code_list = [c.strip() for c in codes.split(',') if c.strip()]
     results = []
@@ -610,6 +623,8 @@ def api_estimate_batch():
             except Exception:
                 pass
 
+    # 写入缓存
+    _set_cache(cache_key, results)
     return jsonify(results)
 
 
@@ -952,11 +967,33 @@ def api_ranking():
     fund_type = request.args.get('type', 'all')
     order = request.args.get('order', 'desc')  # desc=降序(涨幅榜), asc=升序(跌幅榜)
 
-    # 缓存15秒（首页默认参数高频访问）
+    # SWR机制:15秒内返回缓存,15-60秒返回旧数据+后台刷新
     cache_key = f'ranking_{sort_type}_{size}_{page}_{fund_type}_{order}'
     cached = _get_cache(cache_key, 15)
     if cached is not None:
         return jsonify(cached)
+
+    # SWR:缓存过期但不超过60秒,返回旧数据+后台异步刷新
+    stale = _get_cache(cache_key, 60)
+    if stale is not None:
+        # 后台异步刷新,不阻塞当前请求
+        def _bg_refresh():
+            try:
+                _fetch_ranking(cache_key, sort_type, size, page, fund_type, order)
+            except Exception:
+                pass
+        threading.Thread(target=_bg_refresh, daemon=True).start()
+        return jsonify(stale)
+
+    # 无缓存,同步获取
+    result = _fetch_ranking(cache_key, sort_type, size, page, fund_type, order)
+    if result is not None:
+        return jsonify(result)
+    return jsonify([])
+
+
+def _fetch_ranking(cache_key, sort_type, size, page, fund_type, order):
+    """获取基金排行数据并写入缓存"""
 
     # 东方财富基金排行数据接口
     sort_map = {
@@ -1043,10 +1080,10 @@ def api_ranking():
                 r['change'] = r.get('yearChange', 0)
         result = {'funds': results, 'total': total_count}
         _set_cache(cache_key, result)
-        return jsonify(result)
+        return result
     except Exception as e:
         print(f'[排行异常]: {e}')
-        return jsonify([])
+        return None
 
 
 @app.route('/api/news')
@@ -2562,6 +2599,13 @@ def _refresh_hot_cache():
             _set_cache('news_15', result)
     except Exception as e:
         print(f'[预热] 资讯失败: {e}', flush=True)
+    # 预热基金排行(默认参数:日涨幅降序/全部/500条)
+    try:
+        ranking = _fetch_ranking('ranking_RZDF_500_1_all_desc', 'RZDF', '500', '1', 'all', 'desc')
+        if ranking:
+            print('[预热] 基金排行预热完成', flush=True)
+    except Exception as e:
+        print(f'[预热] 基金排行失败: {e}', flush=True)
 
 
 def _prewarm_loop():

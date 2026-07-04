@@ -516,7 +516,7 @@
 
         // 加载持仓概览
         loadPortfolioOverview();
-        // 加载更多资讯按钮（资讯数据在点击卡片时懒加载）
+        // 加载更多资讯按钮
         var newsMoreBtn = document.getElementById('newsLoadMoreBtn');
         if (newsMoreBtn) {
             newsMoreBtn.addEventListener('click', function () {
@@ -524,6 +524,9 @@
                 loadNews(newsCurrentPage, true);
             });
         }
+
+        // 预加载所有portal区块数据(不等点击,页面加载即并行获取)
+        preloadPortalSections();
 
         // 启动首页自动刷新
         startHomeAutoRefresh();
@@ -533,6 +536,35 @@
 
         // 启动资讯自动更新
         startNewsAutoRefresh();
+    }
+
+    // 预加载所有portal区块,实现点开即显示
+    function preloadPortalSections() {
+        // 并行预加载4个区块的数据
+        // 大盘指数
+        var marketSection = document.getElementById('marketSection');
+        if (marketSection && marketSection.dataset.loaded === 'false') {
+            marketSection.dataset.loaded = 'true';
+            loadMarketIndices();
+        }
+        // 行业板块
+        var sectorSection = document.getElementById('sectorSection');
+        if (sectorSection && sectorSection.dataset.loaded === 'false') {
+            sectorSection.dataset.loaded = 'true';
+            loadSectors('行业板块');
+        }
+        // 基金榜单
+        var rankingSection = document.getElementById('rankingSection');
+        if (rankingSection && rankingSection.dataset.loaded === 'false') {
+            rankingSection.dataset.loaded = 'true';
+            loadRanking(currentRankingType, currentRankingOrder, currentFundType);
+        }
+        // 实时资讯
+        var newsSection = document.getElementById('newsSection');
+        if (newsSection && newsSection.dataset.loaded === 'false') {
+            newsSection.dataset.loaded = 'true';
+            loadNews(1);
+        }
     }
 
     function animateHeroStats() {
@@ -2407,21 +2439,31 @@
     // 并行加载所有数据，大幅缩短总等待时间
     async function refreshHomeData() {
         var tasks = [];
+        // 仅刷新已加载过的区块,避免冷启动时突然并发请求
         // 1. 大盘指数
-        tasks.push(loadMarketIndices());
+        var marketSection = document.getElementById('marketSection');
+        if (marketSection && marketSection.dataset.loaded === 'true') {
+            tasks.push(loadMarketIndices());
+        }
         // 2. 赛道板块
-        var activeSectorTab = document.querySelector('.sector-tab.active');
-        if (activeSectorTab) {
-            var sCat = activeSectorTab.dataset.category || '行业板块';
-            tasks.push(loadSectors(sCat));
+        var sectorSection = document.getElementById('sectorSection');
+        if (sectorSection && sectorSection.dataset.loaded === 'true') {
+            var activeSectorTab = document.querySelector('.sector-tab.active');
+            if (activeSectorTab) {
+                var sCat = activeSectorTab.dataset.category || '行业板块';
+                tasks.push(loadSectors(sCat));
+            }
         }
         // 3. 涨跌榜
-        tasks.push(loadRanking(currentRankingType, currentRankingOrder, currentFundType));
+        var rankingSection = document.getElementById('rankingSection');
+        if (rankingSection && rankingSection.dataset.loaded === 'true') {
+            tasks.push(loadRanking(currentRankingType, currentRankingOrder, currentFundType));
+        }
         // 4. 持仓概览
         tasks.push(loadPortfolioOverview());
         // 资讯由独立的自动更新定时器处理,不在此处刷新
         // 并行执行所有
-        await Promise.all(tasks);
+        if (tasks.length > 0) await Promise.all(tasks);
     }
 
     // ========== 添加持仓表单 ==========
@@ -4635,17 +4677,18 @@
     function init() {
         bindEvents();
         updateLoginUI();
-        // 先加载站点文案配置，再渲染页面
+        // 先渲染页面(使用默认文案),再异步加载站点配置覆盖
+        if (isLoggedIn()) {
+            syncFromServer();
+        }
+        router();
+        updateFooterTime();
+        setInterval(updateFooterTime, 1000);
+        loadAnnouncements();
+        // 异步加载站点配置,不阻塞首屏渲染
         loadSiteConfig(function () {
-            // 页面加载时如果已登录，从服务端同步数据（确保多设备/版本更新后数据一致）
-            if (isLoggedIn()) {
-                syncFromServer();
-            }
-            router();
+            // 配置加载完成后重新渲染当前页面以应用文案
             updateFooterTime();
-            setInterval(updateFooterTime, 1000);
-            // 加载公告栏
-            loadAnnouncements();
         });
     }
 

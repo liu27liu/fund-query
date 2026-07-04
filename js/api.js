@@ -10,11 +10,8 @@ const FundAPI = (function () {
     async function fetchJSON(url, timeout = 10000) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeout);
-        // 添加时间戳防止浏览器缓存
-        var separator = url.indexOf('?') !== -1 ? '&' : '?';
-        var noCacheUrl = url + separator + '_t=' + Date.now();
         try {
-            const resp = await fetch(noCacheUrl, {
+            const resp = await fetch(url, {
                 signal: controller.signal,
                 cache: 'no-cache'
             });
