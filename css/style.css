@@ -1943,14 +1943,26 @@ ul, ol { list-style: none; }
 }
 
 /* ========== 7x24实时资讯 ========== */
-.news-refresh-info {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--text-secondary);
-    font-weight: normal;
+.news-feed {
+    margin-bottom: 16px;
+}
+
+/* 新资讯入场动画 */
+.news-item-new {
+    animation: newsSlideIn 0.5s ease-out both;
+}
+
+@keyframes newsSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+        background: var(--primary-light);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+        background: transparent;
+    }
 }
 
 .news-feed {

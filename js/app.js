@@ -176,6 +176,7 @@
         // 离开首页时清除自动刷新
         if (path !== '/' && path !== '') {
             stopHomeAutoRefresh();
+            stopNewsAutoRefresh();
         }
 
         // 更新导航高亮
@@ -420,10 +421,6 @@
                 <div class="section-title collapsible-header" data-target="newsFeed">
                     <span class="pulse-dot"></span>
                     ${T('text_section_news', '7×24 实时财经资讯')}
-                    <span class="news-refresh-info">
-                        <span class="refresh-dot"></span>
-                        <span id="newsRefreshStatus">加载中...</span>
-                    </span>
                     <span class="collapse-icon">▾</span>
                 </div>
                 <div class="news-feed" id="newsFeed">
@@ -533,6 +530,9 @@
 
         // Hero数字滚动动画
         animateHeroStats();
+
+        // 启动资讯自动更新
+        startNewsAutoRefresh();
     }
 
     function animateHeroStats() {
@@ -1002,7 +1002,6 @@
             }
             var moreBtn = document.getElementById('newsLoadMoreBtn');
             if (moreBtn) moreBtn.style.display = 'none';
-            updateNewsRefreshStatus(true);
             return;
         }
 
@@ -1042,17 +1041,105 @@
             moreBtn.style.display = 'none';
         }
 
-        updateNewsRefreshStatus(true);
+        // 检查新资讯并插入动画
+        if (!isLoadMore && news.length > 0) {
+            highlightNewNews(container);
+        }
     }
 
-    function updateNewsRefreshStatus(isSuccess) {
-        var statusEl = document.getElementById('newsRefreshStatus');
-        if (!statusEl) return;
-        var now = new Date();
-        var timeStr = String(now.getHours()).padStart(2, '0') + ':' +
-            String(now.getMinutes()).padStart(2, '0') + ':' +
-            String(now.getSeconds()).padStart(2, '0');
-        statusEl.textContent = (isSuccess ? '已更新 ' : '更新失败 ') + timeStr;
+    // 资讯自动更新定时器
+    var newsAutoRefreshTimer = null;
+    var NEWS_REFRESH_INTERVAL = 30; // 资讯自动刷新间隔(秒)
+    var lastNewsFirstId = null; // 记录上次第一条资讯的唯一标识
+
+    function startNewsAutoRefresh() {
+        stopNewsAutoRefresh();
+        newsAutoRefreshTimer = setInterval(function () {
+            var path = location.hash.slice(1) || '/';
+            if (path !== '/' && path !== '') {
+                stopNewsAutoRefresh();
+                return;
+            }
+            // 静默刷新资讯(不显示loading)
+            silentRefreshNews();
+        }, NEWS_REFRESH_INTERVAL * 1000);
+    }
+
+    function stopNewsAutoRefresh() {
+        if (newsAutoRefreshTimer) { clearInterval(newsAutoRefreshTimer); newsAutoRefreshTimer = null; }
+    }
+
+    // 静默刷新:获取最新资讯,有新内容则插入到顶部
+    async function silentRefreshNews() {
+        var container = document.getElementById('newsFeed');
+        if (!container) return;
+
+        // 记录当前第一条资讯的时间(用于判断是否有新资讯)
+        var firstItem = container.querySelector('.news-item');
+        if (firstItem) {
+            var fullTime = firstItem.querySelector('.news-full-time');
+            if (fullTime) {
+                lastNewsFirstId = fullTime.textContent.trim();
+            }
+        }
+
+        FundAPI.resetNewsCursor();
+        var news = await FundAPI.getNews(1, newsPageSize);
+        if (!news || news.length === 0) return;
+
+        // 检查是否有新资讯
+        var hasNew = false;
+        var newItems = [];
+        for (var i = 0; i < news.length; i++) {
+            var itemTime = news[i].time || '';
+            if (itemTime === lastNewsFirstId) break;
+            hasNew = true;
+            newItems.push(news[i]);
+        }
+
+        if (hasNew && newItems.length > 0) {
+            // 构建新资讯HTML
+            var newHtml = newItems.map(function (item) {
+                var time = item.time || '';
+                var timeShort = time;
+                if (time.length > 5) {
+                    var match = time.match(/(\d{2}:\d{2})/);
+                    if (match) timeShort = match[1];
+                }
+                return '<div class="news-item news-item-new">' +
+                    '<div class="news-time">' + timeShort + '</div>' +
+                    '<div class="news-content">' +
+                    '<div class="news-title">' + item.title + '</div>' +
+                    '<div class="news-summary">' + (item.summary || '') + '</div>' +
+                    '<div class="news-meta"><span class="news-full-time">' + time + '</span></div>' +
+                    '</div></div>';
+            }).join('');
+
+            // 插入到顶部
+            container.insertAdjacentHTML('afterbegin', newHtml);
+
+            // 限制总条数,移除超出部分(保留最多50条)
+            var allItems = container.querySelectorAll('.news-item');
+            if (allItems.length > 50) {
+                for (var j = 50; j < allItems.length; j++) {
+                    allItems[j].remove();
+                }
+            }
+
+            // 更新第一条标识
+            var newFirst = container.querySelector('.news-full-time');
+            if (newFirst) lastNewsFirstId = newFirst.textContent.trim();
+        }
+
+        FundAPI.resetNewsCursor();
+    }
+
+    // 高亮新资讯动画
+    function highlightNewNews(container) {
+        var newItems = container.querySelectorAll('.news-item-new');
+        newItems.forEach(function (item, index) {
+            item.style.animationDelay = (index * 0.1) + 's';
+        });
     }
 
     var rankingRefreshTimer = null;
@@ -2332,8 +2419,7 @@
         tasks.push(loadRanking(currentRankingType, currentRankingOrder, currentFundType));
         // 4. 持仓概览
         tasks.push(loadPortfolioOverview());
-        // 5. 资讯
-        tasks.push(loadNews(1));
+        // 资讯由独立的自动更新定时器处理,不在此处刷新
         // 并行执行所有
         await Promise.all(tasks);
     }
