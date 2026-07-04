@@ -1918,6 +1918,7 @@
                         刷新
                     </button>
                 </div>
+                <button class="add-holding-btn" id="newGroupBtn">📁 新建分组</button>
                 <button class="add-holding-btn" id="addHoldingBtn">+ 添加持仓</button>
             </div>
             <div class="batch-action-bar" id="batchActionBar" style="display:none;">
@@ -1938,6 +1939,22 @@
         // 绑定添加持仓按钮
         document.getElementById('addHoldingBtn').addEventListener('click', function () {
             showHoldingForm({});
+        });
+
+        // 绑定新建分组按钮
+        document.getElementById('newGroupBtn').addEventListener('click', function () {
+            var name = prompt('请输入新分组名称:');
+            if (name && name.trim()) {
+                name = name.trim();
+                var existingGroups = Store.getPortfolioGroups();
+                if (existingGroups.indexOf(name) !== -1) {
+                    showToast('该分组已存在', 'warning');
+                    return;
+                }
+                // 创建空分组:添加一笔金额为0的持仓占位(不可见),标记该分组
+                // 更好的方式:直接显示提示,用户通过"设置分组"将基金移入
+                showToast('分组「' + name + '」已创建,请通过"设置分组"将基金移入该分组', 'success');
+            }
         });
 
         // 绑定手动刷新
@@ -1964,7 +1981,18 @@
 
         document.getElementById('batchGroupBtn').addEventListener('click', function () {
             if (portfolioSelectedCodes.length === 0) { showToast('请先选择基金', 'warning'); return; }
-            showSetGroupForm(portfolioSelectedCodes, groups);
+            // 从选中的checkbox中收集 {code, oldGroup}
+            var items = [];
+            var checkboxes = document.querySelectorAll('.row-checkbox:checked');
+            checkboxes.forEach(function (cb) {
+                var g = cb.dataset.group;
+                items.push({ code: cb.dataset.code, oldGroup: (g && g !== '__ungrouped__') ? g : '' });
+            });
+            if (items.length === 0) {
+                // 兼容:无法获取分组信息时退化为code数组
+                items = portfolioSelectedCodes;
+            }
+            showSetGroupForm(items, groups);
         });
 
         document.getElementById('batchCancelBtn').addEventListener('click', function () {
@@ -2190,8 +2218,15 @@
             btn.addEventListener('click', function (e) {
                 e.stopPropagation();
                 var code = this.dataset.code;
-                var groups = Store.getPortfolioGroups();
-                showSetGroupForm([code], groups);
+                // 查找该行所属的分组
+                var tr = this.closest('tr');
+                var groupSection = tr ? tr.closest('.portfolio-group-section') : null;
+                var groupKey = groupSection ? groupSection.querySelector('.portfolio-group-header').dataset.group : '';
+                var groupName = '';
+                if (groupKey && groupKey !== '__ungrouped__') {
+                    groupName = groupKey;
+                }
+                showSetGroupForm([{ code: code, oldGroup: groupName }]);
             });
         });
         container.querySelectorAll('.action-btn[data-action="delete-fund"]').forEach(function (btn) {
@@ -2788,6 +2823,13 @@
                     <label class="form-label">买入日期</label>
                     <input type="date" class="form-input" id="holdingBuyDate" value="">
                 </div>
+                <div class="form-group">
+                    <label class="form-label">分组(可选)</label>
+                    <input type="text" class="form-input" id="holdingGroup" value="${escapeHtml(data.group || '')}" placeholder="输入分组名称,留空则不分组" list="holdingGroupList" autocomplete="off">
+                    <datalist id="holdingGroupList">
+                        ${Store.getPortfolioGroups().map(function (g) { return '<option value="' + escapeHtml(g) + '">'; }).join('')}
+                    </datalist>
+                </div>
                 <div class="form-actions">
                     <button class="form-cancel" id="holdingCancelBtn">取消</button>
                     <button class="form-submit" id="holdingSubmitBtn">确认添加</button>
@@ -2903,7 +2945,8 @@
                     type: submitType,
                     amount: amount,
                     buyPrice: parseFloat(fetchedNav),
-                    buyDate: buyDate
+                    buyDate: buyDate,
+                    group: (document.getElementById('holdingGroup') || {}).value || ''
                 });
 
                 showToast(result.message, result.success ? 'success' : 'error');
@@ -3026,7 +3069,8 @@
                     type: position.type || '',
                     amount: amount,
                     buyPrice: parseFloat(currentNav),
-                    buyDate: buyDate
+                    buyDate: buyDate,
+                    group: position.group || ''
                 });
 
                 showToast(result.message, result.success ? 'success' : 'error');
@@ -3259,7 +3303,8 @@
                     type: position.type || '',
                     shares: shares,
                     price: parseFloat(currentNav),
-                    date: sellDate
+                    date: sellDate,
+                    group: position.group || ''
                 });
 
                 showToast(result.message, result.success ? 'success' : 'error');
@@ -3593,7 +3638,8 @@
                             type: item.type,
                             shares: item.shares,
                             price: item.price,
-                            date: item.date
+                            date: item.date,
+                            group: item.group || ''
                         });
                         if (result.success) {
                             successCount++;
@@ -3639,17 +3685,25 @@
     }
 
     // ========== 设置分组表单 ==========
-    function showSetGroupForm(codes, existingGroups) {
+    // items: [{code, oldGroup}] 或 [code](兼容旧调用)
+    function showSetGroupForm(items, existingGroups) {
         var holdingModal = document.getElementById('holdingModal');
         var holdingFormContent = document.getElementById('holdingFormContent');
-        var isSingle = codes.length === 1;
+        existingGroups = existingGroups || Store.getPortfolioGroups();
+
+        // 统一转换为 {code, oldGroup} 格式
+        var normalized = items.map(function (item) {
+            if (typeof item === 'string') {
+                var pos = Store.getAggregatedPosition(item);
+                return { code: item, oldGroup: (pos && pos.group) || '' };
+            }
+            return item;
+        });
+
+        var isSingle = normalized.length === 1;
 
         // 如果是单个基金，预填当前分组
-        var currentGroup = '';
-        if (isSingle) {
-            var pos = Store.getAggregatedPosition(codes[0]);
-            currentGroup = (pos && pos.group) || '';
-        }
+        var currentGroup = isSingle ? (normalized[0].oldGroup || '') : '';
 
         // 构建 datalist
         var dataListHtml = existingGroups.map(function (g) {
@@ -3658,7 +3712,7 @@
 
         holdingFormContent.innerHTML = `
             <div class="form-header">
-                <h3>📁 ${isSingle ? '设置分组' : '批量设置分组'} · ${codes.length} 只基金</h3>
+                <h3>📁 ${isSingle ? '设置分组' : '批量设置分组'} · ${normalized.length} 只基金</h3>
             </div>
             <div class="form-body">
                 <div class="form-group">
@@ -3700,12 +3754,7 @@
         var removeBtn = document.getElementById('setGroupRemoveBtn');
         if (removeBtn) {
             removeBtn.addEventListener('click', function () {
-                var result;
-                if (isSingle) {
-                    result = Store.setHoldingGroup(codes[0], '');
-                } else {
-                    result = Store.batchSetGroup(codes, '');
-                }
+                var result = Store.batchSetGroup(normalized, '');
                 showToast(result.message, result.success ? 'success' : 'error');
                 if (result.success) {
                     syncToServer('holdings');
@@ -3722,12 +3771,7 @@
                 showToast('请输入分组名称', 'warning');
                 return;
             }
-            var result;
-            if (isSingle) {
-                result = Store.setHoldingGroup(codes[0], groupName);
-            } else {
-                result = Store.batchSetGroup(codes, groupName);
-            }
+            var result = Store.batchSetGroup(normalized, groupName);
             showToast(result.message, result.success ? 'success' : 'error');
             if (result.success) {
                 syncToServer('holdings');

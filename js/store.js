@@ -299,11 +299,13 @@ const Store = (function () {
                 return { success: false, message: '无法获取基金净值，请稍后重试' };
             }
 
-            // 检查持有份额是否足够
-            var position = getAggregatedPosition(data.code);
-            if (!position || position.currentShares < sellShares - 0.0001) {
-                return { success: false, message: '赎回份额不能超过持有份额（' + (position ? position.currentShares.toFixed(4) : 0) + '份）' };
-            }
+        // 检查该分组下的持有份额是否足够
+        var position = getAggregatedPosition(data.code, data.group || '');
+        if (!position || position.currentShares < sellShares - 0.0001) {
+            var allPos = getAggregatedPosition(data.code);
+            var totalShares = allPos ? allPos.currentShares : 0;
+            return { success: false, message: '该分组下份额不足（持有' + (position ? position.currentShares.toFixed(4) : 0) + '份，总计' + totalShares.toFixed(4) + '份）' };
+        }
 
             var holdings = getHoldings();
             var record = {
@@ -481,25 +483,26 @@ const Store = (function () {
         try {
             var holdings = getHoldings();
             var grouped = {};
+            // 按 code+group 聚合:同一分组内同一基金合并,不同分组不合并
             holdings.forEach(function (h) {
-                if (!grouped[h.code]) {
-                    grouped[h.code] = {
+                var groupKey = h.code + '||' + (h.group || '');
+                if (!grouped[groupKey]) {
+                    grouped[groupKey] = {
                         code: h.code,
                         name: h.name || '',
                         type: h.type || '',
-                        group: '',
+                        group: h.group || '',
                         transactions: []
                     };
                 }
-                grouped[h.code].transactions.push(h);
-                if (!grouped[h.code].name && h.name) grouped[h.code].name = h.name;
-                if (!grouped[h.code].type && h.type) grouped[h.code].type = h.type;
-                if (h.group) grouped[h.code].group = h.group;
+                grouped[groupKey].transactions.push(h);
+                if (!grouped[groupKey].name && h.name) grouped[groupKey].name = h.name;
+                if (!grouped[groupKey].type && h.type) grouped[groupKey].type = h.type;
             });
 
             var positions = [];
-            Object.keys(grouped).forEach(function (code) {
-                var group = grouped[code];
+            Object.keys(grouped).forEach(function (key) {
+                var group = grouped[key];
                 var buys = group.transactions.filter(function (t) { return !t.opType || t.opType === 'buy'; });
                 var sells = group.transactions.filter(function (t) { return t.opType === 'sell'; });
 
@@ -541,10 +544,13 @@ const Store = (function () {
     }
 
     /**
-     * 获取单只基金的聚合持仓
+     * 获取单只基金的聚合持仓(可指定分组)
      */
-    function getAggregatedPosition(code) {
+    function getAggregatedPosition(code, group) {
         var positions = getAggregatedPositions();
+        if (group !== undefined) {
+            return positions.find(function (p) { return p.code === code && (p.group || '') === (group || ''); }) || null;
+        }
         return positions.find(function (p) { return p.code === code; }) || null;
     }
 
@@ -768,15 +774,20 @@ const Store = (function () {
     }
 
     /**
-     * 设置基金持仓的分组
+     * 设置基金持仓的分组(支持指定原分组,仅修改匹配的记录)
+     * @param {string} code - 基金代码
+     * @param {string} newGroup - 新分组名
+     * @param {string} [oldGroup] - 可选,仅修改该分组下的记录
      */
-    function setHoldingGroup(code, group) {
+    function setHoldingGroup(code, newGroup, oldGroup) {
         try {
             var holdings = getHoldings();
             var updated = false;
             holdings.forEach(function (h) {
                 if (h.code === code) {
-                    h.group = group || '';
+                    // 如果指定了oldGroup,仅修改该分组下的记录
+                    if (oldGroup !== undefined && (h.group || '') !== oldGroup) return;
+                    h.group = newGroup || '';
                     updated = true;
                 }
             });
@@ -793,14 +804,26 @@ const Store = (function () {
     }
 
     /**
-     * 批量设置分组
+     * 批量设置分组(支持code+oldGroup精确匹配)
+     * @param {Array} items - [{code, oldGroup}] 或 [code]
+     * @param {string} group - 新分组名
      */
-    function batchSetGroup(codes, group) {
+    function batchSetGroup(items, group) {
         try {
             var holdings = getHoldings();
             var count = 0;
             holdings.forEach(function (h) {
-                if (codes.indexOf(h.code) !== -1) {
+                var matched = false;
+                items.forEach(function (item) {
+                    if (typeof item === 'string') {
+                        // 简单code匹配(兼容旧调用)
+                        if (h.code === item) matched = true;
+                    } else {
+                        // 精确匹配 code+oldGroup
+                        if (h.code === item.code && (h.group || '') === (item.oldGroup || '')) matched = true;
+                    }
+                });
+                if (matched) {
                     h.group = group || '';
                     count++;
                 }
