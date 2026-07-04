@@ -193,17 +193,9 @@
             var keyword = getQueryParam(query, 'q');
             renderSearch(keyword);
         } else if (path === '/portfolio') {
-            if (!isLoggedIn()) {
-                showLoginRequired('持仓管理');
-            } else {
-                renderPortfolio();
-            }
+            renderPortfolio();
         } else if (path === '/favorites') {
-            if (!isLoggedIn()) {
-                showLoginRequired('自选基金');
-            } else {
-                renderFavorites();
-            }
+            renderFavorites();
         } else if (path === '/fund') {
             var code = getQueryParam(query, 'code');
             if (code) openDetail(code);
@@ -533,25 +525,7 @@
         var container = document.getElementById('portfolioOverview');
         if (!container) return;
 
-        // 未登录不显示持仓概览
-        if (!isLoggedIn()) {
-            container.innerHTML = '';
-            var promptEl = document.getElementById('loginPromptHome');
-            if (promptEl) {
-                promptEl.style.display = 'block';
-                promptEl.innerHTML = `
-                    <div class="login-prompt-card" style="margin-bottom: 24px; padding: 24px; text-align: center; background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--card-shadow); border: 1px solid var(--border-light);">
-                        <div style="font-size: 48px; margin-bottom: 12px;">🔐</div>
-                        <h3 style="font-size: 18px; margin-bottom: 8px; color: var(--text);">登录后查看持仓和自选</h3>
-                        <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 16px;">登录后可使用持仓盈亏追踪、自选基金管理，数据云端保存</p>
-                        <button class="form-submit" onclick="document.getElementById('loginBtn').click()" style="min-width: 160px;">立即登录</button>
-                    </div>
-                `;
-            }
-            return;
-        }
-
-        // 已登录：隐藏登录提示
+        // 隐藏登录提示(无论是否登录都显示持仓概览)
         var promptEl2 = document.getElementById('loginPromptHome');
         if (promptEl2) promptEl2.style.display = 'none';
 
@@ -1682,12 +1656,6 @@
     }
 
     function renderPortfolio() {
-        // 未登录显示登录拦截
-        if (!isLoggedIn()) {
-            showLoginRequired('持仓');
-            return;
-        }
-
         var positions = Store.getAggregatedPositions();
         var groups = Store.getPortfolioGroups();
         portfolioSelectedCodes = [];
@@ -3279,12 +3247,6 @@
 
     // ========== 自选页 ==========
     function renderFavorites() {
-        // 未登录显示登录拦截
-        if (!isLoggedIn()) {
-            showLoginRequired('自选');
-            return;
-        }
-
         var favorites = Store.getFavorites();
         var groups = Store.getGroups();
         var currentGroup = '全部';
