@@ -2011,13 +2011,13 @@
             return;
         }
 
-        // 用预加载数据构建渲染(复用loadPortfolioData的渲染逻辑)
+        // 用预加载数据,复用loadPortfolioData的渲染逻辑(确保DOM结构与刷新路径一致)
         var navMap = preloaded.navMap;
         var changeRateMap = preloaded.changeRateMap;
         var estimates = preloaded.estimates;
         var groups = Store.getPortfolioGroups();
 
-        // 构建分组
+        // 按分组归类持仓
         var groupMap = {};
         var ungrouped = [];
         positions.forEach(function (p) {
@@ -2029,131 +2029,182 @@
             }
         });
 
-        // 渲染总览
+        var groupNames = Object.keys(groupMap);
+        // 默认展开所有分组
+        if (Object.keys(portfolioExpandedGroups).length === 0) {
+            groupNames.forEach(function (g) { portfolioExpandedGroups[g] = true; });
+            if (ungrouped.length > 0) portfolioExpandedGroups['__ungrouped__'] = true;
+        }
+
+        // 计算总汇总
         var totals = Store.calcTotalAggregatedProfit(positions, navMap, changeRateMap);
+
+        // 构建分组HTML(复用buildGroupSection)
+        var groupSectionsHtml = '';
+        groupNames.forEach(function (groupName) {
+            var groupPositions = groupMap[groupName];
+            var groupTotals = Store.calcTotalAggregatedProfit(groupPositions, navMap, changeRateMap);
+            var isExpanded = portfolioExpandedGroups[groupName];
+            groupSectionsHtml += buildGroupSection(groupName, groupPositions, groupTotals, isExpanded, navMap, changeRateMap, estimates);
+        });
+        if (ungrouped.length > 0) {
+            var ungroupedTotals = Store.calcTotalAggregatedProfit(ungrouped, navMap, changeRateMap);
+            var isUngroupedExpanded = portfolioExpandedGroups['__ungrouped__'];
+            groupSectionsHtml += buildGroupSection('__ungrouped__', ungrouped, ungroupedTotals, isUngroupedExpanded, navMap, changeRateMap, estimates, true);
+        }
+
+        // 总汇总(与loadPortfolioData相同的DOM结构,确保刷新可更新)
+        var profitClass = totals.totalHoldingProfit >= 0 ? 'profit-positive' : 'profit-negative';
+        var profitSign = totals.totalHoldingProfit >= 0 ? '+' : '';
+        var cumClass = totals.totalCumulativeProfit >= 0 ? 'profit-positive' : 'profit-negative';
+        var cumSign = totals.totalCumulativeProfit >= 0 ? '+' : '';
+
         container.innerHTML = `
-            <div class="portfolio-summary">
-                <div class="summary-cell"><span class="label">总市值</span><span class="value" id="totalValue">¥${formatMoney(totals.totalValue)}</span></div>
-                <div class="summary-cell"><span class="label">总成本</span><span class="value" id="totalCost">¥${formatMoney(totals.totalCost)}</span></div>
-                <div class="summary-cell"><span class="label">持仓盈亏</span><span class="value ${totals.totalHoldingProfit >= 0 ? 'profit-positive' : 'profit-negative'}" id="holdingProfit">${totals.totalHoldingProfit >= 0 ? '+' : ''}${formatMoney(totals.totalHoldingProfit)}</span></div>
-                <div class="summary-cell"><span class="label">持仓收益率</span><span class="value ${totals.totalProfitRate >= 0 ? 'profit-positive' : 'profit-negative'}" id="profitRate">${totals.totalProfitRate >= 0 ? '+' : ''}${(totals.totalProfitRate * 100).toFixed(2)}%</span></div>
-                <div class="summary-cell"><span class="label">累计盈亏</span><span class="value ${totals.totalCumulativeProfit >= 0 ? 'profit-positive' : 'profit-negative'}" id="cumulativeProfit">${totals.totalCumulativeProfit >= 0 ? '+' : ''}${formatMoney(totals.totalCumulativeProfit)}</span></div>
+            ${groupSectionsHtml}
+            <div class="portfolio-total-summary">
+                <div class="summary-header">
+                    <span class="summary-title">📊 全部汇总</span>
+                    <span class="summary-count">共 ${positions.length} 只基金</span>
+                </div>
+                <div class="summary-grid summary-grid-5">
+                    <div class="summary-item">
+                        <div class="summary-label">持仓市值</div>
+                        <div class="summary-value" data-summary="totalValue">¥${formatMoney(totals.totalValue)}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">持仓成本</div>
+                        <div class="summary-value" data-summary="totalCost">¥${formatMoney(totals.totalCost)}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">持仓收益</div>
+                        <div class="summary-value ${profitClass}" data-summary="holdingProfit">${profitSign}${formatMoney(totals.totalHoldingProfit)}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">收益率</div>
+                        <div class="summary-value ${profitClass}" data-summary="profitRate">${profitSign}${(totals.totalProfitRate * 100).toFixed(2)}%</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">累计盈亏</div>
+                        <div class="summary-value ${cumClass}" data-summary="cumulativeProfit">${cumSign}${formatMoney(totals.totalCumulativeProfit)}</div>
+                    </div>
+                </div>
             </div>
-            <div id="portfolioGroups"></div>
         `;
 
-        // 渲染分组和基金
-        var groupsContainer = document.getElementById('portfolioGroups');
-        var html = '';
+        // 绑定分组折叠、行点击、自选等事件(复用loadPortfolioData的事件绑定)
+        bindPortfolioGroupEvents(container, positions);
+    }
 
-        // 有分组的持仓
-        Object.keys(groupMap).forEach(function (groupName) {
-            html += renderPortfolioGroupHTML(groupName, groupMap[groupName], navMap, changeRateMap, estimates, groups);
+    // 更新批量操作栏状态
+    function updateBatchBar() {
+        var bar = document.getElementById('batchActionBar');
+        var info = document.getElementById('batchInfo');
+        if (!bar) return;
+        if (portfolioSelectedCodes.length > 0) {
+            bar.style.display = 'flex';
+            if (info) info.textContent = '已选择 ' + portfolioSelectedCodes.length + ' 只基金';
+        } else {
+            bar.style.display = 'none';
+        }
+    }
+
+    // 绑定持仓分组事件(折叠/全选/行点击/操作按钮)
+    function bindPortfolioGroupEvents(container, positions) {
+        positions = positions || Store.getAggregatedPositions();
+        // 分组折叠
+        container.querySelectorAll('.portfolio-group-header').forEach(function (header) {
+            header.addEventListener('click', function (e) {
+                if (e.target.type === 'checkbox') return;
+                var groupKey = this.dataset.group;
+                var body = container.querySelector('.portfolio-group-body[data-group="' + groupKey + '"]');
+                if (!body) return;
+                var isCollapsed = this.classList.toggle('collapsed');
+                body.style.display = isCollapsed ? 'none' : 'block';
+                portfolioExpandedGroups[groupKey] = !isCollapsed;
+                var icon = this.querySelector('.group-toggle-icon');
+                if (icon) icon.textContent = isCollapsed ? '▶' : '▼';
+            });
         });
 
-        // 无分组的持仓
-        if (ungrouped.length > 0) {
-            html += renderPortfolioGroupHTML('未分组', ungrouped, navMap, changeRateMap, estimates, groups);
-        }
+        // 分组全选
+        container.querySelectorAll('.group-select-all').forEach(function (cb) {
+            cb.addEventListener('change', function (e) {
+                e.stopPropagation();
+                var groupKey = this.dataset.group;
+                var checkboxes = container.querySelectorAll('.row-checkbox[data-group="' + groupKey + '"]');
+                checkboxes.forEach(function (c) {
+                    c.checked = cb.checked;
+                    var code = c.dataset.code;
+                    if (cb.checked) {
+                        if (portfolioSelectedCodes.indexOf(code) === -1) portfolioSelectedCodes.push(code);
+                    } else {
+                        portfolioSelectedCodes = portfolioSelectedCodes.filter(function (x) { return x !== code; });
+                    }
+                });
+                updateBatchBar();
+            });
+        });
 
-        groupsContainer.innerHTML = html;
-
-        // 绑定行事件
-        bindPortfolioRowEvents(container);
-    }
-
-    function renderPortfolioGroupHTML(groupName, positions, navMap, changeRateMap, estimates, groups) {
-        var groupTotals = Store.calcTotalAggregatedProfit(positions, navMap, changeRateMap);
-        var groupColor = '';
-        if (groups) {
-            var g = groups.find(function (g) { return g.name === groupName; });
-            if (g && g.color) groupColor = g.color;
-        }
-
-        var rows = positions.map(function (p) {
-            var nav = navMap[p.code] || (p.currentShares > 0.0001 ? p.costPrice : 0);
-            var changeRate = changeRateMap[p.code] || 0;
-            // 统一使用Store.calcPositionProfit计算,与刷新路径一致
-            var calc = Store.calcPositionProfit(p, nav, changeRate);
-            var currentValue = calc.currentValue;
-            var holdingProfit = calc.holdingProfit;
-            var profitRate = calc.holdingProfitRate * 100;
-            var cumulativeProfit = calc.cumulativeProfit;
-            var changeClass = changeRate >= 0 ? 'profit-positive' : 'profit-negative';
-            var profitClass = holdingProfit >= 0 ? 'profit-positive' : 'profit-negative';
-            var cumClass = cumulativeProfit >= 0 ? 'profit-positive' : 'profit-negative';
-            var isCleared = p.isCleared || (p.currentShares || 0) === 0;
-
-            return `
-                <tr data-code="${p.code}" class="${isCleared ? 'cleared-row' : ''}">
-                    <td class="checkbox-cell"><input type="checkbox" data-code="${p.code}"></td>
-                    <td class="col-name">
-                        <div class="fund-name-cell">
-                            <span class="name">${p.name}</span>
-                            <span class="code">${p.code} · ${p.type || ''}</span>
-                        </div>
-                    </td>
-                    <td class="num-cell">${FundAPI.formatNum(nav)}</td>
-                    <td class="num-cell ${changeClass}">${changeRate >= 0 ? '+' : ''}${changeRate.toFixed(2)}%</td>
-                    <td class="num-cell">${(p.currentShares || 0).toFixed(2)}</td>
-                    <td class="num-cell">${FundAPI.formatNum(p.costPrice)}</td>
-                    <td class="num-cell">¥${formatMoney(currentValue)}</td>
-                    <td class="num-cell ${profitClass}">${holdingProfit >= 0 ? '+' : ''}${formatMoney(holdingProfit)}</td>
-                    <td class="num-cell ${profitClass}">${profitRate >= 0 ? '+' : ''}${profitRate.toFixed(2)}%</td>
-                </tr>
-            `;
-        }).join('');
-
-        return `
-            <div class="portfolio-group">
-                <div class="group-header">
-                    <span class="group-name" ${groupColor ? 'style="border-left: 3px solid ' + groupColor + '; padding-left: 8px;"' : ''}>📁 ${groupName}</span>
-                    <span class="group-total">¥${formatMoney(groupTotals.totalValue)}</span>
-                </div>
-                <table class="fund-table portfolio-table">
-                    <thead>
-                        <tr>
-                            <th class="checkbox-cell"><input type="checkbox" class="select-all" data-group="${groupName}"></th>
-                            <th>基金名称</th>
-                            <th class="text-right">净值/估值</th>
-                            <th class="text-right">日涨跌</th>
-                            <th class="text-right">持仓份额</th>
-                            <th class="text-right">成本价</th>
-                            <th class="text-right">市值</th>
-                            <th class="text-right">持仓盈亏</th>
-                            <th class="text-right">收益率</th>
-                        </tr>
-                    </thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            </div>
-        `;
-    }
-
-    function bindPortfolioRowEvents(container) {
-        // 行点击
+        // 行点击和checkbox
         container.querySelectorAll('tr[data-code]').forEach(function (tr) {
             tr.addEventListener('click', function (e) {
-                if (e.target.classList.contains('checkbox-cell') || e.target.type === 'checkbox') return;
+                if (e.target.type === 'checkbox' || e.target.classList.contains('action-btn')) return;
                 openDetail(this.dataset.code);
             });
         });
-        // 全选
-        container.querySelectorAll('.select-all').forEach(function (cb) {
-            cb.addEventListener('change', function () {
-                var groupName = this.dataset.group;
-                var checkboxes = container.querySelectorAll('input[type="checkbox"][data-code]');
-                checkboxes.forEach(function (c) {
-                    var tr = c.closest('tr');
-                    if (tr && tr.closest('.portfolio-group')) {
-                        var groupHeader = tr.closest('.portfolio-group').querySelector('.group-name');
-                        if (groupHeader && groupHeader.textContent.indexOf(groupName) !== -1) {
-                            c.checked = cb.checked;
-                        }
-                    }
-                });
+        container.querySelectorAll('.row-checkbox').forEach(function (cb) {
+            cb.addEventListener('change', function (e) {
+                e.stopPropagation();
+                var code = this.dataset.code;
+                if (this.checked) {
+                    if (portfolioSelectedCodes.indexOf(code) === -1) portfolioSelectedCodes.push(code);
+                } else {
+                    portfolioSelectedCodes = portfolioSelectedCodes.filter(function (x) { return x !== code; });
+                }
+                updateBatchBar();
             });
         });
+
+        // 操作按钮
+        container.querySelectorAll('.action-btn[data-action="add-position"]').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var code = this.dataset.code;
+                var position = positions.find(function (p) { return p.code === code; });
+                if (position) showAddPositionForm(position);
+            });
+        });
+        container.querySelectorAll('.action-btn[data-action="reduce-position"]').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var code = this.dataset.code;
+                var position = positions.find(function (p) { return p.code === code; });
+                if (position) showReducePositionForm(position);
+            });
+        });
+        container.querySelectorAll('.action-btn[data-action="set-group"]').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                showGroupForm(this.dataset.code);
+            });
+        });
+        container.querySelectorAll('.action-btn[data-action="delete-fund"]').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var code = this.dataset.code;
+                var position = positions.find(function (p) { return p.code === code; });
+                if (!position) return;
+                if (confirm('确定删除「' + (position.name || code) + '」的所有交易记录？此操作不可撤销。')) {
+                    var result = Store.removeFundTransactions(code);
+                    showToast(result.message, result.success ? 'success' : 'error');
+                    if (result.success) {
+                        syncToServer('holdings');
+                        renderPortfolio();
+                    }
+                }
+            });
+        });
+        updateBatchBar();
     }
 
     async function loadPortfolioData(positions) {
@@ -2311,18 +2362,6 @@
             });
         });
 
-        // 更新批量操作栏
-        function updateBatchBar() {
-            var bar = document.getElementById('batchActionBar');
-            var info = document.getElementById('batchInfo');
-            if (!bar) return;
-            if (portfolioSelectedCodes.length > 0) {
-                bar.style.display = 'flex';
-                if (info) info.textContent = '已选择 ' + portfolioSelectedCodes.length + ' 只基金';
-            } else {
-                bar.style.display = 'none';
-            }
-        }
         updateBatchBar();
 
         // 绑定行点击事件
