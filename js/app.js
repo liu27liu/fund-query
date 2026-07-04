@@ -277,19 +277,23 @@
     function renderHome() {
         app.innerHTML = `
             <div class="home-hero">
-                <h1>${T('text_hero_title', '基金净值通 · 实时估值查询平台')}</h1>
-                <p>${T('text_hero_subtitle', '覆盖全市场基金 · 盘中实时估值 · 历史净值走势 · 自选基金管理')}</p>
+                <div class="hero-particles">
+                    <span class="particle"></span><span class="particle"></span><span class="particle"></span>
+                    <span class="particle"></span><span class="particle"></span><span class="particle"></span>
+                </div>
+                <h1 class="hero-title-anim">${T('text_hero_title', '基金净值通 · 实时估值查询平台')}</h1>
+                <p class="hero-subtitle-anim">${T('text_hero_subtitle', '覆盖全市场基金 · 盘中实时估值 · 历史净值走势 · 自选基金管理')}</p>
                 <div class="hero-stats">
-                    <div class="hero-stat">
-                        <div class="num">${T('text_hero_stat1_num', '10000+')}</div>
+                    <div class="hero-stat hero-stat-anim" style="animation-delay: 0.3s">
+                        <div class="num" data-target="10000" data-suffix="+">0</div>
                         <div class="label">${T('text_hero_stat1_label', '覆盖基金')}</div>
                     </div>
-                    <div class="hero-stat">
-                        <div class="num">${T('text_hero_stat2_num', '3s')}</div>
+                    <div class="hero-stat hero-stat-anim" style="animation-delay: 0.5s">
+                        <div class="num" data-target="3" data-suffix="s">0</div>
                         <div class="label">${T('text_hero_stat2_label', '估值更新')}</div>
                     </div>
-                    <div class="hero-stat">
-                        <div class="num">${T('text_hero_stat3_num', '24h')}</div>
+                    <div class="hero-stat hero-stat-anim" style="animation-delay: 0.7s">
+                        <div class="num" data-target="24" data-suffix="h">0</div>
                         <div class="label">${T('text_hero_stat3_label', '数据采集')}</div>
                     </div>
                 </div>
@@ -526,6 +530,34 @@
 
         // 启动首页自动刷新
         startHomeAutoRefresh();
+
+        // Hero数字滚动动画
+        animateHeroStats();
+    }
+
+    function animateHeroStats() {
+        var nums = document.querySelectorAll('.hero-stats .num[data-target]');
+        nums.forEach(function (el) {
+            var target = parseInt(el.dataset.target, 10);
+            var suffix = el.dataset.suffix || '';
+            var duration = 1500;
+            var startTime = null;
+
+            function step(timestamp) {
+                if (!startTime) startTime = timestamp;
+                var progress = Math.min((timestamp - startTime) / duration, 1);
+                // easeOutQuart缓动
+                var eased = 1 - Math.pow(1 - progress, 4);
+                var current = Math.floor(eased * target);
+                el.textContent = current + suffix;
+                if (progress < 1) {
+                    requestAnimationFrame(step);
+                } else {
+                    el.textContent = target + suffix;
+                }
+            }
+            requestAnimationFrame(step);
+        });
     }
 
     // ========== 持仓概览(首页) ==========

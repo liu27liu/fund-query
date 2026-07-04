@@ -641,6 +641,8 @@ ul, ol { list-style: none; }
 /* ========== 首页 Hero 区域 ========== */
 .home-hero {
     background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 30%, #4f46e5 60%, #7c3aed 100%);
+    background-size: 200% 200%;
+    animation: heroGradientShift 12s ease infinite;
     border-radius: var(--radius);
     padding: 48px 40px;
     color: #fff;
@@ -648,6 +650,75 @@ ul, ol { list-style: none; }
     position: relative;
     overflow: hidden;
     box-shadow: 0 12px 40px rgba(79, 70, 229, 0.25);
+}
+
+@keyframes heroGradientShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* 粒子装饰 */
+.hero-particles {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.hero-particles .particle {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    animation: particleFloat 8s ease-in-out infinite;
+}
+
+.hero-particles .particle:nth-child(1) { left: 10%; top: 80%; animation-delay: 0s; }
+.hero-particles .particle:nth-child(2) { left: 25%; top: 60%; animation-delay: 1.5s; width: 4px; height: 4px; }
+.hero-particles .particle:nth-child(3) { left: 50%; top: 70%; animation-delay: 3s; width: 8px; height: 8px; }
+.hero-particles .particle:nth-child(4) { left: 70%; top: 85%; animation-delay: 4.5s; width: 5px; height: 5px; }
+.hero-particles .particle:nth-child(5) { left: 85%; top: 65%; animation-delay: 2s; width: 3px; height: 3px; }
+.hero-particles .particle:nth-child(6) { left: 40%; top: 90%; animation-delay: 6s; width: 7px; height: 7px; }
+
+@keyframes particleFloat {
+    0%, 100% { transform: translateY(0) translateX(0); opacity: 0.3; }
+    50% { transform: translateY(-60px) translateX(20px); opacity: 0.8; }
+}
+
+/* 标题入场动画 */
+.hero-title-anim {
+    animation: heroFadeUp 0.8s ease-out both;
+}
+
+.hero-subtitle-anim {
+    animation: heroFadeUp 0.8s ease-out 0.15s both;
+}
+
+.hero-stat-anim {
+    animation: heroFadeUp 0.8s ease-out both;
+    opacity: 0;
+}
+
+@keyframes heroFadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 数字hover放大 */
+.hero-stat {
+    transition: transform 0.3s var(--ease-out);
+}
+
+.hero-stat:hover {
+    transform: translateY(-4px) scale(1.05);
 }
 
 /* 装饰性光斑 */
