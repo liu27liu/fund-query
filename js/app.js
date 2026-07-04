@@ -1176,7 +1176,14 @@
 
     var rankingRefreshTimer = null;
     var rankingRequestId = 0;
-    var dailyRankingCache = null;  // 日榜实时排序缓存 {sortType, order, fundType, ranking, totalPages}
+    // 多Key缓存:每个sortType+order+fundType组合独立缓存
+    var dailyRankingCacheMap = {};  // {key: {ranking, totalCount, totalPages, actualNavPublished, time}}
+    // 候选池缓存:同sortType+fundType的候选基金(不管order),避免重复拉取500只
+    var rankingCandidatePool = null;  // {sortType, fundType, candidates, total, estimates, actualNavPublished, time}
+
+    function getRankingCacheKey(sortType, order, fundType) {
+        return sortType + '_' + order + '_' + fundType;
+    }
 
     async function loadRanking(sortType, order, fundType) {
         sortType = sortType || currentRankingType;
@@ -1190,8 +1197,17 @@
 
         var page = rankingCurrentPage;
         var isDaily = (sortType === 'RZDF');
+        var cacheKey = getRankingCacheKey(sortType, order, fundType);
 
-        if (page === 1) {
+        // 优先显示已有缓存数据(立即显示,不等加载)
+        if (isDaily && dailyRankingCacheMap[cacheKey]) {
+            var cachedData = dailyRankingCacheMap[cacheKey];
+            renderRankingPage(container, cachedData, page, sortType, order, fundType, myRequestId);
+            // 缓存超过30秒才后台刷新,否则直接用缓存
+            if (Date.now() - cachedData.time < 30000) {
+                return;
+            }
+        } else if (page === 1) {
             container.innerHTML = `
                 <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
                     <div class="loader" style="margin: 0 auto 12px;"></div>
@@ -1202,19 +1218,28 @@
 
         if (isDaily) {
             // ===== 日涨跌榜：获取大量候选 → 实时估值 → 重排序 → 客户端分页 =====
-            var needRefresh = !dailyRankingCache ||
-                dailyRankingCache.sortType !== sortType ||
-                dailyRankingCache.order !== order ||
-                dailyRankingCache.fundType !== fundType;
+            // 检查候选池是否可复用(同sortType+fundType,不论order,5分钟内)
+            var poolValid = rankingCandidatePool &&
+                rankingCandidatePool.sortType === sortType &&
+                rankingCandidatePool.fundType === fundType &&
+                (Date.now() - rankingCandidatePool.time < 300000);
 
-            if (needRefresh) {
-                // 拉取500只候选基金（按API日涨跌幅排序作为候选池）
+            var dailyCandidates, dailyTotal, dailyEstimates, actualNavPublished;
+
+            if (poolValid) {
+                // 复用候选池,无需重新拉取
+                dailyCandidates = rankingCandidatePool.candidates;
+                dailyTotal = rankingCandidatePool.total;
+                dailyEstimates = rankingCandidatePool.estimates;
+                actualNavPublished = rankingCandidatePool.actualNavPublished;
+            } else {
+                // 拉取500只候选基金
                 var dailyData = await Promise.race([
                     FundAPI.getFundRankingWithTotal(sortType, 500, order, fundType, 1),
                     new Promise(function (resolve) { setTimeout(function () { resolve({ funds: [], total: 0 }); }, 15000); })
                 ]);
-                var dailyCandidates = dailyData.funds || [];
-                var dailyTotal = dailyData.total || dailyCandidates.length;
+                dailyCandidates = dailyData.funds || [];
+                dailyTotal = dailyData.total || dailyCandidates.length;
 
                 if (!dailyCandidates || dailyCandidates.length === 0) {
                     if (myRequestId !== rankingRequestId) return;
@@ -1231,16 +1256,15 @@
 
                 // 批量获取实时估值
                 var dailyCodes = dailyCandidates.map(function (f) { return f.code; });
-                var dailyEstimates = await Promise.race([
+                dailyEstimates = await Promise.race([
                     FundAPI.batchRealtimeEstimate(dailyCodes),
                     new Promise(function (resolve) { setTimeout(function () { resolve([]); }, 15000); })
                 ]);
 
                 if (myRequestId !== rankingRequestId) return;
 
-                // 检查当日实际净值是否已公布（检查有估值数据的前3只基金）
-                // 优先检查有估值的基金（QDII基金通常无估值且净值延迟公布）
-                var actualNavPublished = false;
+                // 检查当日实际净值是否已公布
+                actualNavPublished = false;
                 if (dailyCandidates.length > 0) {
                     var todayStr = '';
                     if (dailyEstimates.length > 0 && dailyEstimates[0].gztime) {
@@ -1250,13 +1274,11 @@
                         var now = new Date();
                         todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
                     }
-                    // 找出有估值数据的前3只基金
                     var fundsWithEstimate = [];
                     for (var ci = 0; ci < dailyCandidates.length && fundsWithEstimate.length < 3; ci++) {
                         var estCheck = dailyEstimates.find(function (e) { return e.fundcode === dailyCandidates[ci].code; });
                         if (estCheck) fundsWithEstimate.push(dailyCandidates[ci].code);
                     }
-                    // 检查这些有估值的基金的历史净值表首行日期
                     for (var cj = 0; cj < fundsWithEstimate.length && !actualNavPublished; cj++) {
                         try {
                             var histResult = await FundAPI.getHistoryNav(fundsWithEstimate[cj], 1, 1);
@@ -1267,217 +1289,252 @@
                     }
                 }
 
-                // 合并数据：逐基金判断当日实际净值是否已公布
-                // 判断依据：比较估值API的dwjz（最近实际净值）和榜单API的netValue
-                //   - 两者相同 → 该基金当日实际净值还没公布，用估值
-                //   - 两者不同 → 该基金当日实际净值已公布，用榜单API的实际值
-                //   - 无估值   → 用榜单API的值（可能是上一日的，如QDII基金）
-                var dailyRanking = dailyCandidates.map(function (f) {
-                    var est = dailyEstimates.find(function (e) { return e.fundcode === f.code; });
-                    if (est && actualNavPublished) {
-                        // 比较估值API的dwjz和榜单API的netValue
-                        var estDwjz = Number(est.dwjz) || 0;
-                        var rankNav = Number(f.netValue) || 0;
-                        if (Math.abs(estDwjz - rankNav) < 0.0001) {
-                            // 两者相同，说明榜单API的netValue还是上一日的，当日实际净值未公布 → 用估值
-                            f.realtimeChange = est.gszzl;
-                            f.netValue = est.gsz;
-                            f.hasRealtime = true;
-                        } else {
-                            // 两者不同，说明榜单API的netValue已更新为当日实际净值 → 用实际值
-                            f.realtimeChange = f.change;
-                            f.netValue = f.netValue;
-                            f.hasRealtime = false;
-                        }
-                    } else if (est) {
-                        // 盘中（全局未检测到实际净值公布），用实时估值
+                // 保存候选池(供涨幅/跌幅榜复用)
+                rankingCandidatePool = {
+                    sortType: sortType, fundType: fundType,
+                    candidates: dailyCandidates, total: dailyTotal,
+                    estimates: dailyEstimates, actualNavPublished: actualNavPublished,
+                    time: Date.now()
+                };
+            }
+
+            // 合并数据并按order排序
+            var dailyRanking = dailyCandidates.map(function (f) {
+                var est = dailyEstimates.find(function (e) { return e.fundcode === f.code; });
+                if (est && actualNavPublished) {
+                    var estDwjz = Number(est.dwjz) || 0;
+                    var rankNav = Number(f.netValue) || 0;
+                    if (Math.abs(estDwjz - rankNav) < 0.0001) {
                         f.realtimeChange = est.gszzl;
                         f.netValue = est.gsz;
                         f.hasRealtime = true;
                     } else {
-                        // 无估值数据，用榜单API的值
                         f.realtimeChange = f.change;
+                        f.netValue = f.netValue;
                         f.hasRealtime = false;
                     }
-                    return f;
-                });
-
-                // 按涨跌幅重新排序
-                dailyRanking.sort(function (a, b) {
-                    var aVal = a.realtimeChange !== null ? a.realtimeChange : a.change;
-                    var bVal = b.realtimeChange !== null ? b.realtimeChange : b.change;
-                    if (order === 'desc') return bVal - aVal;
-                    return aVal - bVal;
-                });
-
-                dailyRankingCache = {
-                    sortType: sortType, order: order, fundType: fundType,
-                    ranking: dailyRanking,
-                    totalCount: dailyTotal,
-                    totalPages: Math.ceil(dailyRanking.length / rankingPageSize),
-                    actualNavPublished: actualNavPublished
-                };
-            }
-
-            // 客户端分页
-            var cached = dailyRankingCache;
-            var startIdx = (page - 1) * rankingPageSize;
-            var pageData = cached.ranking.slice(startIdx, startIdx + rankingPageSize);
-
-            if (pageData.length === 0) {
-                if (myRequestId !== rankingRequestId) return;
-                container.innerHTML = '<div class="empty-state"><div class="icon">📊</div><h3>没有更多数据</h3></div>';
-                return;
-            }
-
-            var changeColTitle = cached.actualNavPublished ? '今日涨跌幅' : '今日实时涨跌幅';
-            var totalPages = cached.totalPages;
-            var totalCount = cached.totalCount;
-            var startRank = startIdx;
-
-            container.innerHTML = `
-                <div class="ranking-info-bar">
-                    <span>全市场共 <strong>${totalCount}</strong> 只基金，第 ${page}/${totalPages} 页（${changeColTitle}排序）</span>
-                </div>
-                <div class="ranking-table-fixed">
-                    <table class="fund-table">
-                        <thead>
-                            <tr>
-                                <th>基金名称</th>
-                                <th class="text-right">${cached.actualNavPublished ? '最新净值' : '今日实时估值'}</th>
-                                <th class="text-right">${changeColTitle}</th>
-                                <th class="text-right">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="rankingTbody">
-                            ${pageData.map(function (f, i) {
-                                var change = f.realtimeChange !== null ? f.realtimeChange : f.change;
-                                var changeClass = FundAPI.getChangeClass(change);
-                                var isFav = Store.isFavorite(f.code);
-                                return `
-                                    <tr data-code="${f.code}" data-rank="${i}" style="transition: all 0.5s ease;">
-                                        <td class="col-name">
-                                            <div class="fund-name-cell">
-                                                <span class="name">${startRank + i + 1}. ${f.name}</span>
-                                                <span class="code">${f.code} · ${f.type}</span>
-                                            </div>
-                                        </td>
-                                        <td class="num-cell net-value-cell">${FundAPI.formatNum(f.netValue)}</td>
-                                        <td class="num-cell change-cell">
-                                            <span class="change-badge ${changeClass === 'up' ? 'bg-up' : changeClass === 'down' ? 'bg-down' : 'bg-flat'}">
-                                                ${FundAPI.formatChange(change)}
-                                            </span>
-                                        </td>
-                                        <td class="action-cell">
-                                            <button class="action-btn ${isFav ? '' : 'add-fav-mini'}" data-action="${isFav ? 'remove' : 'add'}" data-code="${f.code}" data-name="${f.name}" data-type="${f.type}">
-                                                ${isFav ? '移除自选' : '+ 自选'}
-                                            </button>
-                                        </td>
-                                    </tr>
-                                `;
-                            }).join('')}
-                        </tbody>
-                    </table>
-                </div>
-                ${totalPages > 1 ? `
-                    <div class="ranking-pagination">
-                        <button class="page-btn" data-page="1" ${page <= 1 ? 'disabled' : ''}>首页</button>
-                        <button class="page-btn" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>上一页</button>
-                        <span class="page-info">第 <strong>${page}</strong> / ${totalPages} 页</span>
-                        <button class="page-btn" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>下一页</button>
-                        <button class="page-btn" data-page="${totalPages}" ${page >= totalPages ? 'disabled' : ''}>末页</button>
-                    </div>
-                ` : ''}
-            `;
-        } else {
-            // ===== 周/月/年榜：直接使用API数据，服务端分页 =====
-            var rankingData = await Promise.race([
-                FundAPI.getFundRankingWithTotal(sortType, rankingPageSize, order, fundType, page),
-                new Promise(function (resolve) { setTimeout(function () { resolve({ funds: [], total: 0 }); }, 15000); })
-            ]);
-            var candidates = rankingData.funds || [];
-            var totalCount = rankingData.total || candidates.length;
-
-            if (!candidates || candidates.length === 0) {
-                if (myRequestId !== rankingRequestId) return;
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="icon">📊</div>
-                        <h3>暂无排行数据</h3>
-                        <p>数据接口可能暂时不可用,请稍后重试</p>
-                    </div>
-                `;
-                updateRankingRefreshStatus(false);
-                return;
-            }
-
-            var ranking = candidates.map(function (f) {
-                f.realtimeChange = null;
-                f.hasRealtime = false;
+                } else if (est) {
+                    f.realtimeChange = est.gszzl;
+                    f.netValue = est.gsz;
+                    f.hasRealtime = true;
+                } else {
+                    f.realtimeChange = f.change;
+                    f.hasRealtime = false;
+                }
                 return f;
             });
 
-            var changeColTitle = sortType === 'ZZF' ? '周涨幅' : (sortType === '1YZF' ? '近1月涨幅' : (sortType === '1NZF' ? '近1年涨幅' : '日涨跌幅'));
-            var totalPages = Math.ceil(totalCount / rankingPageSize);
-            var startRank = (page - 1) * rankingPageSize;
+            dailyRanking.sort(function (a, b) {
+                var aVal = a.realtimeChange !== null ? a.realtimeChange : a.change;
+                var bVal = b.realtimeChange !== null ? b.realtimeChange : b.change;
+                if (order === 'desc') return bVal - aVal;
+                return aVal - bVal;
+            });
 
-            container.innerHTML = `
-                <div class="ranking-info-bar">
-                    <span>全市场共 <strong>${totalCount}</strong> 只基金，第 ${page}/${totalPages} 页（${changeColTitle}排序）</span>
-                </div>
-                <div class="ranking-table-fixed">
-                    <table class="fund-table">
-                        <thead>
-                            <tr>
-                                <th>基金名称</th>
-                                <th class="text-right">最新净值</th>
-                                <th class="text-right">${changeColTitle}</th>
-                                <th class="text-right">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="rankingTbody">
-                            ${ranking.map(function (f, i) {
-                                var change = f.change;
-                                var changeClass = FundAPI.getChangeClass(change);
-                                var isFav = Store.isFavorite(f.code);
-                                return `
-                                    <tr data-code="${f.code}" data-rank="${i}" style="transition: all 0.5s ease;">
-                                        <td class="col-name">
-                                            <div class="fund-name-cell">
-                                                <span class="name">${startRank + i + 1}. ${f.name}</span>
-                                                <span class="code">${f.code} · ${f.type}</span>
-                                            </div>
-                                        </td>
-                                        <td class="num-cell net-value-cell">${FundAPI.formatNum(f.netValue)}</td>
-                                        <td class="num-cell change-cell">
-                                            <span class="change-badge ${changeClass === 'up' ? 'bg-up' : changeClass === 'down' ? 'bg-down' : 'bg-flat'}">
-                                                ${FundAPI.formatChange(change)}
-                                            </span>
-                                        </td>
-                                        <td class="action-cell">
-                                            <button class="action-btn ${isFav ? '' : 'add-fav-mini'}" data-action="${isFav ? 'remove' : 'add'}" data-code="${f.code}" data-name="${f.name}" data-type="${f.type}">
-                                                ${isFav ? '移除自选' : '+ 自选'}
-                                            </button>
-                                        </td>
-                                    </tr>
-                                `;
-                            }).join('')}
-                        </tbody>
-                    </table>
-                </div>
-                ${totalPages > 1 ? `
-                    <div class="ranking-pagination">
-                        <button class="page-btn" data-page="1" ${page <= 1 ? 'disabled' : ''}>首页</button>
-                        <button class="page-btn" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>上一页</button>
-                        <span class="page-info">第 <strong>${page}</strong> / ${totalPages} 页</span>
-                        <button class="page-btn" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>下一页</button>
-                        <button class="page-btn" data-page="${totalPages}" ${page >= totalPages ? 'disabled' : ''}>末页</button>
-                    </div>
-                ` : ''}
-            `;
+            // 写入多Key缓存
+            dailyRankingCacheMap[cacheKey] = {
+                ranking: dailyRanking,
+                totalCount: dailyTotal,
+                totalPages: Math.ceil(dailyRanking.length / rankingPageSize),
+                actualNavPublished: actualNavPublished,
+                time: Date.now()
+            };
+
+            // 渲染(从缓存)
+            var cached = dailyRankingCacheMap[cacheKey];
+            if (cached) {
+                renderRankingPage(container, cached, page, sortType, order, fundType, myRequestId);
+            }
+            return;
         }
 
+        // 非日榜(周/月/年榜)走原有逻辑
+        // ===== 周/月/年榜：直接使用API数据，服务端分页 =====
+        var rankingData = await Promise.race([
+            FundAPI.getFundRankingWithTotal(sortType, rankingPageSize, order, fundType, page),
+            new Promise(function (resolve) { setTimeout(function () { resolve({ funds: [], total: 0 }); }, 15000); })
+        ]);
+        var candidates = rankingData.funds || [];
+        var totalCount = rankingData.total || candidates.length;
+
+        if (!candidates || candidates.length === 0) {
+            if (myRequestId !== rankingRequestId) return;
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="icon">📊</div>
+                    <h3>暂无排行数据</h3>
+                    <p>数据接口可能暂时不可用,请稍后重试</p>
+                </div>
+            `;
+            updateRankingRefreshStatus(false);
+            return;
+        }
+
+        var ranking = candidates.map(function (f) {
+            f.realtimeChange = null;
+            f.hasRealtime = false;
+            return f;
+        });
+
+        var changeColTitle = sortType === 'ZZF' ? '周涨幅' : (sortType === '1YZF' ? '近1月涨幅' : (sortType === '1NZF' ? '近1年涨幅' : '日涨跌幅'));
+        var totalPages = Math.ceil(totalCount / rankingPageSize);
+        var startRank = (page - 1) * rankingPageSize;
+
+        container.innerHTML = `
+            <div class="ranking-info-bar">
+                <span>全市场共 <strong>${totalCount}</strong> 只基金，第 ${page}/${totalPages} 页（${changeColTitle}排序）</span>
+            </div>
+            <div class="ranking-table-fixed">
+                <table class="fund-table">
+                    <thead>
+                        <tr>
+                            <th>基金名称</th>
+                            <th class="text-right">最新净值</th>
+                            <th class="text-right">${changeColTitle}</th>
+                            <th class="text-right">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rankingTbody">
+                        ${ranking.map(function (f, i) {
+                            var change = f.change;
+                            var changeClass = FundAPI.getChangeClass(change);
+                            var isFav = Store.isFavorite(f.code);
+                            return `
+                                <tr data-code="${f.code}" data-rank="${i}" style="transition: all 0.5s ease;">
+                                    <td class="col-name">
+                                        <div class="fund-name-cell">
+                                            <span class="name">${startRank + i + 1}. ${f.name}</span>
+                                            <span class="code">${f.code} · ${f.type}</span>
+                                        </div>
+                                    </td>
+                                    <td class="num-cell net-value-cell">${FundAPI.formatNum(f.netValue)}</td>
+                                    <td class="num-cell change-cell">
+                                        <span class="change-badge ${changeClass === 'up' ? 'bg-up' : changeClass === 'down' ? 'bg-down' : 'bg-flat'}">
+                                            ${FundAPI.formatChange(change)}
+                                        </span>
+                                    </td>
+                                    <td class="action-cell">
+                                        <button class="action-btn ${isFav ? '' : 'add-fav-mini'}" data-action="${isFav ? 'remove' : 'add'}" data-code="${f.code}" data-name="${f.name}" data-type="${f.type}">
+                                            ${isFav ? '移除自选' : '+ 自选'}
+                                        </button>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+            ${totalPages > 1 ? `
+                <div class="ranking-pagination">
+                    <button class="page-btn" data-page="1" ${page <= 1 ? 'disabled' : ''}>首页</button>
+                    <button class="page-btn" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>上一页</button>
+                    <span class="page-info">第 <strong>${page}</strong> / ${totalPages} 页</span>
+                    <button class="page-btn" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>下一页</button>
+                    <button class="page-btn" data-page="${totalPages}" ${page >= totalPages ? 'disabled' : ''}>末页</button>
+                </div>
+            ` : ''}
+        `;
+
         // 绑定行点击和自选事件
+        bindRankingEvents(container, sortType, order, fundType, isDaily);
+        updateRankingRefreshStatus(true);
+
+        // 自动刷新：周/月/年榜24小时
+        rankingRefreshTimer = setInterval(function () {
+            if (document.getElementById('rankingTable')) {
+                loadRanking(sortType, order, fundType);
+            }
+        }, 24 * 60 * 60 * 1000);
+    }
+
+    // 渲染日榜分页数据(从缓存)
+    function renderRankingPage(container, cached, page, sortType, order, fundType, myRequestId) {
+        if (myRequestId !== rankingRequestId) return;
+
+        var startIdx = (page - 1) * rankingPageSize;
+        var pageData = cached.ranking.slice(startIdx, startIdx + rankingPageSize);
+
+        if (pageData.length === 0) {
+            container.innerHTML = '<div class="empty-state"><div class="icon">📊</div><h3>没有更多数据</h3></div>';
+            return;
+        }
+
+        var changeColTitle = cached.actualNavPublished ? '今日涨跌幅' : '今日实时涨跌幅';
+        var totalPages = cached.totalPages;
+        var totalCount = cached.totalCount;
+        var startRank = startIdx;
+
+        container.innerHTML = `
+            <div class="ranking-info-bar">
+                <span>全市场共 <strong>${totalCount}</strong> 只基金，第 ${page}/${totalPages} 页（${changeColTitle}排序）</span>
+            </div>
+            <div class="ranking-table-fixed">
+                <table class="fund-table">
+                    <thead>
+                        <tr>
+                            <th>基金名称</th>
+                            <th class="text-right">${cached.actualNavPublished ? '最新净值' : '今日实时估值'}</th>
+                            <th class="text-right">${changeColTitle}</th>
+                            <th class="text-right">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rankingTbody">
+                        ${pageData.map(function (f, i) {
+                            var change = f.realtimeChange !== null ? f.realtimeChange : f.change;
+                            var changeClass = FundAPI.getChangeClass(change);
+                            var isFav = Store.isFavorite(f.code);
+                            return `
+                                <tr data-code="${f.code}" data-rank="${i}" style="transition: all 0.5s ease;">
+                                    <td class="col-name">
+                                        <div class="fund-name-cell">
+                                            <span class="name">${startRank + i + 1}. ${f.name}</span>
+                                            <span class="code">${f.code} · ${f.type}</span>
+                                        </div>
+                                    </td>
+                                    <td class="num-cell net-value-cell">${FundAPI.formatNum(f.netValue)}</td>
+                                    <td class="num-cell change-cell">
+                                        <span class="change-badge ${changeClass === 'up' ? 'bg-up' : changeClass === 'down' ? 'bg-down' : 'bg-flat'}">
+                                            ${FundAPI.formatChange(change)}
+                                        </span>
+                                    </td>
+                                    <td class="action-cell">
+                                        <button class="action-btn ${isFav ? '' : 'add-fav-mini'}" data-action="${isFav ? 'remove' : 'add'}" data-code="${f.code}" data-name="${f.name}" data-type="${f.type}">
+                                            ${isFav ? '移除自选' : '+ 自选'}
+                                        </button>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+            ${totalPages > 1 ? `
+                <div class="ranking-pagination">
+                    <button class="page-btn" data-page="1" ${page <= 1 ? 'disabled' : ''}>首页</button>
+                    <button class="page-btn" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>上一页</button>
+                    <span class="page-info">第 <strong>${page}</strong> / ${totalPages} 页</span>
+                    <button class="page-btn" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>下一页</button>
+                    <button class="page-btn" data-page="${totalPages}" ${page >= totalPages ? 'disabled' : ''}>末页</button>
+                </div>
+            ` : ''}
+        `;
+
+        bindRankingEvents(container, sortType, order, fundType, true);
+        updateRankingRefreshStatus(true);
+
+        // 日榜自动刷新15分钟
+        if (rankingRefreshTimer) { clearInterval(rankingRefreshTimer); rankingRefreshTimer = null; }
+        rankingRefreshTimer = setInterval(function () {
+            if (document.getElementById('rankingTable')) {
+                // 清缓存以重新获取实时数据
+                delete dailyRankingCacheMap[getRankingCacheKey(sortType, order, fundType)];
+                loadRanking(sortType, order, fundType);
+            }
+        }, 15 * 60 * 1000);
+    }
+
+    // 绑定榜单事件(行点击/自选/分页)
+    function bindRankingEvents(container, sortType, order, fundType, isDaily) {
         container.querySelectorAll('tr[data-code]').forEach(function (tr) {
             tr.addEventListener('click', function (e) {
                 if (e.target.classList.contains('action-btn')) return;
@@ -1490,27 +1547,14 @@
                 handleFavToggle(this);
             });
         });
-
-        // 绑定分页按钮
         container.querySelectorAll('.page-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 if (this.disabled) return;
                 rankingCurrentPage = parseInt(this.dataset.page);
-                loadRanking(currentRankingType, currentRankingOrder, currentFundType);
+                loadRanking(sortType, order, fundType);
                 container.scrollIntoView({ behavior: 'smooth', block: 'start' });
             });
         });
-
-        updateRankingRefreshStatus(true);
-
-        // 自动刷新：日榜15分钟（刷新时清缓存重新获取实时数据），周/月/年榜24小时
-        var refreshInterval = isDaily ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000;
-        rankingRefreshTimer = setInterval(function () {
-            if (document.getElementById('rankingTable')) {
-                if (isDaily) dailyRankingCache = null; // 清缓存以重新获取实时数据
-                loadRanking(sortType, order, fundType);
-            }
-        }, refreshInterval);
     }
 
     // ========== 搜索页 ==========
