@@ -1197,10 +1197,10 @@
 
         var page = rankingCurrentPage;
         var isDaily = (sortType === 'RZDF');
-        var cacheKey = getRankingCacheKey(sortType, order, fundType);
+        var cacheKey = getRankingCacheKey(sortType, order, fundType) + '_p' + page;
 
         // 优先显示已有缓存数据(立即显示,不等加载)
-        if (isDaily && dailyRankingCacheMap[cacheKey]) {
+        if (dailyRankingCacheMap[cacheKey]) {
             var cachedData = dailyRankingCacheMap[cacheKey];
             renderRankingPage(container, cachedData, page, sortType, order, fundType, myRequestId);
             // 缓存超过30秒才后台刷新,否则直接用缓存
@@ -1217,130 +1217,65 @@
         }
 
         if (isDaily) {
-            // ===== 日涨跌榜：获取大量候选 → 实时估值 → 重排序 → 客户端分页 =====
-            // 检查候选池是否可复用(同sortType+fundType,不论order,5分钟内)
-            var poolValid = rankingCandidatePool &&
-                rankingCandidatePool.sortType === sortType &&
-                rankingCandidatePool.fundType === fundType &&
-                (Date.now() - rankingCandidatePool.time < 300000);
+            // ===== 日涨跌榜：服务端分页(覆盖全市场) + 当前页实时估值增强 =====
+            var rankingData = await Promise.race([
+                FundAPI.getFundRankingWithTotal(sortType, rankingPageSize, order, fundType, page),
+                new Promise(function (resolve) { setTimeout(function () { resolve({ funds: [], total: 0 }); }, 15000); })
+            ]);
+            var candidates = rankingData.funds || [];
+            var totalCount = rankingData.total || candidates.length;
 
-            var dailyCandidates, dailyTotal, dailyEstimates, actualNavPublished;
-
-            if (poolValid) {
-                // 复用候选池,无需重新拉取
-                dailyCandidates = rankingCandidatePool.candidates;
-                dailyTotal = rankingCandidatePool.total;
-                dailyEstimates = rankingCandidatePool.estimates;
-                actualNavPublished = rankingCandidatePool.actualNavPublished;
-            } else {
-                // 拉取500只候选基金
-                var dailyData = await Promise.race([
-                    FundAPI.getFundRankingWithTotal(sortType, 500, order, fundType, 1),
-                    new Promise(function (resolve) { setTimeout(function () { resolve({ funds: [], total: 0 }); }, 15000); })
-                ]);
-                dailyCandidates = dailyData.funds || [];
-                dailyTotal = dailyData.total || dailyCandidates.length;
-
-                if (!dailyCandidates || dailyCandidates.length === 0) {
-                    if (myRequestId !== rankingRequestId) return;
-                    container.innerHTML = `
-                        <div class="empty-state">
-                            <div class="icon">📊</div>
-                            <h3>暂无排行数据</h3>
-                            <p>数据接口可能暂时不可用,请稍后重试</p>
-                        </div>
-                    `;
-                    updateRankingRefreshStatus(false);
-                    return;
-                }
-
-                // 批量获取实时估值
-                var dailyCodes = dailyCandidates.map(function (f) { return f.code; });
-                dailyEstimates = await Promise.race([
-                    FundAPI.batchRealtimeEstimate(dailyCodes),
-                    new Promise(function (resolve) { setTimeout(function () { resolve([]); }, 15000); })
-                ]);
-
+            if (!candidates || candidates.length === 0) {
                 if (myRequestId !== rankingRequestId) return;
-
-                // 检查当日实际净值是否已公布
-                actualNavPublished = false;
-                if (dailyCandidates.length > 0) {
-                    var todayStr = '';
-                    if (dailyEstimates.length > 0 && dailyEstimates[0].gztime) {
-                        todayStr = dailyEstimates[0].gztime.substring(0, 10);
-                    }
-                    if (!todayStr) {
-                        var now = new Date();
-                        todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
-                    }
-                    var fundsWithEstimate = [];
-                    for (var ci = 0; ci < dailyCandidates.length && fundsWithEstimate.length < 3; ci++) {
-                        var estCheck = dailyEstimates.find(function (e) { return e.fundcode === dailyCandidates[ci].code; });
-                        if (estCheck) fundsWithEstimate.push(dailyCandidates[ci].code);
-                    }
-                    for (var cj = 0; cj < fundsWithEstimate.length && !actualNavPublished; cj++) {
-                        try {
-                            var histResult = await FundAPI.getHistoryNav(fundsWithEstimate[cj], 1, 1);
-                            if (histResult && histResult.list && histResult.list.length > 0 && histResult.list[0].date === todayStr) {
-                                actualNavPublished = true;
-                            }
-                        } catch (e) { /* 忽略检查失败 */ }
-                    }
-                }
-
-                // 保存候选池(供涨幅/跌幅榜复用)
-                rankingCandidatePool = {
-                    sortType: sortType, fundType: fundType,
-                    candidates: dailyCandidates, total: dailyTotal,
-                    estimates: dailyEstimates, actualNavPublished: actualNavPublished,
-                    time: Date.now()
-                };
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">📊</div>
+                        <h3>暂无排行数据</h3>
+                        <p>数据接口可能暂时不可用,请稍后重试</p>
+                    </div>
+                `;
+                updateRankingRefreshStatus(false);
+                return;
             }
 
-            // 合并数据并按order排序
-            var dailyRanking = dailyCandidates.map(function (f) {
-                var est = dailyEstimates.find(function (e) { return e.fundcode === f.code; });
-                if (est && actualNavPublished) {
-                    var estDwjz = Number(est.dwjz) || 0;
-                    var rankNav = Number(f.netValue) || 0;
-                    if (Math.abs(estDwjz - rankNav) < 0.0001) {
-                        f.realtimeChange = est.gszzl;
-                        f.netValue = est.gsz;
-                        f.hasRealtime = true;
-                    } else {
-                        f.realtimeChange = f.change;
-                        f.netValue = f.netValue;
-                        f.hasRealtime = false;
-                    }
-                } else if (est) {
+            // 批量获取当前页(约20只)的实时估值
+            var pageCodes = candidates.map(function (f) { return f.code; });
+            var pageEstimates = [];
+            try {
+                pageEstimates = await Promise.race([
+                    FundAPI.batchRealtimeEstimate(pageCodes),
+                    new Promise(function (resolve) { setTimeout(function () { resolve([]); }, 8000); })
+                ]);
+            } catch (e) { /* 估值失败不影响榜单显示 */ }
+
+            if (myRequestId !== rankingRequestId) return;
+
+            // 合并实时估值数据
+            var dailyRanking = candidates.map(function (f) {
+                var est = pageEstimates.find(function (e) { return e.fundcode === f.code; });
+                if (est && est.gszzl !== null && est.gszzl !== undefined) {
+                    // 有实时估值,用估值涨跌幅
                     f.realtimeChange = est.gszzl;
                     f.netValue = est.gsz;
                     f.hasRealtime = true;
                 } else {
+                    // 无估值,用API返回的涨跌幅
                     f.realtimeChange = f.change;
                     f.hasRealtime = false;
                 }
                 return f;
             });
 
-            dailyRanking.sort(function (a, b) {
-                var aVal = a.realtimeChange !== null ? a.realtimeChange : a.change;
-                var bVal = b.realtimeChange !== null ? b.realtimeChange : b.change;
-                if (order === 'desc') return bVal - aVal;
-                return aVal - bVal;
-            });
-
-            // 写入多Key缓存
+            // 写入缓存
             dailyRankingCacheMap[cacheKey] = {
                 ranking: dailyRanking,
-                totalCount: dailyTotal,
-                totalPages: Math.ceil(dailyRanking.length / rankingPageSize),
-                actualNavPublished: actualNavPublished,
+                totalCount: totalCount,
+                totalPages: Math.ceil(totalCount / rankingPageSize),
+                actualNavPublished: false,
                 time: Date.now()
             };
 
-            // 渲染(从缓存)
+            // 渲染
             var cached = dailyRankingCacheMap[cacheKey];
             if (cached) {
                 renderRankingPage(container, cached, page, sortType, order, fundType, myRequestId);

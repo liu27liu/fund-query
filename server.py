@@ -2599,9 +2599,9 @@ def _refresh_hot_cache():
             _set_cache('news_15', result)
     except Exception as e:
         print(f'[预热] 资讯失败: {e}', flush=True)
-    # 预热基金排行(默认参数:日涨幅降序/全部/500条)
+    # 预热基金排行(默认参数:日涨幅降序/全部/第1页20条)
     try:
-        ranking = _fetch_ranking('ranking_RZDF_500_1_all_desc', 'RZDF', '500', '1', 'all', 'desc')
+        ranking = _fetch_ranking('ranking_RZDF_20_1_all_desc', 'RZDF', '20', '1', 'all', 'desc')
         if ranking:
             print('[预热] 基金排行预热完成', flush=True)
     except Exception as e:
