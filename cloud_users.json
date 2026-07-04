@@ -252,5 +252,15 @@
     ],
     "holdings": [],
     "createTime": 1783160004.1943493
+  },
+  "testuser_del_test": {
+    "password": "9e30c07c21e7c4dd86056afc45dc3778026c7e117fa39f2acadc1f97136ac28d",
+    "salt": "757769",
+    "favorites": [],
+    "groups": [
+      "全部"
+    ],
+    "holdings": [],
+    "createTime": 1783160039.1735911
   }
 }
