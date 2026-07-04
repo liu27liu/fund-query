@@ -914,45 +914,46 @@ def api_ranking():
 @app.route('/api/news')
 def api_news():
     """7x24实时财经资讯 - 对接东方财富7x24快讯接口"""
+    page_size = request.args.get('size', '15')
+    sort_end = request.args.get('sortEnd', '')
+    cache_key = f'news_{page_size}'
+
     # stale-while-revalidate
-    cached = _get_cache('news', 30)
+    cached = _get_cache(cache_key, 30)
     if cached is not None:
         return jsonify(cached)
 
     # 检查过期缓存
-    stale = _hot_cache.get('news')
+    stale = _hot_cache.get(cache_key)
     if stale and stale.get('data'):
         def _bg_refresh_news():
             try:
-                result = _fetch_news()
+                result = _fetch_news(page_size, sort_end)
                 if result:
-                    _set_cache('news', result)
+                    _set_cache(cache_key, result)
             except Exception:
                 pass
         threading.Thread(target=_bg_refresh_news, daemon=True).start()
         return jsonify(stale['data'])
 
     # 完全没有缓存, 同步获取
-    lock = _get_key_lock('news')
+    lock = _get_key_lock(cache_key)
     if not lock.acquire(blocking=False):
         time.sleep(0.5)
-        cached = _get_cache('news', 60)
+        cached = _get_cache(cache_key, 60)
         if cached is not None:
             return jsonify(cached)
 
     try:
-        result = _fetch_news()
-        _set_cache('news', result)
+        result = _fetch_news(page_size, sort_end)
+        _set_cache(cache_key, result)
         return jsonify(result)
     finally:
         lock.release()
 
 
-def _fetch_news():
-    """实际采集资讯数据"""
-    page_size = request.args.get('size', '15')
-    sort_end = request.args.get('sortEnd', '')
-
+def _fetch_news(page_size='15', sort_end=''):
+    """实际采集资讯数据(参数化, 不依赖request上下文, 可在后台线程调用)"""
     # 主接口: getFastNewsList (7x24实时快讯)
     url = 'https://np-listapi.eastmoney.com/comm/web/getFastNewsList'
     params = {
@@ -2417,6 +2418,12 @@ def _refresh_hot_cache():
         _sector_cache['sectors_概念题材'] = {'data': results, 'time': time.time()}
     except Exception as e:
         print(f'[预热] 概念题材失败: {e}', flush=True)
+    try:
+        result = _fetch_news('15')
+        if result:
+            _set_cache('news_15', result)
+    except Exception as e:
+        print(f'[预热] 资讯失败: {e}', flush=True)
 
 
 def _prewarm_loop():
