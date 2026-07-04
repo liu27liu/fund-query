@@ -653,28 +653,39 @@ const Store = (function () {
     function calcPositionProfit(position, currentNav, dailyChangeRate) {
         try {
             if (!position) {
-                return { cost: 0, currentValue: 0, holdingProfit: 0, holdingProfitRate: 0, realizedProfit: 0, cumulativeProfit: 0 };
+                return { cost: 0, currentValue: 0, holdingProfit: 0, holdingProfitRate: 0, realizedProfit: 0, cumulativeProfit: 0, dailyProfit: 0, dailyProfitRate: 0 };
             }
             var nav = Number(currentNav) || 0;
             var changeRate = Number(dailyChangeRate) || 0;  // 百分比，如 1.52
             var changeDecimal = changeRate / 100;            // 小数，如 0.0152
 
-            var currentValue = nav * position.currentShares;
-            var holdingProfit = changeDecimal * currentValue;        // 持仓收益 = 日涨跌幅 × 当前持仓市值
-            var holdingProfitRate = changeDecimal;                    // 收益率 = 日涨跌幅
-            var cumulativeProfit = holdingProfit + position.realizedProfit;  // 累计收益 = 持仓收益 + 已实现收益
+            var currentShares = position.currentShares || 0;
+            var cost = position.currentCost || 0;            // = costPrice * currentShares
+            var currentValue = nav * currentShares;          // 当前市值
+
+            // 持仓盈亏(浮动盈亏) = 当前市值 - 持仓成本
+            var holdingProfit = currentValue - cost;
+            // 持仓收益率 = 持仓盈亏 / 持仓成本
+            var holdingProfitRate = cost > 0 ? (holdingProfit / cost) : 0;
+            // 累计盈亏 = 浮动盈亏 + 已实现收益(卖出盈亏)
+            var cumulativeProfit = holdingProfit + (position.realizedProfit || 0);
+            // 当日收益 = 日涨跌幅 × 当前市值(仅参考)
+            var dailyProfit = changeDecimal * currentValue;
+            var dailyProfitRate = changeDecimal;
 
             return {
-                cost: position.currentCost,
+                cost: cost,
                 currentValue: currentValue,
                 holdingProfit: holdingProfit,
                 holdingProfitRate: holdingProfitRate,
-                realizedProfit: position.realizedProfit,
-                cumulativeProfit: cumulativeProfit
+                realizedProfit: position.realizedProfit || 0,
+                cumulativeProfit: cumulativeProfit,
+                dailyProfit: dailyProfit,
+                dailyProfitRate: dailyProfitRate
             };
         } catch (e) {
             console.error('计算聚合持仓盈亏失败:', e);
-            return { cost: 0, currentValue: 0, holdingProfit: 0, holdingProfitRate: 0, realizedProfit: 0, cumulativeProfit: 0 };
+            return { cost: 0, currentValue: 0, holdingProfit: 0, holdingProfitRate: 0, realizedProfit: 0, cumulativeProfit: 0, dailyProfit: 0, dailyProfitRate: 0 };
         }
     }
 
@@ -695,21 +706,29 @@ const Store = (function () {
             var totalCost = 0;
             var totalHoldingProfit = 0;
             var totalRealizedProfit = 0;
+            var totalDailyProfit = 0;
             var count = 0;
 
             positions.forEach(function (p) {
-                var nav = navMap[p.code];
-                if (nav === undefined || nav === null) return;
                 var changeRate = changeRateMap[p.code] || 0;
+                // 已清仓持仓无净值但仍有已实现收益,不应跳过
+                var nav = navMap[p.code];
+                if (nav === undefined || nav === null) {
+                    // 估值缺失:已清仓则用0,未清仓则用成本价
+                    nav = (p.currentShares || 0) <= 0.0001 ? 0 : (p.costPrice || 0);
+                }
                 var calc = calcPositionProfit(p, nav, changeRate);
                 totalValue += calc.currentValue;
                 totalCost += calc.cost;
                 totalHoldingProfit += calc.holdingProfit;
                 totalRealizedProfit += calc.realizedProfit;
+                totalDailyProfit += calc.dailyProfit;
                 count++;
             });
 
-            var totalProfitRate = totalValue > 0 ? (totalHoldingProfit / totalValue) : 0;
+            // 持仓收益率 = 持仓盈亏 / 持仓成本
+            var totalProfitRate = totalCost > 0 ? (totalHoldingProfit / totalCost) : 0;
+            // 累计盈亏 = 浮动盈亏 + 已实现收益
             var totalCumulativeProfit = totalHoldingProfit + totalRealizedProfit;
 
             return {
@@ -719,11 +738,12 @@ const Store = (function () {
                 totalProfitRate: totalProfitRate,
                 totalRealizedProfit: totalRealizedProfit,
                 totalCumulativeProfit: totalCumulativeProfit,
+                totalDailyProfit: totalDailyProfit,
                 count: count
             };
         } catch (e) {
             console.error('计算总聚合盈亏失败:', e);
-            return { totalValue: 0, totalCost: 0, totalHoldingProfit: 0, totalProfitRate: 0, totalRealizedProfit: 0, totalCumulativeProfit: 0, count: 0 };
+            return { totalValue: 0, totalCost: 0, totalHoldingProfit: 0, totalProfitRate: 0, totalRealizedProfit: 0, totalCumulativeProfit: 0, totalDailyProfit: 0, count: 0 };
         }
     }
 

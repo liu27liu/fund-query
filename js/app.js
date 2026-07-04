@@ -1888,7 +1888,8 @@
                 navMap[p.code] = est.gsz || est.dwjz || p.costPrice;
                 changeRateMap[p.code] = est.gszzl || 0;
             } else {
-                navMap[p.code] = p.costPrice;
+                // 无估值:已清仓用0,未清仓用成本价
+                navMap[p.code] = (p.currentShares || 0) <= 0.0001 ? 0 : p.costPrice;
                 changeRateMap[p.code] = 0;
             }
         });
@@ -2070,17 +2071,18 @@
         }
 
         var rows = positions.map(function (p) {
-            var nav = navMap[p.code] || p.costPrice;
+            var nav = navMap[p.code] || (p.currentShares > 0.0001 ? p.costPrice : 0);
             var changeRate = changeRateMap[p.code] || 0;
-            var currentShares = p.currentShares || 0;
-            var currentValue = nav * currentShares;
-            var costValue = (p.avgCostPrice || p.costPrice) * currentShares;
-            var holdingProfit = currentValue - costValue;
-            var profitRate = costValue > 0 ? (holdingProfit / costValue * 100) : 0;
+            // 统一使用Store.calcPositionProfit计算,与刷新路径一致
+            var calc = Store.calcPositionProfit(p, nav, changeRate);
+            var currentValue = calc.currentValue;
+            var holdingProfit = calc.holdingProfit;
+            var profitRate = calc.holdingProfitRate * 100;
+            var cumulativeProfit = calc.cumulativeProfit;
             var changeClass = changeRate >= 0 ? 'profit-positive' : 'profit-negative';
             var profitClass = holdingProfit >= 0 ? 'profit-positive' : 'profit-negative';
-            var est = estimates ? estimates.find(function (e) { return e.fundcode === p.code; }) : null;
-            var isCleared = p.isCleared || currentShares === 0;
+            var cumClass = cumulativeProfit >= 0 ? 'profit-positive' : 'profit-negative';
+            var isCleared = p.isCleared || (p.currentShares || 0) === 0;
 
             return `
                 <tr data-code="${p.code}" class="${isCleared ? 'cleared-row' : ''}">
@@ -2093,8 +2095,8 @@
                     </td>
                     <td class="num-cell">${FundAPI.formatNum(nav)}</td>
                     <td class="num-cell ${changeClass}">${changeRate >= 0 ? '+' : ''}${changeRate.toFixed(2)}%</td>
-                    <td class="num-cell">${currentShares.toFixed(2)}</td>
-                    <td class="num-cell">${FundAPI.formatNum(p.avgCostPrice || p.costPrice)}</td>
+                    <td class="num-cell">${(p.currentShares || 0).toFixed(2)}</td>
+                    <td class="num-cell">${FundAPI.formatNum(p.costPrice)}</td>
                     <td class="num-cell">¥${formatMoney(currentValue)}</td>
                     <td class="num-cell ${profitClass}">${holdingProfit >= 0 ? '+' : ''}${formatMoney(holdingProfit)}</td>
                     <td class="num-cell ${profitClass}">${profitRate >= 0 ? '+' : ''}${profitRate.toFixed(2)}%</td>
@@ -2399,7 +2401,7 @@
         var groupKey = isUngrouped ? '__ungrouped__' : groupName;
 
         var rowsHtml = groupPositions.map(function (p) {
-            var currentNav = navMap[p.code] || p.costPrice;
+            var currentNav = navMap[p.code] || (p.currentShares > 0.0001 ? p.costPrice : 0);
             var dailyChange = changeRateMap[p.code] || 0;
             var calc = Store.calcPositionProfit(p, currentNav, dailyChange);
             var pClass = calc.holdingProfit >= 0 ? 'profit-positive' : 'profit-negative';
@@ -2582,7 +2584,7 @@
 
         // 更新每行数据
         positions.forEach(function (p) {
-            var currentNav = navMap[p.code] || p.costPrice;
+            var currentNav = navMap[p.code] || (p.currentShares > 0.0001 ? p.costPrice : 0);
             var dailyChange = changeRateMap[p.code] || 0;
             var calc = Store.calcPositionProfit(p, currentNav, dailyChange);
             var pClass = calc.holdingProfit >= 0 ? 'profit-positive' : 'profit-negative';
