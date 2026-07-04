@@ -3500,6 +3500,36 @@ select.form-input {
 .announcement-close:hover { color: #333; }
 
 /* ========== 响应式 ========== */
+
+/* ---- 平板适配 (768px - 1024px) ---- */
+@media (max-width: 1024px) {
+    .summary-grid,
+    .summary-grid-5 {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
+    .portal-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    .header-inner {
+        padding: 0 16px;
+        gap: 12px;
+    }
+    .nav-menu {
+        gap: 4px;
+    }
+    .nav-menu a {
+        padding: 6px 10px;
+        font-size: 13px;
+    }
+    .app-main {
+        padding: 16px;
+    }
+    .home-hero {
+        padding: 36px 24px;
+    }
+}
+
+/* ---- 手机适配 (<=768px) ---- */
 @media (max-width: 768px) {
     .header-inner {
         gap: 12px;
@@ -3565,9 +3595,10 @@ select.form-input {
         grid-template-columns: 1fr;
     }
 
-    /* 持仓卡片移动端单列 */
-    .summary-grid {
-        grid-template-columns: repeat(2, 1fr);
+    /* 持仓卡片移动端 */
+    .summary-grid,
+    .summary-grid-5 {
+        grid-template-columns: repeat(2, 1fr) !important;
         gap: 12px;
     }
 
@@ -3619,8 +3650,157 @@ select.form-input {
     .toast {
         min-width: 0;
     }
+
+    /* 持仓页头部按钮换行 */
+    .favorites-header {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .add-holding-btn,
+    #newGroupBtn {
+        font-size: 13px;
+        padding: 6px 12px;
+        white-space: nowrap;
+    }
+
+    /* 表格移动端:移除固定最小宽度,允许内容自适应 */
+    .fund-table {
+        min-width: 0;
+    }
+    .portfolio-table {
+        min-width: 0;
+    }
+    #searchResultTable .fund-list-table {
+        min-width: 0;
+    }
+
+    /* 基金表格卡片化:隐藏次要列,保留核心信息 */
+    .fund-table thead {
+        display: none;
+    }
+    .fund-table,
+    .portfolio-table,
+    #searchResultTable .fund-list-table {
+        display: block;
+    }
+    .fund-table tbody,
+    .portfolio-table tbody,
+    #searchResultTable .fund-list-table tbody {
+        display: block;
+    }
+    .fund-table tbody tr,
+    .portfolio-table tbody tr,
+    #searchResultTable .fund-list-table tbody tr {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 4px 8px;
+        padding: 12px;
+        border-bottom: 1px solid var(--border-light);
+        align-items: center;
+    }
+
+    /* 表格单元格自适应 */
+    .fund-table td,
+    .portfolio-table td,
+    #searchResultTable .fund-list-table td {
+        display: block;
+        text-align: right !important;
+        font-size: 13px;
+        padding: 2px 4px;
+    }
+
+    /* 基金名称列跨两行 */
+    .fund-table td.col-name,
+    .fund-table td.col-checkbox,
+    .portfolio-table td.col-name,
+    .portfolio-table td.col-checkbox,
+    #searchResultTable .fund-list-table td:first-child {
+        grid-column: 1 / -1;
+        text-align: left !important;
+    }
+
+    /* 操作按钮区域跨两行 */
+    .portfolio-table td.action-cell {
+        grid-column: 1 / -1;
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    /* 数值列左对齐标签 */
+    .fund-table td.num-cell,
+    .portfolio-table td.num-cell {
+        text-align: right !important;
+    }
+
+    /* 搜索结果表格简化 */
+    #searchResultTable .fund-list-table tbody tr {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    /* 分组头部移动端 */
+    .portfolio-group-header {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .group-header-right {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .group-stat {
+        font-size: 12px;
+    }
+
+    /* 分页器移动端 */
+    .pagination {
+        flex-wrap: wrap;
+        gap: 4px;
+        justify-content: center;
+    }
+    .pagination a,
+    .pagination span {
+        padding: 6px 8px;
+        font-size: 13px;
+    }
+
+    /* 基金类型标签移动端 */
+    .fund-type-tabs {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .fund-type-tab {
+        font-size: 13px;
+        padding: 4px 10px;
+    }
+
+    /* 批量操作栏移动端 */
+    .batch-action-bar {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .batch-btn {
+        font-size: 13px;
+        padding: 6px 10px;
+    }
+
+    /* 表单移动端 */
+    .form-row {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    /* 提示信息栏 */
+    .tip-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        padding: 8px 12px;
+        font-size: 13px;
+    }
 }
 
+/* ---- 小屏手机适配 (<=480px) ---- */
 @media (max-width: 480px) {
     .fund-card {
         padding: 18px;
@@ -3632,6 +3812,55 @@ select.form-input {
 
     .detail-metrics {
         grid-template-columns: 1fr;
+    }
+
+    /* 所有网格降为单列 */
+    .summary-grid,
+    .summary-grid-5 {
+        grid-template-columns: 1fr !important;
+    }
+    .portal-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* 表格行单列布局 */
+    .fund-table tbody tr,
+    .portfolio-table tbody tr,
+    #searchResultTable .fund-list-table tbody tr {
+        grid-template-columns: 1fr;
+    }
+
+    .home-hero h1 {
+        font-size: 18px;
+    }
+    .hero-stats {
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start;
+    }
+
+    /* 持仓页按钮堆叠 */
+    .favorites-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .portfolio-toolbar {
+        display: flex;
+        gap: 8px;
+    }
+    .add-holding-btn,
+    #newGroupBtn {
+        flex: 1;
+        text-align: center;
+    }
+
+    /* 弹窗表单紧凑 */
+    .form-actions {
+        flex-direction: column-reverse;
+        gap: 8px;
+    }
+    .form-actions button {
+        width: 100%;
     }
 }
 
