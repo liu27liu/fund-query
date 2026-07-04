@@ -3602,6 +3602,11 @@ select.form-input {
         gap: 12px;
     }
 
+    /* 首页区块移动端2列 */
+    .portal-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
     .summary-value {
         font-size: 18px;
     }
