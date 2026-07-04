@@ -7,25 +7,53 @@
 
 /* ========== 全局变量 ========== */
 :root {
-    /* 主色调 */
+    /* 主色调 - 蓝色系 */
     --primary: #2563eb;
     --primary-2: #3b82f6;
     --primary-dark: #1d4ed8;
     --primary-light: #eff6ff;
     --primary-gradient: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
 
-    /* 涨跌色（A股习惯：涨红跌绿，柔和版） */
-    --up: #e11d48;
-    --up-bg: #fff1f2;
-    --down: #16a34a;
-    --down-bg: #f0fdf4;
-    --success: #16a34a;
-    --danger: #e11d48;
-    --warning: #faad14;
+    /* 辅助色 - 增加色彩层次 */
+    --accent-purple: #7c3aed;
+    --accent-purple-light: #f5f3ff;
+    --accent-cyan: #0891b2;
+    --accent-cyan-light: #ecfeff;
+    --accent-orange: #ea580c;
+    --accent-orange-light: #fff7ed;
+    --accent-teal: #0d9488;
+    --accent-teal-light: #f0fdfa;
 
-    /* 背景 */
+    /* 基金类型语义色 */
+    --type-stock: #2563eb;
+    --type-stock-bg: #eff6ff;
+    --type-mixed: #7c3aed;
+    --type-mixed-bg: #f5f3ff;
+    --type-bond: #0891b2;
+    --type-bond-bg: #ecfeff;
+    --type-qdii: #ea580c;
+    --type-qdii-bg: #fff7ed;
+    --type-index: #0d9488;
+    --type-index-bg: #f0fdfa;
+    --type-lof: #db2777;
+    --type-lof-bg: #fdf2f8;
+    --type-default: #64748b;
+    --type-default-bg: #f1f5f9;
+
+    /* 涨跌色（A股习惯：涨红跌绿，强化版） */
+    --up: #dc2626;
+    --up-bg: #fef2f2;
+    --up-border: #fecaca;
+    --down: #059669;
+    --down-bg: #ecfdf5;
+    --down-border: #bbf7d0;
+    --success: #059669;
+    --danger: #dc2626;
+    --warning: #f59e0b;
+
+    /* 背景 - 增加层次 */
     --bg: #f8fafc;
-    --bg-gradient: linear-gradient(180deg, #f1f5f9 0%, #f8fafc 40%, #ffffff 100%);
+    --bg-gradient: linear-gradient(180deg, #eff6ff 0%, #f8fafc 30%, #ffffff 100%);
     --bg-secondary: #f1f5f9;
     --bg-tertiary: #e2e8f0;
     --bg-hover: #f1f5f9;
@@ -33,12 +61,12 @@
 
     /* 卡片 */
     --card-bg: #ffffff;
-    --card-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(37,99,235,0.04);
-    --card-shadow-hover: 0 8px 24px rgba(37,99,235,0.10), 0 2px 8px rgba(0,0,0,0.04);
+    --card-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(37,99,235,0.05);
+    --card-shadow-hover: 0 8px 28px rgba(37,99,235,0.12), 0 2px 8px rgba(0,0,0,0.04);
 
     /* 文字 */
     --text: #0f172a;
-    --text-secondary: #64748b;
+    --text-secondary: #475569;
     --text-tertiary: #94a3b8;
 
     /* 边框 */
@@ -441,7 +469,34 @@ ul, ol { list-style: none; }
     justify-content: center;
     font-size: 26px;
     flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+    transition: transform 0.25s var(--ease-out);
+}
+
+.portal-card:hover .portal-icon {
+    transform: scale(1.08) rotate(-3deg);
+}
+
+/* portal-icon 不同颜色变体 */
+.portal-icon.icon-blue {
+    background: linear-gradient(135deg, #2563eb, #3b82f6);
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+}
+.portal-icon.icon-purple {
+    background: linear-gradient(135deg, #7c3aed, #a855f7);
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
+}
+.portal-icon.icon-teal {
+    background: linear-gradient(135deg, #0d9488, #14b8a6);
+    box-shadow: 0 4px 14px rgba(13, 148, 136, 0.3);
+}
+.portal-icon.icon-orange {
+    background: linear-gradient(135deg, #ea580c, #f97316);
+    box-shadow: 0 4px 14px rgba(234, 88, 12, 0.3);
+}
+.portal-icon.icon-cyan {
+    background: linear-gradient(135deg, #0891b2, #06b6d4);
+    box-shadow: 0 4px 14px rgba(8, 145, 178, 0.3);
 }
 
 .portal-body {
@@ -567,25 +622,25 @@ ul, ol { list-style: none; }
 
 /* ========== 首页 Hero 区域 ========== */
 .home-hero {
-    background: linear-gradient(135deg, #1e40af 0%, #2563eb 45%, #3b82f6 100%);
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 30%, #4f46e5 60%, #7c3aed 100%);
     border-radius: var(--radius);
     padding: 48px 40px;
     color: #fff;
     margin-bottom: 28px;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 12px 32px rgba(37, 99, 235, 0.18);
+    box-shadow: 0 12px 40px rgba(79, 70, 229, 0.25);
 }
 
-/* 装饰性圆形 */
+/* 装饰性光斑 */
 .home-hero::before {
     content: '';
     position: absolute;
-    right: -80px;
-    top: -80px;
-    width: 260px;
-    height: 260px;
-    background: rgba(255, 255, 255, 0.12);
+    right: -60px;
+    top: -100px;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.3) 0%, transparent 70%);
     border-radius: 50%;
     pointer-events: none;
 }
@@ -593,14 +648,13 @@ ul, ol { list-style: none; }
 .home-hero::after {
     content: '';
     position: absolute;
-    right: 120px;
+    right: 100px;
     bottom: -120px;
-    width: 200px;
-    height: 200px;
-    background: rgba(19, 194, 194, 0.18);
+    width: 240px;
+    height: 240px;
+    background: radial-gradient(circle, rgba(6, 182, 212, 0.25) 0%, transparent 70%);
     border-radius: 50%;
     pointer-events: none;
-    filter: blur(2px);
 }
 
 /* 装饰性波浪（底部） */
@@ -615,7 +669,7 @@ ul, ol { list-style: none; }
 }
 
 .home-hero h1 {
-    font-size: 28px;
+    font-size: 30px;
     margin-bottom: 12px;
     position: relative;
     z-index: 1;
@@ -677,8 +731,8 @@ ul, ol { list-style: none; }
     top: 50%;
     transform: translateY(-50%);
     width: 4px;
-    height: 18px;
-    background: var(--primary-gradient);
+    height: 20px;
+    background: linear-gradient(180deg, var(--primary) 0%, var(--accent-purple) 100%);
     border-radius: 2px;
 }
 
@@ -730,9 +784,10 @@ ul, ol { list-style: none; }
 }
 
 .ranking-tab.active {
-    background: #fff;
+    background: var(--card-bg);
     color: var(--primary);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
+    font-weight: 600;
 }
 
 .ranking-refresh-bar {
@@ -795,7 +850,7 @@ ul, ol { list-style: none; }
     font-size: 15px;
     font-weight: 600;
     line-height: 1.4;
-    max-width: 180px;
+    max-width: 220px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -810,16 +865,54 @@ ul, ol { list-style: none; }
     letter-spacing: 0.5px;
 }
 
-/* 类型标签：渐变色背景 */
+/* 类型标签：语义色背景 */
 .fund-card-type {
     font-size: 11px;
     padding: 3px 10px;
     border-radius: var(--radius-pill);
-    background: linear-gradient(135deg, #eff6ff, #f0fdf4);
-    color: var(--primary);
+    background: var(--type-default-bg);
+    color: var(--type-default);
     white-space: nowrap;
     font-weight: 600;
-    border: 1px solid rgba(37, 99, 235, 0.10);
+    border: 1px solid transparent;
+}
+
+/* 基金类型语义色 */
+.fund-card-type[data-type="股票型"],
+.fund-card-type.type-stock {
+    background: var(--type-stock-bg);
+    color: var(--type-stock);
+}
+
+.fund-card-type[data-type="混合型"],
+.fund-card-type.type-mixed {
+    background: var(--type-mixed-bg);
+    color: var(--type-mixed);
+}
+
+.fund-card-type[data-type="债券型"],
+.fund-card-type.type-bond {
+    background: var(--type-bond-bg);
+    color: var(--type-bond);
+}
+
+.fund-card-type[data-type="QDII"],
+.fund-card-type.type-qdii {
+    background: var(--type-qdii-bg);
+    color: var(--type-qdii);
+}
+
+.fund-card-type[data-type="指数型"],
+.fund-card-type[data-type="ETF"],
+.fund-card-type.type-index {
+    background: var(--type-index-bg);
+    color: var(--type-index);
+}
+
+.fund-card-type[data-type="LOF"],
+.fund-card-type.type-lof {
+    background: var(--type-lof-bg);
+    color: var(--type-lof);
 }
 
 .fund-card-value {
@@ -877,13 +970,15 @@ ul, ol { list-style: none; }
 .bg-up {
     background: var(--up);
     color: #fff;
+    box-shadow: 0 1px 4px rgba(220, 38, 38, 0.25);
 }
 .bg-down {
     background: var(--down);
     color: #fff;
+    box-shadow: 0 1px 4px rgba(5, 150, 105, 0.25);
 }
 .bg-flat {
-    background: #d9dde3;
+    background: var(--text-tertiary);
     color: #fff;
 }
 
@@ -1498,9 +1593,9 @@ ul, ol { list-style: none; }
 .sector-card.sector-hot::before { height: 3px; }
 
 .sector-card:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    border-color: var(--primary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    border-color: var(--primary-2);
 }
 
 .sector-info {
@@ -1786,7 +1881,7 @@ ul, ol { list-style: none; }
 }
 
 .news-item:hover {
-    background: var(--bg-secondary);
+    background: linear-gradient(90deg, var(--primary-light) 0%, transparent 100%);
     margin: 0 -12px;
     padding: 14px 12px;
     border-radius: var(--radius-xs);
@@ -2638,7 +2733,7 @@ select.form-input {
     background: var(--card-bg);
     border-radius: var(--radius);
     overflow: hidden;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--card-shadow);
 }
 
 /* 表格容器支持水平滚动 - 搜索页专用 */
@@ -2660,7 +2755,7 @@ select.form-input {
     font-weight: 600;
     font-size: 12px;
     color: var(--text-secondary);
-    background: var(--bg-secondary);
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
     border-bottom: 2px solid var(--border);
     white-space: nowrap;
     position: sticky;
@@ -2670,7 +2765,7 @@ select.form-input {
 
 .fund-list-table th.sortable:hover {
     color: var(--primary);
-    background: var(--primary-light);
+    background: linear-gradient(180deg, var(--primary-light) 0%, #e0e7ff 100%);
 }
 
 .fund-list-table td {
@@ -2685,7 +2780,7 @@ select.form-input {
 }
 
 .fund-list-table tbody tr:hover {
-    background: var(--bg-secondary);
+    background: linear-gradient(90deg, var(--primary-light) 0%, #f8fafc 100%);
 }
 
 .fund-list-table .col-code {
@@ -2751,6 +2846,7 @@ select.form-input {
 .page-btn:hover {
     border-color: var(--primary-2);
     color: var(--primary);
+    background: var(--primary-light);
 }
 
 .page-btn.active {
@@ -2758,6 +2854,7 @@ select.form-input {
     color: #fff;
     border-color: transparent;
     font-weight: 600;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
 }
 
 .page-ellipsis {

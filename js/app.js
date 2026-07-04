@@ -303,7 +303,7 @@
             <!-- 门户卡片网格 -->
             <div class="portal-grid">
                 <div class="portal-card" data-target="marketSection">
-                    <div class="portal-icon" style="background: linear-gradient(135deg, #1677ff, #4096ff);">📈</div>
+                    <div class="portal-icon icon-blue">📈</div>
                     <div class="portal-body">
                         <div class="portal-title">${T('text_portal_market_title', '大盘指数')}</div>
                         <div class="portal-desc">${T('text_portal_market_desc', 'A股 · 美股 · 全球实时行情')}</div>
@@ -311,7 +311,7 @@
                     <div class="portal-arrow">›</div>
                 </div>
                 <div class="portal-card" data-target="sectorSection">
-                    <div class="portal-icon" style="background: linear-gradient(135deg, #13c2c2, #36cfc9);">🏭</div>
+                    <div class="portal-icon icon-teal">🏭</div>
                     <div class="portal-body">
                         <div class="portal-title">${T('text_portal_sector_title', '行业板块')}</div>
                         <div class="portal-desc">${T('text_portal_sector_desc', '赛道行情 · 涨跌排名')}</div>
@@ -319,7 +319,7 @@
                     <div class="portal-arrow">›</div>
                 </div>
                 <div class="portal-card" data-target="rankingSection">
-                    <div class="portal-icon" style="background: linear-gradient(135deg, #722ed1, #9254de);">📊</div>
+                    <div class="portal-icon icon-purple">📊</div>
                     <div class="portal-body">
                         <div class="portal-title">${T('text_portal_ranking_title', '基金榜单')}</div>
                         <div class="portal-desc">${T('text_portal_ranking_desc', '日涨跌 · 周涨幅 · 年涨幅')}</div>
@@ -327,7 +327,7 @@
                     <div class="portal-arrow">›</div>
                 </div>
                 <div class="portal-card" data-target="newsSection">
-                    <div class="portal-icon" style="background: linear-gradient(135deg, #fa541c, #ff7a45);">📰</div>
+                    <div class="portal-icon icon-orange">📰</div>
                     <div class="portal-body">
                         <div class="portal-title">${T('text_portal_news_title', '实时资讯')}</div>
                         <div class="portal-desc">${T('text_portal_news_desc', '7×24小时财经快讯')}</div>
@@ -657,7 +657,7 @@
                             <div class="fund-card-name" title="${f.name}">${f.name}</div>
                             <div class="fund-card-code">${f.code}</div>
                         </div>
-                        <span class="fund-card-type">${f.type}</span>
+                        <span class="fund-card-type" data-type="${f.type}">${f.type}</span>
                     </div>
                     <div class="fund-card-value">
                         <span class="fund-card-dwjz ${changeClass}">${FundAPI.formatNum(f.gsz || f.dwjz)}</span>
