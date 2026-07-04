@@ -2703,7 +2703,7 @@ select.form-input {
     -webkit-overflow-scrolling: touch;
 }
 
-.type-tab {
+.fund-type-tab {
     padding: 8px 18px;
     font-size: 14px;
     font-weight: 500;
@@ -2716,11 +2716,11 @@ select.form-input {
     flex-shrink: 0;
 }
 
-.type-tab:hover {
+.fund-type-tab:hover {
     color: var(--primary);
 }
 
-.type-tab.active {
+.fund-type-tab.active {
     color: var(--primary);
     border-bottom-color: var(--primary);
     font-weight: 600;

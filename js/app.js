@@ -1392,7 +1392,7 @@
 
                 <div class="fund-type-tabs">
                     ${typeTabs.map(function (t) {
-                        return '<span class="type-tab' + (t.key === searchState.type ? ' active' : '') + '" data-type="' + t.key + '">' + t.label + '</span>';
+                        return '<span class="fund-type-tab' + (t.key === searchState.type ? ' active' : '') + '" data-type="' + t.key + '">' + t.label + '</span>';
                     }).join('')}
                 </div>
 
@@ -1408,9 +1408,9 @@
         `;
 
         // 绑定类型Tab
-        app.querySelectorAll('.type-tab').forEach(function (tab) {
+        app.querySelectorAll('.fund-type-tab').forEach(function (tab) {
             tab.addEventListener('click', function () {
-                app.querySelectorAll('.type-tab').forEach(function (t) { t.classList.remove('active'); });
+                app.querySelectorAll('.fund-type-tab').forEach(function (t) { t.classList.remove('active'); });
                 this.classList.add('active');
                 searchState.type = this.dataset.type;
                 searchState.page = 1;
