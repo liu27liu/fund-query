@@ -1492,6 +1492,8 @@
                         <th class="text-right sortable" data-sort="week">近一周${sortArrow('week')}</th>
                         <th class="text-right sortable" data-sort="month">近一月${sortArrow('month')}</th>
                         <th class="text-right sortable" data-sort="quarter">近三月${sortArrow('quarter')}</th>
+                        <th class="text-right sortable" data-sort="year">近一年${sortArrow('year')}</th>
+                        <th class="text-right sortable" data-sort="since">成立以来${sortArrow('since')}</th>
                         <th class="text-right">操作</th>
                     </tr>
                 </thead>
@@ -1501,6 +1503,8 @@
                         var weekClass = FundAPI.getChangeClass(parseFloat(f.week) || 0);
                         var monthClass = FundAPI.getChangeClass(parseFloat(f.month) || 0);
                         var quarterClass = FundAPI.getChangeClass(parseFloat(f.quarter) || 0);
+                        var yearClass = FundAPI.getChangeClass(parseFloat(f.year) || 0);
+                        var sinceClass = FundAPI.getChangeClass(parseFloat(f.since) || 0);
                         var isFav = Store.isFavorite(f.code);
                         var fmtPct = function (v) {
                             var n = parseFloat(v);
@@ -1528,6 +1532,8 @@
                                 <td class="num-cell ${weekClass === 'up' ? 'text-up' : weekClass === 'down' ? 'text-down' : ''}">${fmtPct(f.week)}</td>
                                 <td class="num-cell ${monthClass === 'up' ? 'text-up' : monthClass === 'down' ? 'text-down' : ''}">${fmtPct(f.month)}</td>
                                 <td class="num-cell ${quarterClass === 'up' ? 'text-up' : quarterClass === 'down' ? 'text-down' : ''}">${fmtPct(f.quarter)}</td>
+                                <td class="num-cell ${yearClass === 'up' ? 'text-up' : yearClass === 'down' ? 'text-down' : ''}">${fmtPct(f.year)}</td>
+                                <td class="num-cell ${sinceClass === 'up' ? 'text-up' : sinceClass === 'down' ? 'text-down' : ''}">${fmtPct(f.since)}</td>
                                 <td>
                                     <button class="action-btn ${isFav ? 'fav-active' : ''}" data-action="${isFav ? 'remove' : 'add'}" data-code="${f.code}" data-name="${f.name}" data-type="${f.typename || f.type}">
                                         ${isFav ? '移除' : '+ 自选'}

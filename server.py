@@ -357,6 +357,7 @@ THS_SORT_MAP = {
     'month': 'F008',           # 近一月
     'quarter': 'F009',         # 近三月
     'year': 'F011',            # 近一年
+    'since': 'F012',           # 成立以来
 }
 
 
@@ -462,6 +463,7 @@ def _fetch_ths_fund_list(fund_type, sort_field, order):
                 'month': item.get('F008', ''),
                 'quarter': item.get('F009', ''),
                 'year': item.get('F011', ''),
+                'since': item.get('F012', ''),
                 'orgname': item.get('orgname', ''),
             })
 
