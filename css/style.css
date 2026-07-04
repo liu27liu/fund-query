@@ -109,11 +109,29 @@ html, body {
     font-family: var(--font);
     font-size: 15px;
     color: var(--text);
-    background: var(--bg-gradient);
+    background: linear-gradient(-45deg, #e0e7ff, #ede9fe, #fce7f3, #dbeafe, #ccfbf1, #e0e7ff);
+    background-size: 400% 400%;
     background-attachment: fixed;
+    animation: bgGradientShift 30s ease infinite;
     line-height: 1.65;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+}
+
+@keyframes bgGradientShift {
+    0% { background-position: 0% 50%; }
+    25% { background-position: 50% 100%; }
+    50% { background-position: 100% 50%; }
+    75% { background-position: 50% 0%; }
+    100% { background-position: 0% 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html, body {
+        animation: none;
+        background: linear-gradient(135deg, #e0e7ff 0%, #fce7f3 50%, #dbeafe 100%);
+        background-attachment: fixed;
+    }
 }
 
 body {
