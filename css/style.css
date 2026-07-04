@@ -2641,11 +2641,17 @@ select.form-input {
     box-shadow: var(--shadow-sm);
 }
 
-/* 表格容器支持水平滚动 */
-.fund-table-wrap {
-    overflow-x: auto;
+/* 表格容器支持水平滚动 - 搜索页专用 */
+#searchResultTable.fund-table-wrap {
+    overflow-x: auto !important;
+    overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     border-radius: var(--radius);
+    border: 1px solid var(--border-light);
+}
+
+#searchResultTable .fund-list-table {
+    min-width: 900px;
 }
 
 .fund-list-table th {
