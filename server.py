@@ -383,29 +383,49 @@ def api_fund_list():
     ths_sort = THS_SORT_MAP.get(sort_field, 'F009')
     ths_order = 'asc' if order == 'asc' else 'desc'
 
-    # 缓存: 同花顺数据缓存5分钟, key按类型+排序+方向区分
+    # SWR缓存: 5分钟内返回缓存,5-10分钟返回旧数据+后台刷新
     cache_key = f'ths_list_{ths_type}_{ths_sort}_{ths_order}'
     cached = _get_cache(cache_key, 300)
     if cached is not None:
         funds = cached
     else:
+        # SWR: 缓存过期但不超过10分钟,返回旧数据+后台异步刷新
+        stale = _get_cache(cache_key, 600)
         lock = _get_key_lock(cache_key)
         if not lock.acquire(blocking=False):
+            # 已有线程在采集,等待0.5秒看是否能拿到缓存
             time.sleep(0.5)
             cached = _get_cache(cache_key, 600)
             if cached is not None:
                 funds = cached
+            elif stale is not None:
+                funds = stale
             else:
                 return jsonify({'funds': [], 'total': 0, 'page': page, 'size': size})
         else:
-            try:
-                funds = _fetch_ths_fund_list(ths_type, ths_sort, ths_order)
-                if funds:
-                    _set_cache(cache_key, funds)
-                elif _hot_cache.get(cache_key):
-                    funds = _hot_cache[cache_key]['data']
-            finally:
-                lock.release()
+            if stale is not None:
+                # 有旧数据,先返回旧数据+后台刷新
+                funds = stale
+                def _bg_fetch():
+                    try:
+                        new_funds = _fetch_ths_fund_list(ths_type, ths_sort, ths_order)
+                        if new_funds:
+                            _set_cache(cache_key, new_funds)
+                    except Exception:
+                        pass
+                    finally:
+                        lock.release()
+                threading.Thread(target=_bg_fetch, daemon=True).start()
+            else:
+                # 无旧数据,同步采集
+                try:
+                    funds = _fetch_ths_fund_list(ths_type, ths_sort, ths_order)
+                    if funds:
+                        _set_cache(cache_key, funds)
+                    elif _hot_cache.get(cache_key):
+                        funds = _hot_cache[cache_key]['data']
+                finally:
+                    lock.release()
 
     # 关键词过滤(在已采集的全量数据上做)
     if keyword:
@@ -2606,6 +2626,14 @@ def _refresh_hot_cache():
             print('[预热] 基金排行预热完成', flush=True)
     except Exception as e:
         print(f'[预热] 基金排行失败: {e}', flush=True)
+    # 预热基金列表(默认参数:全部类型/季度排序降序)
+    try:
+        funds = _fetch_ths_fund_list('all', 'F009', 'desc')
+        if funds:
+            _set_cache('ths_list_all_F009_desc', funds)
+            print(f'[预热] 基金列表预热完成({len(funds)}只)', flush=True)
+    except Exception as e:
+        print(f'[预热] 基金列表失败: {e}', flush=True)
 
 
 def _prewarm_loop():

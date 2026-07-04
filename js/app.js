@@ -1795,24 +1795,8 @@
             }
         });
 
-        // 并行检查每只基金的历史净值表首行是否为当日
-        var historyPromises = positions.map(function (p) {
-            return FundAPI.getHistoryNav(p.code, 1, 1).catch(function () { return null; });
-        });
-        var historyResults = await Promise.all(historyPromises);
-
-        for (var i = 0; i < positions.length; i++) {
-            var histResult = historyResults[i];
-            if (histResult && histResult.list && histResult.list.length > 0) {
-                var firstRow = histResult.list[0];
-                if (firstRow.date === todayStr) {
-                    // 当日实际净值已公布，使用实际值
-                    navMap[positions[i].code] = firstRow.dwjz;
-                    changeRateMap[positions[i].code] = firstRow.change;
-                }
-            }
-        }
-
+        // 不再同步等待历史净值检查(这是加载慢的主要原因)
+        // 盘中用估值即可,收盘后估值API的dwjz会更新为实际净值
         return { navMap: navMap, changeRateMap: changeRateMap };
     }
 
