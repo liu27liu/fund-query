@@ -3679,8 +3679,10 @@ select.form-input {
         min-width: 0;
     }
 
-    /* 基金表格卡片化:隐藏次要列,保留核心信息 */
-    .fund-table thead {
+    /* 基金表格卡片化:隐藏表头,保留核心信息 */
+    .fund-table thead,
+    #searchResultTable .fund-list-table thead,
+    .portfolio-table thead {
         display: none;
     }
     .fund-table,
