@@ -2604,6 +2604,8 @@ select.form-input {
     margin-bottom: 16px;
     border-bottom: 2px solid var(--border);
     padding-bottom: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .type-tab {
@@ -2615,6 +2617,8 @@ select.form-input {
     border-bottom: 2px solid transparent;
     margin-bottom: -2px;
     transition: all 0.2s var(--ease);
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .type-tab:hover {
@@ -2635,6 +2639,13 @@ select.form-input {
     border-radius: var(--radius);
     overflow: hidden;
     box-shadow: var(--shadow-sm);
+}
+
+/* 表格容器支持水平滚动 */
+.fund-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: var(--radius);
 }
 
 .fund-list-table th {
