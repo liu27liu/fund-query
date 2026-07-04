@@ -87,9 +87,43 @@ try:
 except Exception:
     pass
 _USERS_FILE = os.path.join(_DB_DIR, 'users.json')
+_DELETED_USERS_FILE = os.path.join(_DB_DIR, 'deleted_users.json')
 _TOKENS = {}  # {token: {username, expire_time}} - 兼容旧令牌（内存）
 # 固定密钥，版本更新不会变化，确保老token仍然有效
 _TOKEN_SECRET = 'fund_query_secret_2026_v1'
+
+
+def _load_deleted_users():
+    """加载已删除用户黑名单"""
+    try:
+        with open(_DELETED_USERS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def _add_deleted_user(username):
+    """将用户加入删除黑名单"""
+    deleted = _load_deleted_users()
+    if username not in deleted:
+        deleted.append(username)
+        try:
+            with open(_DELETED_USERS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(deleted, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f'[WARN] 保存删除黑名单失败: {e}')
+
+
+def _remove_deleted_user(username):
+    """从删除黑名单移除(重新注册时调用)"""
+    deleted = _load_deleted_users()
+    if username in deleted:
+        deleted.remove(username)
+        try:
+            with open(_DELETED_USERS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(deleted, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f'[WARN] 更新删除黑名单失败: {e}')
 
 # ========== GitHub云端存储（解决Railway重新部署数据丢失问题）==========
 import base64
@@ -223,11 +257,15 @@ def _get_user_from_token(req):
     expected_sign = hashlib.sha256((username + _TOKEN_SECRET).encode()).hexdigest()[:32]
     if sign != expected_sign:
         return None
+    # 检查是否在删除黑名单中(被管理员删除的用户不允许自动重建)
+    deleted = _load_deleted_users()
+    if username in deleted:
+        return None
     # 验证用户是否存在
     users = _load_users()
     if username not in users:
         # 如果users.json丢失（重新部署），但token签名有效，
-        # 则自动重建用户记录（空数据，密码未知但token仍有效）
+        # 且不在删除黑名单中，则自动重建用户记录（空数据，密码未知但token仍有效）
         users[username] = {
             'password': '',
             'salt': '',
@@ -2461,6 +2499,9 @@ def api_register():
     }
     if not _save_users(users):
         return jsonify({'success': False, 'message': '注册失败，请稍后重试'})
+
+    # 重新注册时从删除黑名单中移除
+    _remove_deleted_user(username)
 
     token = _gen_token(username)
     return jsonify({

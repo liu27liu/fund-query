@@ -18,6 +18,7 @@ admin_bp = Blueprint('admin', __name__, url_prefix='/admin/api')
 # ========== 用户数据文件路径（与 server.py 共用）==========
 _DB_DIR = '/data' if os.path.isdir('/data') else os.path.dirname(os.path.abspath(__file__))
 _USERS_FILE = os.path.join(_DB_DIR, 'users.json')
+_DELETED_USERS_FILE = os.path.join(_DB_DIR, 'deleted_users.json')
 
 
 def _load_site_users():
@@ -38,6 +39,27 @@ def _save_site_users(users):
     except Exception as e:
         print(f'[AdminAPI] 保存用户数据失败: {e}', flush=True)
         return False
+
+
+def _load_deleted_users():
+    """加载已删除用户黑名单"""
+    try:
+        with open(_DELETED_USERS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def _add_to_deleted(username):
+    """将用户加入删除黑名单"""
+    deleted = _load_deleted_users()
+    if username not in deleted:
+        deleted.append(username)
+        try:
+            with open(_DELETED_USERS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(deleted, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f'[AdminAPI] 保存删除黑名单失败: {e}', flush=True)
 
 
 # ========== 认证装饰器 ==========
@@ -342,6 +364,8 @@ def site_user_delete(username):
         return jsonify({'success': False, 'message': '用户不存在'}), 404
     del users[username]
     _save_site_users(users)
+    # 写入删除黑名单,防止旧token自动重建
+    _add_to_deleted(username)
     _log_op('users', '删除用户', f'用户:{username}')
     return jsonify({'success': True, 'message': '用户已删除'})
 
