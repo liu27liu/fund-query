@@ -336,6 +336,142 @@ def static_files(path):
     return send_from_directory('.', path)
 
 
+# ========== 同花顺基金列表数据(10jqka) ==========
+# 同花顺基金类型映射
+THS_FUND_TYPES = {
+    'all': '全部',
+    'gpx': '股票型',
+    'hhx': '混合型',
+    'zqx': '债券型',
+    'QDII': 'QDII',
+    'zsx': '指数型',
+}
+# 同花顺排序字段映射
+THS_SORT_MAP = {
+    'code': 'code',
+    'net': 'newnet',          # 净值
+    'totalnet': 'newtotalnet', # 累计净值
+    'date': 'SYENDDATE',       # 更新日期
+    'daily': 'prerate',        # 日增长率
+    'week': 'F003N_FUND33',    # 近一周
+    'month': 'F008',           # 近一月
+    'quarter': 'F009',         # 近三月
+    'year': 'F011',            # 近一年
+}
+
+
+@app.route('/api/fund-list')
+def api_fund_list():
+    """同花顺基金列表 - 对接10jqka.com.cn基金排行数据
+    参数: type(基金类型), sort(排序字段), order(asc/desc), page, size, keyword(关键词过滤)
+    """
+    fund_type = request.args.get('type', 'all')
+    sort_field = request.args.get('sort', 'quarter')
+    order = request.args.get('order', 'desc')
+    page = int(request.args.get('page', 1))
+    size = int(request.args.get('size', 50))
+    keyword = request.args.get('keyword', '').strip()
+
+    # 映射参数
+    ths_type = fund_type if fund_type in THS_FUND_TYPES else 'all'
+    ths_sort = THS_SORT_MAP.get(sort_field, 'F009')
+    ths_order = 'asc' if order == 'asc' else 'desc'
+
+    # 缓存: 同花顺数据缓存5分钟, key按类型+排序+方向区分
+    cache_key = f'ths_list_{ths_type}_{ths_sort}_{ths_order}'
+    cached = _get_cache(cache_key, 300)
+    if cached is not None:
+        funds = cached
+    else:
+        lock = _get_key_lock(cache_key)
+        if not lock.acquire(blocking=False):
+            time.sleep(0.5)
+            cached = _get_cache(cache_key, 600)
+            if cached is not None:
+                funds = cached
+            else:
+                return jsonify({'funds': [], 'total': 0, 'page': page, 'size': size})
+        else:
+            try:
+                funds = _fetch_ths_fund_list(ths_type, ths_sort, ths_order)
+                if funds:
+                    _set_cache(cache_key, funds)
+                elif _hot_cache.get(cache_key):
+                    funds = _hot_cache[cache_key]['data']
+            finally:
+                lock.release()
+
+    # 关键词过滤(在已采集的全量数据上做)
+    if keyword:
+        kw_lower = keyword.lower()
+        funds = [f for f in funds if kw_lower in f.get('code', '').lower() or kw_lower in f.get('name', '').lower()]
+
+    total = len(funds)
+
+    # 分页
+    start_idx = (page - 1) * size
+    end_idx = start_idx + size
+    page_funds = funds[start_idx:end_idx]
+
+    return jsonify({
+        'funds': page_funds,
+        'total': total,
+        'page': page,
+        'size': size,
+        'types': THS_FUND_TYPES,
+    })
+
+
+def _fetch_ths_fund_list(fund_type, sort_field, order):
+    """从同花顺采集基金列表全量数据
+    API: https://fund.10jqka.com.cn/data/Net/info/{type}_{key}_{sort}_0_0_1_9999_0_0_0_jsonp_g.html
+    """
+    url = f'https://fund.10jqka.com.cn/data/Net/info/{fund_type}_{sort_field}_{order}_0_0_1_9999_0_0_0_jsonp_g.html'
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'https://fund.10jqka.com.cn/public/pc/sy/kfs/qdii/pc.html',
+        'Accept': '*/*',
+    }
+    try:
+        resp = SESSION.get(url, headers=headers, timeout=15)
+        text = resp.text
+        # 解析JSONP: g({...})
+        m = re.search(r'g\((.*)\)', text, re.DOTALL)
+        if not m:
+            print(f'[同花顺基金列表] JSONP解析失败: {text[:150]}', flush=True)
+            return []
+
+        data = json.loads(m.group(1))
+        funds_data = data.get('data', {}).get('data', {})
+        if not funds_data:
+            print(f'[同花顺基金列表] 无数据 type={fund_type}', flush=True)
+            return []
+
+        results = []
+        for key, item in funds_data.items():
+            results.append({
+                'code': item.get('code', ''),
+                'name': item.get('name', ''),
+                'typename': item.get('typename', ''),
+                'type': item.get('type', ''),
+                'net': item.get('newnet', '') or item.get('net', ''),
+                'totalnet': item.get('newtotalnet', '') or item.get('totalnet', ''),
+                'date': item.get('newdate', '') or item.get('SYENDDATE', ''),
+                'daily': item.get('prerate', ''),
+                'week': item.get('F003N_FUND33', ''),
+                'month': item.get('F008', ''),
+                'quarter': item.get('F009', ''),
+                'year': item.get('F011', ''),
+                'orgname': item.get('orgname', ''),
+            })
+
+        print(f'[同花顺基金列表] type={fund_type} 采集到 {len(results)} 只基金', flush=True)
+        return results
+    except Exception as e:
+        print(f'[同花顺基金列表] 异常: {e}', flush=True)
+        return []
+
+
 @app.route('/api/search', methods=['GET', 'POST'])
 def api_search():
     """基金搜索 - 对接东方财富搜索API"""

@@ -1358,197 +1358,179 @@
     }
 
     // ========== 搜索页 ==========
+    // 搜索页状态
+    var searchState = {
+        type: 'all',
+        sort: 'quarter',
+        order: 'desc',
+        page: 1,
+        size: 50,
+        keyword: '',
+        total: 0,
+        loading: false
+    };
+
     function renderSearch(keyword) {
-        if (!keyword) {
-            // 无关键词,显示搜索引导页
-            var history = Store.getSearchHistory();
-            var hotKeywords = FundAPI.getHotKeywords();
+        searchState.keyword = keyword || '';
+        searchState.page = 1;
 
-            app.innerHTML = `
+        var typeTabs = [
+            { key: 'all', label: '全部' },
+            { key: 'gpx', label: '股票型' },
+            { key: 'hhx', label: '混合型' },
+            { key: 'zqx', label: '债券型' },
+            { key: 'QDII', label: 'QDII' },
+            { key: 'zsx', label: '指数型' }
+        ];
+
+        app.innerHTML = `
+            <div class="search-page">
                 <div class="search-results-header">
-                    <h2>基金搜索</h2>
-                    <p>输入基金代码、名称或拼音首字母进行搜索</p>
+                    <h2>基金列表</h2>
+                    <p id="searchResultCount">${keyword ? '关键词: "' + keyword + '" · ' : ''}正在加载...</p>
                 </div>
 
-                ${history.length > 0 ? `
-                    <div class="section-title">
-                        <span>🕐</span> 搜索历史
-                        <span class="more" id="clearHistoryBtn">清空</span>
-                    </div>
-                    <div class="hot-search-list">
-                        ${history.map(function (h) {
-                            return '<span class="hot-search-item" data-keyword="' + h + '">' + h + ' <small style="color:var(--text-tertiary)">×</small></span>';
-                        }).join('')}
-                    </div>
-                ` : ''}
-
-                <div class="section-title">
-                    <span>🔥</span> 热门搜索
-                </div>
-                <div class="hot-search-list">
-                    ${hotKeywords.map(function (kw) {
-                        return '<span class="hot-search-item" data-keyword="' + kw + '">' + kw + '</span>';
+                <div class="fund-type-tabs">
+                    ${typeTabs.map(function (t) {
+                        return '<span class="type-tab' + (t.key === searchState.type ? ' active' : '') + '" data-type="' + t.key + '">' + t.label + '</span>';
                     }).join('')}
                 </div>
 
-                <div class="section-title">
-                    <span>⭐</span> 推荐基金
+                <div class="fund-table-wrap" id="searchResultTable">
+                    <div style="padding: 40px; text-align: center;">
+                        <div class="loader" style="margin: 0 auto 12px;"></div>
+                        <p style="color: var(--text-secondary);">正在加载基金列表...</p>
+                    </div>
                 </div>
-                <div class="fund-grid" id="recommendGrid">
-                    <div class="fund-card skeleton" style="height: 160px;"></div>
-                    <div class="fund-card skeleton" style="height: 160px;"></div>
-                    <div class="fund-card skeleton" style="height: 160px;"></div>
-                    <div class="fund-card skeleton" style="height: 160px;"></div>
-                </div>
-            `;
 
-            // 绑定热门搜索和历史
-            document.querySelectorAll('.hot-search-item').forEach(function (el) {
-                el.addEventListener('click', function () {
-                    var kw = this.dataset.keyword;
-                    searchInput.value = kw;
-                    navigate('/search?q=' + encodeURIComponent(kw));
-                });
-            });
-
-            // 清空历史
-            var clearBtn = document.getElementById('clearHistoryBtn');
-            if (clearBtn) {
-                clearBtn.addEventListener('click', function () {
-                    Store.clearSearchHistory();
-                    renderSearch('');
-                    showToast('搜索历史已清空', 'success');
-                });
-            }
-
-            // 加载推荐基金
-            loadHotFunds('recommendGrid');
-            return;
-        }
-
-        // 有关键词,执行搜索
-        Store.addSearchHistory(keyword);
-        app.innerHTML = `
-            <div class="search-results-header">
-                <h2>搜索结果: "${keyword}"</h2>
-                <p>正在搜索中...</p>
-            </div>
-            <div class="search-filter-bar">
-                <span class="filter-chip active" data-filter="all">全部</span>
-                <span class="filter-chip" data-filter="股票型">股票型</span>
-                <span class="filter-chip" data-filter="混合型">混合型</span>
-                <span class="filter-chip" data-filter="债券型">债券型</span>
-                <span class="filter-chip" data-filter="指数型">指数型</span>
-                <span class="filter-chip" data-filter="QDII">QDII</span>
-                <span class="filter-chip" data-filter="LOF">LOF</span>
-            </div>
-            <div class="fund-table-wrap" id="searchResultTable">
-                <div style="padding: 40px; text-align: center;">
-                    <div class="loader" style="margin: 0 auto 12px;"></div>
-                    <p style="color: var(--text-secondary);">正在搜索基金...</p>
-                </div>
+                <div class="pagination" id="searchPagination"></div>
             </div>
         `;
 
-        // 筛选器事件
-        var currentFilter = 'all';
-        var searchResults = [];
-
-        document.querySelectorAll('.filter-chip').forEach(function (chip) {
-            chip.addEventListener('click', function () {
-                document.querySelectorAll('.filter-chip').forEach(function (c) { c.classList.remove('active'); });
+        // 绑定类型Tab
+        app.querySelectorAll('.type-tab').forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                app.querySelectorAll('.type-tab').forEach(function (t) { t.classList.remove('active'); });
                 this.classList.add('active');
-                currentFilter = this.dataset.filter;
-                renderSearchResults(searchResults, currentFilter);
+                searchState.type = this.dataset.type;
+                searchState.page = 1;
+                loadFundList();
             });
         });
 
-        // 执行搜索
-        performSearch(keyword).then(function (results) {
-            searchResults = results;
-            renderSearchResults(searchResults, currentFilter);
-
-            // 更新搜索结果头部
-            var header = app.querySelector('.search-results-header p');
-            if (header) {
-                header.textContent = '共找到 ' + results.length + ' 只基金';
-            }
-        });
+        loadFundList();
     }
 
-    async function performSearch(keyword) {
-        var results = await FundAPI.searchFunds(keyword);
+    async function loadFundList() {
+        if (searchState.loading) return;
+        searchState.loading = true;
 
-        // 如果结果较少,尝试获取实时估值补充
-        if (results.length > 0 && results.length <= 20) {
-            var codes = results.map(function (r) { return r.code; });
-            var estimates = await FundAPI.batchRealtimeEstimate(codes);
-            results = results.map(function (r) {
-                var est = estimates.find(function (e) { return e.fundcode === r.code; });
-                r.dwjz = est ? est.dwjz : 0;
-                r.gsz = est ? est.gsz : 0;
-                r.gszzl = est ? est.gszzl : 0;
-                r.gztime = est ? est.gztime : '';
-                return r;
-            });
+        var container = document.getElementById('searchResultTable');
+        if (container) {
+            container.innerHTML = '<div style="padding: 40px; text-align: center;"><div class="loader" style="margin: 0 auto 12px;"></div><p style="color: var(--text-secondary);">正在加载...</p></div>';
         }
 
-        return results;
+        try {
+            var data = await FundAPI.getFundList({
+                type: searchState.type,
+                sort: searchState.sort,
+                order: searchState.order,
+                page: searchState.page,
+                size: searchState.size,
+                keyword: searchState.keyword
+            });
+
+            searchState.total = data.total || 0;
+            renderFundListTable(data.funds || []);
+            renderPagination();
+        } catch (e) {
+            console.warn('加载基金列表失败:', e);
+            if (container) {
+                container.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><h3>加载失败</h3><p>请稍后重试</p></div>';
+            }
+        } finally {
+            searchState.loading = false;
+        }
     }
 
-    function renderSearchResults(results, filter) {
+    function renderFundListTable(funds) {
         var container = document.getElementById('searchResultTable');
         if (!container) return;
 
-        var filtered = filter === 'all' ? results : results.filter(function (r) {
-            return r.category === filter || r.type === filter;
-        });
+        // 更新结果计数
+        var countEl = document.getElementById('searchResultCount');
+        if (countEl) {
+            countEl.textContent = (searchState.keyword ? '关键词: "' + searchState.keyword + '" · ' : '') + '共 ' + searchState.total + ' 只基金';
+        }
 
-        if (filtered.length === 0) {
+        if (funds.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
                     <div class="icon">🔍</div>
                     <h3>未找到相关基金</h3>
-                    <p>试试其他关键词,如基金代码、名称或拼音首字母</p>
+                    <p>试试其他关键词或切换基金类型</p>
                 </div>
             `;
             return;
         }
 
+        var sortArrow = function (field) {
+            if (searchState.sort !== field) return '';
+            return searchState.order === 'desc' ? ' ▼' : ' ▲';
+        };
+
         container.innerHTML = `
-            <table class="fund-table">
+            <table class="fund-list-table">
                 <thead>
                     <tr>
-                        <th>基金名称</th>
-                        <th class="text-right">最新净值</th>
-                        <th class="text-right">估值</th>
-                        <th class="text-right">涨跌幅</th>
+                        <th class="sortable" data-sort="code">代码${sortArrow('code')}</th>
+                        <th>名称</th>
+                        <th class="text-right sortable" data-sort="net">净值${sortArrow('net')}</th>
+                        <th class="text-right sortable" data-sort="totalnet">累计净值${sortArrow('totalnet')}</th>
+                        <th class="text-center sortable" data-sort="date">更新日期${sortArrow('date')}</th>
+                        <th class="text-right sortable" data-sort="daily">日增长率${sortArrow('daily')}</th>
+                        <th class="text-right sortable" data-sort="week">近一周${sortArrow('week')}</th>
+                        <th class="text-right sortable" data-sort="month">近一月${sortArrow('month')}</th>
+                        <th class="text-right sortable" data-sort="quarter">近三月${sortArrow('quarter')}</th>
                         <th class="text-right">操作</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${filtered.map(function (f) {
-                        var change = f.gszzl || 0;
-                        var changeClass = FundAPI.getChangeClass(change);
+                    ${funds.map(function (f) {
+                        var dailyClass = FundAPI.getChangeClass(parseFloat(f.daily) || 0);
+                        var weekClass = FundAPI.getChangeClass(parseFloat(f.week) || 0);
+                        var monthClass = FundAPI.getChangeClass(parseFloat(f.month) || 0);
+                        var quarterClass = FundAPI.getChangeClass(parseFloat(f.quarter) || 0);
                         var isFav = Store.isFavorite(f.code);
+                        var fmtPct = function (v) {
+                            var n = parseFloat(v);
+                            if (isNaN(n)) return '--';
+                            return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
+                        };
+                        var fmtNum = function (v) {
+                            var n = parseFloat(v);
+                            if (isNaN(n)) return '--';
+                            return n.toFixed(4);
+                        };
                         return `
                             <tr data-code="${f.code}">
+                                <td class="col-code">${f.code}</td>
                                 <td class="col-name">
                                     <div class="fund-name-cell">
-                                        <span class="name">${f.name || f.shortName}</span>
-                                        <span class="code">${f.code} · ${f.category || f.type || ''}</span>
+                                        <span class="name">${f.name}</span>
+                                        <span class="code">${f.typename || f.type || ''}</span>
                                     </div>
                                 </td>
-                                <td class="num-cell">${f.dwjz ? FundAPI.formatNum(f.dwjz) : '--'}</td>
-                                <td class="num-cell">${f.gsz ? FundAPI.formatNum(f.gsz) : '--'}</td>
-                                <td class="num-cell">
-                                    <span class="change-badge ${changeClass === 'up' ? 'bg-up' : changeClass === 'down' ? 'bg-down' : 'bg-flat'}">
-                                        ${FundAPI.formatChange(change)}
-                                    </span>
-                                </td>
+                                <td class="num-cell">${fmtNum(f.net)}</td>
+                                <td class="num-cell">${fmtNum(f.totalnet)}</td>
+                                <td class="text-center">${f.date || '--'}</td>
+                                <td class="num-cell ${dailyClass === 'up' ? 'text-up' : dailyClass === 'down' ? 'text-down' : ''}">${fmtPct(f.daily)}</td>
+                                <td class="num-cell ${weekClass === 'up' ? 'text-up' : weekClass === 'down' ? 'text-down' : ''}">${fmtPct(f.week)}</td>
+                                <td class="num-cell ${monthClass === 'up' ? 'text-up' : monthClass === 'down' ? 'text-down' : ''}">${fmtPct(f.month)}</td>
+                                <td class="num-cell ${quarterClass === 'up' ? 'text-up' : quarterClass === 'down' ? 'text-down' : ''}">${fmtPct(f.quarter)}</td>
                                 <td>
-                                    <button class="action-btn" data-action="${isFav ? 'remove' : 'add'}" data-code="${f.code}" data-name="${f.name || f.shortName}" data-type="${f.category || f.type}">
-                                        ${isFav ? '移除自选' : '+ 自选'}
+                                    <button class="action-btn ${isFav ? 'fav-active' : ''}" data-action="${isFav ? 'remove' : 'add'}" data-code="${f.code}" data-name="${f.name}" data-type="${f.typename || f.type}">
+                                        ${isFav ? '移除' : '+ 自选'}
                                     </button>
                                 </td>
                             </tr>
@@ -1558,7 +1540,7 @@
             </table>
         `;
 
-        // 绑定事件
+        // 绑定行点击
         container.querySelectorAll('tr[data-code]').forEach(function (tr) {
             tr.addEventListener('click', function (e) {
                 if (e.target.classList.contains('action-btn')) return;
@@ -1566,10 +1548,77 @@
             });
         });
 
+        // 绑定排序
+        container.querySelectorAll('.sortable').forEach(function (th) {
+            th.style.cursor = 'pointer';
+            th.addEventListener('click', function () {
+                var field = this.dataset.sort;
+                if (searchState.sort === field) {
+                    searchState.order = searchState.order === 'desc' ? 'asc' : 'desc';
+                } else {
+                    searchState.sort = field;
+                    searchState.order = 'desc';
+                }
+                searchState.page = 1;
+                loadFundList();
+            });
+        });
+
+        // 绑定自选按钮
         container.querySelectorAll('.action-btn').forEach(function (btn) {
             btn.addEventListener('click', function (e) {
                 e.stopPropagation();
                 handleFavToggle(this);
+            });
+        });
+    }
+
+    function renderPagination() {
+        var pagEl = document.getElementById('searchPagination');
+        if (!pagEl) return;
+
+        var totalPages = Math.ceil(searchState.total / searchState.size);
+        if (totalPages <= 1) {
+            pagEl.innerHTML = '';
+            return;
+        }
+
+        var currentPage = searchState.page;
+        var html = '';
+
+        // 上一页
+        if (currentPage > 1) {
+            html += '<span class="page-btn" data-page="' + (currentPage - 1) + '">‹ 上一页</span>';
+        }
+
+        // 页码
+        var startPage = Math.max(1, currentPage - 2);
+        var endPage = Math.min(totalPages, currentPage + 2);
+        if (startPage > 1) {
+            html += '<span class="page-btn" data-page="1">1</span>';
+            if (startPage > 2) html += '<span class="page-ellipsis">...</span>';
+        }
+        for (var i = startPage; i <= endPage; i++) {
+            html += '<span class="page-btn' + (i === currentPage ? ' active' : '') + '" data-page="' + i + '">' + i + '</span>';
+        }
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) html += '<span class="page-ellipsis">...</span>';
+            html += '<span class="page-btn" data-page="' + totalPages + '">' + totalPages + '</span>';
+        }
+
+        // 下一页
+        if (currentPage < totalPages) {
+            html += '<span class="page-btn" data-page="' + (currentPage + 1) + '">下一页 ›</span>';
+        }
+
+        pagEl.innerHTML = html;
+
+        pagEl.querySelectorAll('.page-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                searchState.page = parseInt(this.dataset.page);
+                loadFundList();
+                // 滚动到顶部
+                window.scrollTo({ top: 0, behavior: 'smooth' });
             });
         });
     }

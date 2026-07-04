@@ -313,6 +313,24 @@ const FundAPI = (function () {
         ];
     }
 
+    // ========== 同花顺基金列表 ==========
+
+    /**
+     * 获取基金列表(同花顺数据源)
+     * @param {object} params - {type, sort, order, page, size, keyword}
+     */
+    async function getFundList(params) {
+        var query = Object.keys(params || {}).map(function (k) {
+            return k + '=' + encodeURIComponent(params[k] || '');
+        }).join('&');
+        try {
+            return await fetchJSON('/api/fund-list?' + query, 20000);
+        } catch (e) {
+            console.warn('基金列表接口异常:', e);
+            return { funds: [], total: 0, page: 1, size: 50 };
+        }
+    }
+
     // ========== 辅助函数 ==========
 
     function parseFundType(typeCode) {
@@ -508,6 +526,7 @@ const FundAPI = (function () {
         getFundRankingWithTotal: getFundRankingWithTotal,
         getHotFunds: getHotFunds,
         getHotKeywords: getHotKeywords,
+        getFundList: getFundList,
         getNews: getNews,
         resetNewsCursor: function () { newsSortEnd = ''; },
         getMarketIndices: getMarketIndices,
