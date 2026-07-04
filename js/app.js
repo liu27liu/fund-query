@@ -565,6 +565,51 @@
             newsSection.dataset.loaded = 'true';
             loadNews(1);
         }
+
+        // 预加载基金列表第1页(全部类型),进入搜索页即可显示
+        preloadFundList();
+
+        // 预加载持仓数据(已登录),进入持仓页即可显示
+        if (isLoggedIn()) {
+            preloadPortfolioData();
+        }
+    }
+
+    // 预加载基金列表第1页
+    function preloadFundList() {
+        var cacheKey = 'all_F009_desc_1_50_';
+        if (fundListCache[cacheKey]) return; // 已缓存
+        FundAPI.getFundList({
+            type: 'all', sort: 'F009', order: 'desc', page: 1, size: 50, keyword: ''
+        }).then(function (data) {
+            fundListCache[cacheKey] = {
+                funds: data.funds || [],
+                total: data.total || 0,
+                time: Date.now()
+            };
+        }).catch(function () {});
+    }
+
+    // 持仓预加载数据缓存
+    var portfolioPreloadedData = null;
+
+    // 预加载持仓数据
+    function preloadPortfolioData() {
+        var positions = Store.getAggregatedPositions();
+        if (!positions || positions.length === 0) return;
+        var codes = positions.map(function (p) { return p.code; });
+        FundAPI.batchRealtimeEstimate(codes).then(function (estimates) {
+            if (!estimates || estimates.length === 0) return;
+            buildPortfolioNavMaps(positions, estimates).then(function (navMaps) {
+                portfolioPreloadedData = {
+                    positions: positions,
+                    estimates: estimates,
+                    navMap: navMaps.navMap,
+                    changeRateMap: navMaps.changeRateMap,
+                    time: Date.now()
+                };
+            });
+        }).catch(function () {});
     }
 
     function animateHeroStats() {
@@ -1556,9 +1601,29 @@
         loadFundList();
     }
 
+    // 基金列表分页缓存: key = type_sort_order_page_size_keyword
+    var fundListCache = {};
+
     async function loadFundList() {
         if (searchState.loading) return;
         searchState.loading = true;
+
+        var cacheKey = searchState.type + '_' + searchState.sort + '_' + searchState.order + '_' + searchState.page + '_' + searchState.size + '_' + (searchState.keyword || '');
+
+        // 优先从缓存显示(立即渲染,无loading)
+        if (fundListCache[cacheKey]) {
+            var cached = fundListCache[cacheKey];
+            searchState.total = cached.total;
+            renderFundListTable(cached.funds);
+            renderPagination();
+            searchState.loading = false;
+            // 缓存超过2分钟才刷新,否则直接用缓存
+            if (Date.now() - cached.time < 120000) return;
+            // 超过2分钟,后台静默刷新(不显示loading)
+            searchState.loading = false;
+            silentRefreshFundList(cacheKey);
+            return;
+        }
 
         var container = document.getElementById('searchResultTable');
         if (container) {
@@ -1578,6 +1643,13 @@
             searchState.total = data.total || 0;
             renderFundListTable(data.funds || []);
             renderPagination();
+
+            // 写入缓存
+            fundListCache[cacheKey] = {
+                funds: data.funds || [],
+                total: searchState.total,
+                time: Date.now()
+            };
         } catch (e) {
             console.warn('加载基金列表失败:', e);
             if (container) {
@@ -1586,6 +1658,32 @@
         } finally {
             searchState.loading = false;
         }
+    }
+
+    // 静默刷新基金列表(不显示loading)
+    async function silentRefreshFundList(cacheKey) {
+        try {
+            var data = await FundAPI.getFundList({
+                type: searchState.type,
+                sort: searchState.sort,
+                order: searchState.order,
+                page: searchState.page,
+                size: searchState.size,
+                keyword: searchState.keyword
+            });
+            searchState.total = data.total || 0;
+            fundListCache[cacheKey] = {
+                funds: data.funds || [],
+                total: searchState.total,
+                time: Date.now()
+            };
+            // 仅当用户还在当前页时更新DOM
+            var currentKey = searchState.type + '_' + searchState.sort + '_' + searchState.order + '_' + searchState.page + '_' + searchState.size + '_' + (searchState.keyword || '');
+            if (currentKey === cacheKey) {
+                renderFundListTable(data.funds || []);
+                renderPagination();
+            }
+        } catch (e) { /* 静默失败 */ }
     }
 
     function renderFundListTable(funds) {
@@ -1873,7 +1971,187 @@
             loadPortfolioData(Store.getAggregatedPositions());
         });
 
-        loadPortfolioData(positions);
+        // 优先使用预加载数据(立即渲染,无loading)
+        if (portfolioPreloadedData && portfolioPreloadedData.positions &&
+            Date.now() - portfolioPreloadedData.time < 60000) {
+            // 用预加载数据立即渲染
+            renderPortfolioWithPreloaded(positions, portfolioPreloadedData);
+            // 后台静默刷新(60秒后自动刷新)
+            setTimeout(function () {
+                if (document.getElementById('portfolioContent')) {
+                    loadPortfolioData(Store.getAggregatedPositions());
+                }
+            }, 5000);
+        } else {
+            loadPortfolioData(positions);
+        }
+    }
+
+    // 用预加载数据渲染持仓(立即显示)
+    function renderPortfolioWithPreloaded(positions, preloaded) {
+        var container = document.getElementById('portfolioContent');
+        if (!container) return;
+
+        if (!positions || positions.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="icon">💼</div>
+                    <h3>还没有添加持仓</h3>
+                    <p>添加你的基金持仓,实时跟踪盈亏情况</p>
+                    <button class="add-holding-btn" style="margin-top: 16px;" id="emptyAddHoldingBtn">+ 添加持仓</button>
+                </div>
+            `;
+            var emptyBtn = document.getElementById('emptyAddHoldingBtn');
+            if (emptyBtn) {
+                emptyBtn.addEventListener('click', function () {
+                    showHoldingForm({});
+                });
+            }
+            return;
+        }
+
+        // 用预加载数据构建渲染(复用loadPortfolioData的渲染逻辑)
+        var navMap = preloaded.navMap;
+        var changeRateMap = preloaded.changeRateMap;
+        var estimates = preloaded.estimates;
+        var groups = Store.getPortfolioGroups();
+
+        // 构建分组
+        var groupMap = {};
+        var ungrouped = [];
+        positions.forEach(function (p) {
+            if (p.group) {
+                if (!groupMap[p.group]) groupMap[p.group] = [];
+                groupMap[p.group].push(p);
+            } else {
+                ungrouped.push(p);
+            }
+        });
+
+        // 渲染总览
+        var totals = Store.calcTotalAggregatedProfit(positions, navMap, changeRateMap);
+        container.innerHTML = `
+            <div class="portfolio-summary">
+                <div class="summary-cell"><span class="label">总市值</span><span class="value" id="totalValue">¥${formatMoney(totals.totalValue)}</span></div>
+                <div class="summary-cell"><span class="label">总成本</span><span class="value" id="totalCost">¥${formatMoney(totals.totalCost)}</span></div>
+                <div class="summary-cell"><span class="label">持仓盈亏</span><span class="value ${totals.totalHoldingProfit >= 0 ? 'profit-positive' : 'profit-negative'}" id="holdingProfit">${totals.totalHoldingProfit >= 0 ? '+' : ''}${formatMoney(totals.totalHoldingProfit)}</span></div>
+                <div class="summary-cell"><span class="label">持仓收益率</span><span class="value ${totals.totalProfitRate >= 0 ? 'profit-positive' : 'profit-negative'}" id="profitRate">${totals.totalProfitRate >= 0 ? '+' : ''}${(totals.totalProfitRate * 100).toFixed(2)}%</span></div>
+                <div class="summary-cell"><span class="label">累计盈亏</span><span class="value ${totals.totalCumulativeProfit >= 0 ? 'profit-positive' : 'profit-negative'}" id="cumulativeProfit">${totals.totalCumulativeProfit >= 0 ? '+' : ''}${formatMoney(totals.totalCumulativeProfit)}</span></div>
+            </div>
+            <div id="portfolioGroups"></div>
+        `;
+
+        // 渲染分组和基金
+        var groupsContainer = document.getElementById('portfolioGroups');
+        var html = '';
+
+        // 有分组的持仓
+        Object.keys(groupMap).forEach(function (groupName) {
+            html += renderPortfolioGroupHTML(groupName, groupMap[groupName], navMap, changeRateMap, estimates, groups);
+        });
+
+        // 无分组的持仓
+        if (ungrouped.length > 0) {
+            html += renderPortfolioGroupHTML('未分组', ungrouped, navMap, changeRateMap, estimates, groups);
+        }
+
+        groupsContainer.innerHTML = html;
+
+        // 绑定行事件
+        bindPortfolioRowEvents(container);
+    }
+
+    function renderPortfolioGroupHTML(groupName, positions, navMap, changeRateMap, estimates, groups) {
+        var groupTotals = Store.calcTotalAggregatedProfit(positions, navMap, changeRateMap);
+        var groupColor = '';
+        if (groups) {
+            var g = groups.find(function (g) { return g.name === groupName; });
+            if (g && g.color) groupColor = g.color;
+        }
+
+        var rows = positions.map(function (p) {
+            var nav = navMap[p.code] || p.costPrice;
+            var changeRate = changeRateMap[p.code] || 0;
+            var currentShares = p.currentShares || 0;
+            var currentValue = nav * currentShares;
+            var costValue = (p.avgCostPrice || p.costPrice) * currentShares;
+            var holdingProfit = currentValue - costValue;
+            var profitRate = costValue > 0 ? (holdingProfit / costValue * 100) : 0;
+            var changeClass = changeRate >= 0 ? 'profit-positive' : 'profit-negative';
+            var profitClass = holdingProfit >= 0 ? 'profit-positive' : 'profit-negative';
+            var est = estimates ? estimates.find(function (e) { return e.fundcode === p.code; }) : null;
+            var isCleared = p.isCleared || currentShares === 0;
+
+            return `
+                <tr data-code="${p.code}" class="${isCleared ? 'cleared-row' : ''}">
+                    <td class="checkbox-cell"><input type="checkbox" data-code="${p.code}"></td>
+                    <td class="col-name">
+                        <div class="fund-name-cell">
+                            <span class="name">${p.name}</span>
+                            <span class="code">${p.code} · ${p.type || ''}</span>
+                        </div>
+                    </td>
+                    <td class="num-cell">${FundAPI.formatNum(nav)}</td>
+                    <td class="num-cell ${changeClass}">${changeRate >= 0 ? '+' : ''}${changeRate.toFixed(2)}%</td>
+                    <td class="num-cell">${currentShares.toFixed(2)}</td>
+                    <td class="num-cell">${FundAPI.formatNum(p.avgCostPrice || p.costPrice)}</td>
+                    <td class="num-cell">¥${formatMoney(currentValue)}</td>
+                    <td class="num-cell ${profitClass}">${holdingProfit >= 0 ? '+' : ''}${formatMoney(holdingProfit)}</td>
+                    <td class="num-cell ${profitClass}">${profitRate >= 0 ? '+' : ''}${profitRate.toFixed(2)}%</td>
+                </tr>
+            `;
+        }).join('');
+
+        return `
+            <div class="portfolio-group">
+                <div class="group-header">
+                    <span class="group-name" ${groupColor ? 'style="border-left: 3px solid ' + groupColor + '; padding-left: 8px;"' : ''}>📁 ${groupName}</span>
+                    <span class="group-total">¥${formatMoney(groupTotals.totalValue)}</span>
+                </div>
+                <table class="fund-table portfolio-table">
+                    <thead>
+                        <tr>
+                            <th class="checkbox-cell"><input type="checkbox" class="select-all" data-group="${groupName}"></th>
+                            <th>基金名称</th>
+                            <th class="text-right">净值/估值</th>
+                            <th class="text-right">日涨跌</th>
+                            <th class="text-right">持仓份额</th>
+                            <th class="text-right">成本价</th>
+                            <th class="text-right">市值</th>
+                            <th class="text-right">持仓盈亏</th>
+                            <th class="text-right">收益率</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    function bindPortfolioRowEvents(container) {
+        // 行点击
+        container.querySelectorAll('tr[data-code]').forEach(function (tr) {
+            tr.addEventListener('click', function (e) {
+                if (e.target.classList.contains('checkbox-cell') || e.target.type === 'checkbox') return;
+                openDetail(this.dataset.code);
+            });
+        });
+        // 全选
+        container.querySelectorAll('.select-all').forEach(function (cb) {
+            cb.addEventListener('change', function () {
+                var groupName = this.dataset.group;
+                var checkboxes = container.querySelectorAll('input[type="checkbox"][data-code]');
+                checkboxes.forEach(function (c) {
+                    var tr = c.closest('tr');
+                    if (tr && tr.closest('.portfolio-group')) {
+                        var groupHeader = tr.closest('.portfolio-group').querySelector('.group-name');
+                        if (groupHeader && groupHeader.textContent.indexOf(groupName) !== -1) {
+                            c.checked = cb.checked;
+                        }
+                    }
+                });
+            });
+        });
     }
 
     async function loadPortfolioData(positions) {
