@@ -293,7 +293,7 @@
                 <div class="hero-rose">
                     <div class="rose-wrap">
                         <div class="rose">
-                            <img class="rose-img" src="assets/rose-clean.png?v=2" alt="rose">
+                            <img class="rose-img" src="assets/rose-bluebg.png?v=3" alt="rose">
                         </div>
                         <div class="rose-glow"></div>
                         <div class="petal-fall pf1"></div>

@@ -817,40 +817,33 @@ ul, ol { list-style: none; }
     left: 50%;
     width: 100%;
     height: 100%;
-    /* 从花骨朵到盛开:scale从小到大,clip-path从中心向外扩张 */
-    transform: translate(-50%, -50%) scale(0.12);
+    /* 从花骨朵到盛开 */
+    transform: translate(-50%, -50%) scale(0.15);
     opacity: 0;
-    clip-path: circle(6% at 50% 48%);
     animation: roseBloom 3.5s cubic-bezier(0.22, 1, 0.36, 1) 0.4s forwards, roseSway 8s ease-in-out 4s infinite;
 }
 
-/* 花骨朵→盛开:先小scale+clip收缩(花骨朵),再展开(盛开) */
+/* 花骨朵→盛开:scale从小到大模拟花朵长大绽放 */
 @keyframes roseBloom {
     0% {
-        transform: translate(-50%, -50%) scale(0.12) rotate(-20deg);
+        transform: translate(-50%, -50%) scale(0.15) rotate(-15deg);
         opacity: 0;
-        clip-path: circle(5% at 50% 48%);
     }
     10% {
         opacity: 1;
-        clip-path: circle(8% at 50% 48%);
     }
     35% {
-        transform: translate(-50%, -50%) scale(0.3) rotate(-10deg);
-        clip-path: circle(18% at 50% 48%);
+        transform: translate(-50%, -50%) scale(0.35) rotate(-8deg);
     }
     60% {
-        transform: translate(-50%, -50%) scale(0.6) rotate(-5deg);
-        clip-path: circle(38% at 50% 48%);
+        transform: translate(-50%, -50%) scale(0.65) rotate(-4deg);
     }
     85% {
         transform: translate(-50%, -50%) scale(0.92) rotate(-1deg);
-        clip-path: circle(60% at 50% 48%);
     }
     100% {
         transform: translate(-50%, -50%) scale(1) rotate(0deg);
         opacity: 1;
-        clip-path: circle(75% at 50% 48%);
     }
 }
 
