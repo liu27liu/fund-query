@@ -290,20 +290,6 @@
                     <div class="orb orb-3"></div>
                 </div>
                 <div class="hero-shine"></div>
-                <div class="hero-rose">
-                    <div class="rose-wrap">
-                        <div class="rose">
-                            <img class="rose-img" src="assets/rose-bluebg.png?v=3" alt="rose">
-                        </div>
-                        <div class="rose-glow"></div>
-                        <div class="petal-fall pf1"></div>
-                        <div class="petal-fall pf2"></div>
-                        <div class="petal-fall pf3"></div>
-                        <div class="petal-fall pf4"></div>
-                        <div class="petal-fall pf5"></div>
-                        <div class="petal-fall pf6"></div>
-                    </div>
-                </div>
                 <div class="hero-content">
                     <h1 class="hero-title-anim">${T('text_hero_title', '基金净值通 · 实时估值查询平台')}</h1>
                     <p class="hero-subtitle-anim">${T('text_hero_subtitle', '覆盖全市场基金 · 盘中实时估值 · 历史净值走势 · 自选基金管理')}</p>
