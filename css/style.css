@@ -658,12 +658,96 @@ ul, ol { list-style: none; }
     100% { background-position: 0% 50%; }
 }
 
-/* 粒子装饰 */
+/* 内容容器 */
+.hero-content {
+    position: relative;
+    z-index: 2;
+}
+
+/* ===== 动态光球 ===== */
+.hero-orbs {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.hero-orbs .orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(40px);
+    opacity: 0.5;
+}
+
+.hero-orbs .orb-1 {
+    width: 280px;
+    height: 280px;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.6) 0%, transparent 70%);
+    top: -80px;
+    right: 5%;
+    animation: orbFloat1 14s ease-in-out infinite;
+}
+
+.hero-orbs .orb-2 {
+    width: 200px;
+    height: 200px;
+    background: radial-gradient(circle, rgba(6, 182, 212, 0.5) 0%, transparent 70%);
+    bottom: -50px;
+    right: 25%;
+    animation: orbFloat2 18s ease-in-out infinite;
+}
+
+.hero-orbs .orb-3 {
+    width: 160px;
+    height: 160px;
+    background: radial-gradient(circle, rgba(236, 72, 153, 0.35) 0%, transparent 70%);
+    top: 30%;
+    right: 15%;
+    animation: orbFloat3 16s ease-in-out infinite;
+}
+
+@keyframes orbFloat1 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(-30px, 40px) scale(1.1); }
+    66% { transform: translate(20px, -20px) scale(0.95); }
+}
+
+@keyframes orbFloat2 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(40px, -50px) scale(1.15); }
+}
+
+@keyframes orbFloat3 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    40% { transform: translate(-50px, 30px) scale(1.1); }
+    70% { transform: translate(30px, -40px) scale(0.9); }
+}
+
+/* ===== 闪光扫过 ===== */
+.hero-shine {
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.08) 50%, transparent 60%);
+    pointer-events: none;
+    z-index: 3;
+    animation: heroShine 8s ease-in-out infinite;
+}
+
+@keyframes heroShine {
+    0%, 100% { left: -100%; }
+    40%, 60% { left: 200%; }
+}
+
+/* ===== 粒子装饰 ===== */
 .hero-particles {
     position: absolute;
     inset: 0;
     pointer-events: none;
     overflow: hidden;
+    z-index: 1;
 }
 
 .hero-particles .particle {
@@ -681,15 +765,53 @@ ul, ol { list-style: none; }
 .hero-particles .particle:nth-child(4) { left: 70%; top: 85%; animation-delay: 4.5s; width: 5px; height: 5px; }
 .hero-particles .particle:nth-child(5) { left: 85%; top: 65%; animation-delay: 2s; width: 3px; height: 3px; }
 .hero-particles .particle:nth-child(6) { left: 40%; top: 90%; animation-delay: 6s; width: 7px; height: 7px; }
+.hero-particles .particle:nth-child(7) { left: 15%; top: 30%; animation-delay: 1s; width: 4px; height: 4px; }
+.hero-particles .particle:nth-child(8) { left: 60%; top: 20%; animation-delay: 3.5s; width: 6px; height: 6px; }
+.hero-particles .particle:nth-child(9) { left: 80%; top: 40%; animation-delay: 5s; width: 3px; height: 3px; }
+.hero-particles .particle:nth-child(10) { left: 35%; top: 50%; animation-delay: 2.5s; width: 5px; height: 5px; }
+.hero-particles .particle:nth-child(11) { left: 90%; top: 75%; animation-delay: 7s; width: 4px; height: 4px; }
+.hero-particles .particle:nth-child(12) { left: 5%; top: 55%; animation-delay: 4s; width: 6px; height: 6px; }
 
 @keyframes particleFloat {
-    0%, 100% { transform: translateY(0) translateX(0); opacity: 0.3; }
-    50% { transform: translateY(-60px) translateX(20px); opacity: 0.8; }
+    0%, 100% { transform: translateY(0) translateX(0); opacity: 0.2; }
+    50% { transform: translateY(-80px) translateX(30px); opacity: 0.7; }
 }
 
-/* 标题入场动画 */
+/* ===== 标题渐变文字动画 ===== */
 .hero-title-anim {
     animation: heroFadeUp 0.8s ease-out both;
+    background: linear-gradient(90deg, #fff 0%, #c7d2fe 30%, #a5f3fc 50%, #c7d2fe 70%, #fff 100%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: heroFadeUp 0.8s ease-out both, heroTitleShimmer 5s linear infinite 0.8s;
+}
+
+@keyframes heroTitleShimmer {
+    0% { background-position: 0% center; }
+    100% { background-position: 200% center; }
+}
+
+/* ===== 标题下划线动画 ===== */
+.hero-accent-line {
+    height: 3px;
+    width: 0;
+    background: linear-gradient(90deg, #818cf8, #22d3ee, #818cf8);
+    background-size: 200% 100%;
+    border-radius: 2px;
+    margin-bottom: 14px;
+    animation: accentLineGrow 1s ease-out 0.4s forwards, accentLineShimmer 3s linear infinite 1.4s;
+}
+
+@keyframes accentLineGrow {
+    from { width: 0; }
+    to { width: 80px; }
+}
+
+@keyframes accentLineShimmer {
+    0% { background-position: 0% 0%; }
+    100% { background-position: 200% 0%; }
 }
 
 .hero-subtitle-anim {
@@ -712,13 +834,46 @@ ul, ol { list-style: none; }
     }
 }
 
-/* 数字hover放大 */
+/* ===== 统计卡片悬浮+发光 ===== */
 .hero-stat {
     transition: transform 0.3s var(--ease-out);
+    position: relative;
+    padding: 8px 0;
+}
+
+.hero-stat::before {
+    content: '';
+    position: absolute;
+    inset: -8px -12px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+    border-radius: 12px;
+    opacity: 0;
+    transition: opacity 0.3s var(--ease);
+    pointer-events: none;
 }
 
 .hero-stat:hover {
-    transform: translateY(-4px) scale(1.05);
+    transform: translateY(-6px) scale(1.05);
+}
+
+.hero-stat:hover::before {
+    opacity: 1;
+}
+
+/* 统计图标 */
+.hero-stat .stat-icon {
+    font-size: 20px;
+    margin-bottom: 4px;
+    animation: statIconPulse 3s ease-in-out infinite;
+}
+
+.hero-stat:nth-child(1) .stat-icon { animation-delay: 0s; }
+.hero-stat:nth-child(2) .stat-icon { animation-delay: 1s; }
+.hero-stat:nth-child(3) .stat-icon { animation-delay: 2s; }
+
+@keyframes statIconPulse {
+    0%, 100% { transform: scale(1); opacity: 0.9; }
+    50% { transform: scale(1.15); opacity: 1; }
 }
 
 /* 装饰性光斑 */
@@ -759,7 +914,7 @@ ul, ol { list-style: none; }
 
 .home-hero h1 {
     font-size: 30px;
-    margin-bottom: 12px;
+    margin-bottom: 0;
     position: relative;
     z-index: 1;
     letter-spacing: -0.5px;
@@ -792,6 +947,12 @@ ul, ol { list-style: none; }
     letter-spacing: 1px;
     line-height: 1.2;
     transition: color 0.3s var(--ease);
+    animation: numGlow 4s ease-in-out infinite;
+}
+
+@keyframes numGlow {
+    0%, 100% { text-shadow: 0 0 8px rgba(255, 255, 255, 0.3); }
+    50% { text-shadow: 0 0 16px rgba(165, 243, 252, 0.6), 0 0 24px rgba(129, 140, 248, 0.4); }
 }
 
 .hero-stat .label {
