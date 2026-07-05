@@ -1441,10 +1441,10 @@
     function renderRankingPage(container, cached, page, sortType, order, fundType, myRequestId) {
         if (myRequestId !== rankingRequestId) return;
 
-        var startIdx = (page - 1) * rankingPageSize;
-        var pageData = cached.ranking.slice(startIdx, startIdx + rankingPageSize);
+        // 缓存只存当前页数据(服务端分页),直接使用,不需slice
+        var pageData = cached.ranking;
 
-        if (pageData.length === 0) {
+        if (!pageData || pageData.length === 0) {
             container.innerHTML = '<div class="empty-state"><div class="icon">📊</div><h3>没有更多数据</h3></div>';
             return;
         }
@@ -1452,7 +1452,7 @@
         var changeColTitle = cached.actualNavPublished ? '今日涨跌幅' : '今日实时涨跌幅';
         var totalPages = cached.totalPages;
         var totalCount = cached.totalCount;
-        var startRank = startIdx;
+        var startRank = (page - 1) * rankingPageSize;
 
         container.innerHTML = `
             <div class="ranking-info-bar">
