@@ -290,23 +290,40 @@
                     <div class="orb orb-3"></div>
                 </div>
                 <div class="hero-shine"></div>
+                <div class="hero-rose">
+                    <div class="rose-wrap">
+                        <div class="rose">
+                            <div class="petal petal-1"></div>
+                            <div class="petal petal-2"></div>
+                            <div class="petal petal-3"></div>
+                            <div class="petal petal-4"></div>
+                            <div class="petal petal-5"></div>
+                            <div class="petal petal-6"></div>
+                            <div class="petal petal-7"></div>
+                            <div class="petal petal-8"></div>
+                            <div class="rose-center"></div>
+                        </div>
+                        <div class="rose-glow"></div>
+                        <div class="petal-fall p1"></div>
+                        <div class="petal-fall p2"></div>
+                        <div class="petal-fall p3"></div>
+                        <div class="petal-fall p4"></div>
+                        <div class="petal-fall p5"></div>
+                    </div>
+                </div>
                 <div class="hero-content">
                     <h1 class="hero-title-anim">${T('text_hero_title', '基金净值通 · 实时估值查询平台')}</h1>
-                    <div class="hero-accent-line"></div>
                     <p class="hero-subtitle-anim">${T('text_hero_subtitle', '覆盖全市场基金 · 盘中实时估值 · 历史净值走势 · 自选基金管理')}</p>
                     <div class="hero-stats">
                         <div class="hero-stat hero-stat-anim" style="animation-delay: 0.3s">
-                            <div class="stat-icon">📈</div>
                             <div class="num" data-target="10000" data-suffix="+">0</div>
                             <div class="label">${T('text_hero_stat1_label', '覆盖基金')}</div>
                         </div>
                         <div class="hero-stat hero-stat-anim" style="animation-delay: 0.5s">
-                            <div class="stat-icon">⚡</div>
                             <div class="num" data-target="3" data-suffix="s">0</div>
                             <div class="label">${T('text_hero_stat2_label', '估值更新')}</div>
                         </div>
                         <div class="hero-stat hero-stat-anim" style="animation-delay: 0.7s">
-                            <div class="stat-icon">🌐</div>
                             <div class="num" data-target="24" data-suffix="h">0</div>
                             <div class="label">${T('text_hero_stat3_label', '数据采集')}</div>
                         </div>
