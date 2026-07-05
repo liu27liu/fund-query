@@ -793,17 +793,17 @@ ul, ol { list-style: none; }
     100% { background-position: 200% center; }
 }
 
-/* ===== 玫瑰花开动画(逼真版) ===== */
+/* ===== 玫瑰花动画(白粉渐变·高心翘角·水珠) ===== */
 .hero-rose {
     position: absolute;
     top: 50%;
-    right: 6%;
+    right: 5%;
     transform: translateY(-50%);
-    width: 220px;
-    height: 220px;
+    width: 230px;
+    height: 250px;
     z-index: 2;
     pointer-events: none;
-    perspective: 600px;
+    perspective: 700px;
 }
 
 .rose-wrap {
@@ -820,158 +820,160 @@ ul, ol { list-style: none; }
     width: 0;
     height: 0;
     transform: translate(-50%, -50%) scale(0);
-    animation: roseBloom 2s cubic-bezier(0.34, 1.15, 0.64, 1) 0.3s forwards, roseSway 8s ease-in-out 3s infinite;
+    animation: roseBloom 1.8s cubic-bezier(0.34, 1.15, 0.64, 1) 0.3s forwards, roseSway 9s ease-in-out 3s infinite;
     transform-style: preserve-3d;
 }
 
 @keyframes roseBloom {
-    0% { transform: translate(-50%, -50%) scale(0) rotate(-90deg); }
+    0% { transform: translate(-50%, -50%) scale(0) rotate(-60deg); }
     100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); }
 }
 
 @keyframes roseSway {
     0%, 100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); }
-    25% { transform: translate(-50%, -50%) scale(1.03) rotate(2deg); }
-    75% { transform: translate(-50%, -50%) scale(1.03) rotate(-2deg); }
+    33% { transform: translate(-50%, -50%) scale(1.025) rotate(1.5deg); }
+    66% { transform: translate(-50%, -50%) scale(1.025) rotate(-1.5deg); }
 }
 
-/* 花瓣层 */
-.petal-layer {
+/* 花瓣容器 */
+.rose .petals {
     position: absolute;
     top: 0;
     left: 0;
     transform-style: preserve-3d;
 }
 
-/* 通用花瓣形状:卷曲水滴形 */
-.petal-layer .petal {
+/* 单片花瓣:水滴形+卷曲边缘,白粉渐变 */
+.rose .rp {
     position: absolute;
-    border-radius: 50% 50% 45% 45% / 70% 70% 30% 30%;
-    transform-origin: 50% 95%;
+    width: var(--w);
+    height: var(--h);
+    top: calc(var(--h) / -2);
+    left: calc(var(--w) / -2);
+    border-radius: 48% 48% 50% 50% / 68% 68% 32% 32%;
+    transform-origin: 50% 92%;
     opacity: 0;
-    transform: rotate(var(--a)) translateY(-100%) scale(0.1);
-    animation: petalUnfold 1.2s cubic-bezier(0.22, 1, 0.36, 1) var(--d) forwards;
-    box-shadow: inset 0 -8px 12px rgba(0,0,0,0.15), inset 0 4px 8px rgba(255,255,255,0.12);
+    transform: rotate(var(--ang)) translateX(var(--rad)) translateY(calc(var(--lift) * -1)) scale(0.1) perspective(450px) rotateX(75deg) rotateZ(var(--cx));
+    animation: petalUnfold 1.3s cubic-bezier(0.22, 1, 0.36, 1) var(--dl) forwards;
+    z-index: var(--z);
+    /* 白粉渐变:基部乳白/淡黄,顶端柔和粉红,内层更深粉 */
+    background:
+        radial-gradient(ellipse at 50% 85%, #fffbeb 0%, #fef3f2 12%, #ffe4e6 28%, #fecdd3 45%, #fda4af 62%, #fb7185 82%, #e11d48 100%);
+    /* 花瓣立体感:内阴影模拟卷曲,外高光模拟受光 */
+    box-shadow:
+        inset 0 -6px 14px rgba(225, 29, 72, 0.18),
+        inset 0 8px 12px rgba(255, 255, 255, 0.55),
+        inset 2px 0 6px rgba(254, 205, 211, 0.4),
+        inset -2px 0 6px rgba(254, 205, 211, 0.4),
+        0 2px 4px rgba(0, 0, 0, 0.08);
+    /* 花瓣边缘细描边 */
+    border: 0.5px solid rgba(251, 113, 133, 0.25);
+}
+
+/* 内层花瓣(t>0.6)更深粉,模拟花心 */
+.rose .rp[style*="--t:0.6"],
+.rose .rp[style*="--t:0.7"],
+.rose .rp[style*="--t:0.8"],
+.rose .rp[style*="--t:0.9"],
+.rose .rp[style*="--t:1.0"] {
+    background:
+        radial-gradient(ellipse at 50% 80%, #ffe4e6 0%, #fecdd3 15%, #fda4af 35%, #fb7185 55%, #e11d48 75%, #be123c 100%);
+    box-shadow:
+        inset 0 -4px 10px rgba(190, 18, 60, 0.25),
+        inset 0 6px 10px rgba(255, 255, 255, 0.4),
+        0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* 最内层花心(t>0.85):最深,紧裹 */
+.rose .rp[style*="--t:0.8"],
+.rose .rp[style*="--t:0.9"],
+.rose .rp[style*="--t:1.0"] {
+    background:
+        radial-gradient(ellipse at 50% 75%, #fecdd3 0%, #fb7185 25%, #e11d48 50%, #be123c 75%, #881337 100%);
+    box-shadow:
+        inset 0 -3px 8px rgba(136, 19, 55, 0.4),
+        inset 0 4px 8px rgba(254, 205, 211, 0.3);
 }
 
 @keyframes petalUnfold {
     0% {
         opacity: 0;
-        transform: rotate(var(--a)) translateY(-100%) scale(0.1) perspective(400px) rotateX(80deg);
+        transform: rotate(var(--ang)) translateX(var(--rad)) translateY(calc(var(--lift) * -1)) scale(0.1) perspective(450px) rotateX(75deg) rotateZ(var(--cx));
     }
-    60% {
-        opacity: 0.9;
+    50% {
+        opacity: 0.85;
     }
     100% {
         opacity: 1;
-        transform: rotate(var(--a)) translateY(-100%) scale(1) perspective(400px) rotateX(8deg);
+        transform: rotate(var(--ang)) translateX(var(--rad)) translateY(calc(var(--lift) * -1)) scale(1) perspective(450px) rotateX(calc(var(--cx) * 0.3)) rotateZ(0deg);
     }
 }
 
-/* 外层花瓣:最大,浅红,向外展开 */
-.petal-layer.outer .petal {
-    width: 80px;
-    height: 100px;
-    top: -50px;
-    left: -40px;
-    background:
-        radial-gradient(ellipse at 50% 20%, #fecaca 0%, #f87171 15%, #ef4444 40%, #dc2626 65%, #991b1b 100%);
-    border: 1px solid rgba(127, 29, 29, 0.3);
-    z-index: 1;
-}
-
-/* 中层花瓣:中等,中红 */
-.petal-layer.middle .petal {
-    width: 62px;
-    height: 78px;
-    top: -39px;
-    left: -31px;
-    background:
-        radial-gradient(ellipse at 50% 20%, #fca5a5 0%, #f87171 20%, #ef4444 45%, #dc2626 70%, #b91c1c 100%);
-    border: 1px solid rgba(127, 29, 29, 0.25);
-    z-index: 2;
-}
-
-/* 内层花瓣:较小,深红,向内卷 */
-.petal-layer.inner .petal {
-    width: 46px;
-    height: 58px;
-    top: -29px;
-    left: -23px;
-    background:
-        radial-gradient(ellipse at 50% 25%, #f87171 0%, #ef4444 25%, #dc2626 55%, #b91c1c 80%, #7f1d1d 100%);
-    border: 1px solid rgba(127, 29, 29, 0.2);
-    z-index: 3;
-}
-
-/* 花心花瓣:最小,最深,紧裹 */
-.petal-layer.core .petal {
-    width: 32px;
-    height: 42px;
-    top: -21px;
-    left: -16px;
-    background:
-        radial-gradient(ellipse at 50% 30%, #ef4444 0%, #dc2626 30%, #b91c1c 60%, #7f1d1d 90%, #450a0a 100%);
-    border: 1px solid rgba(69, 10, 10, 0.3);
-    z-index: 4;
-    border-radius: 50% 50% 40% 40% / 60% 60% 40% 40%;
-}
-
-/* 花苞中心:深红紧裹的未开花心 */
-.rose-bud {
+/* 水珠 */
+.rose .droplets {
     position: absolute;
-    width: 16px;
-    height: 20px;
-    top: -10px;
-    left: -8px;
-    border-radius: 50% 50% 40% 40% / 60% 60% 40% 40%;
-    background: radial-gradient(ellipse at 50% 30%, #b91c1c 0%, #7f1d1d 50%, #450a0a 100%);
+    top: 0;
+    left: 0;
+    z-index: 100;
+    pointer-events: none;
+}
+
+.rose .drop {
+    position: absolute;
+    width: var(--ds);
+    height: var(--ds);
+    left: var(--dx);
+    top: var(--dy);
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.5) 40%, rgba(255, 255, 255, 0.1) 70%, transparent 100%);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15), inset -1px -1px 2px rgba(254, 205, 211, 0.3);
     opacity: 0;
     transform: scale(0);
-    animation: budBloom 0.8s ease-out 3s forwards, budGlow 4s ease-in-out 3.8s infinite;
-    z-index: 5;
-    box-shadow: inset 0 -3px 6px rgba(0,0,0,0.4), 0 0 8px rgba(185, 28, 28, 0.4);
+    animation: dropAppear 0.6s ease-out var(--dd) forwards, dropShimmer 4s ease-in-out calc(var(--dd) + 1s) infinite;
 }
 
-@keyframes budBloom {
-    to { opacity: 1; transform: scale(1); }
+@keyframes dropAppear {
+    0% { opacity: 0; transform: scale(0); }
+    60% { transform: scale(1.3); }
+    100% { opacity: 1; transform: scale(1); }
 }
 
-@keyframes budGlow {
-    0%, 100% { box-shadow: inset 0 -3px 6px rgba(0,0,0,0.4), 0 0 8px rgba(185, 28, 28, 0.3); }
-    50% { box-shadow: inset 0 -3px 6px rgba(0,0,0,0.4), 0 0 18px rgba(220, 38, 38, 0.5); }
+@keyframes dropShimmer {
+    0%, 100% { box-shadow: 0 1px 2px rgba(0,0,0,0.15), inset -1px -1px 2px rgba(254, 205, 211, 0.3); }
+    50% { box-shadow: 0 1px 3px rgba(0,0,0,0.2), inset -1px -1px 2px rgba(255, 255, 255, 0.6), 0 0 4px rgba(255, 255, 255, 0.4); }
 }
 
-/* 玫瑰光晕 */
+/* 玫瑰柔光晕(粉白) */
 .rose-glow {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 200px;
-    height: 200px;
+    width: 210px;
+    height: 210px;
     transform: translate(-50%, -50%) scale(0);
-    background: radial-gradient(circle, rgba(220, 38, 38, 0.18) 0%, rgba(248, 113, 113, 0.08) 40%, transparent 70%);
+    background: radial-gradient(circle, rgba(251, 113, 133, 0.16) 0%, rgba(254, 205, 211, 0.08) 40%, rgba(255, 255, 255, 0.04) 60%, transparent 75%);
     border-radius: 50%;
-    animation: glowPulse 5s ease-in-out 2.5s infinite;
+    animation: glowPulse 6s ease-in-out 2.5s infinite;
     pointer-events: none;
+    filter: blur(4px);
 }
 
 @keyframes glowPulse {
     0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
-    50% { transform: translate(-50%, -50%) scale(1.25); opacity: 0.9; }
+    50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.85; }
 }
 
-/* 飘落花瓣:更逼真的形状 */
+/* 飘落花瓣:白粉色 */
 .petal-fall {
     position: absolute;
-    width: 16px;
-    height: 22px;
+    width: 18px;
+    height: 24px;
     top: -25px;
-    border-radius: 50% 50% 45% 45% / 65% 65% 35% 35%;
-    background: radial-gradient(ellipse at 50% 20%, #fca5a5 0%, #ef4444 40%, #b91c1c 90%);
+    border-radius: 48% 48% 50% 50% / 68% 68% 32% 32%;
+    background: radial-gradient(ellipse at 50% 20%, #fffbeb 0%, #ffe4e6 30%, #fda4af 60%, #fb7185 90%);
     opacity: 0;
-    animation: petalFall 9s ease-in infinite;
-    box-shadow: inset 0 -3px 4px rgba(0,0,0,0.1);
+    animation: petalFall 10s ease-in infinite;
+    box-shadow: inset 0 -2px 4px rgba(225, 29, 72, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 .petal-fall.pf1 { left: 15%; animation-delay: 3.5s; }
@@ -983,10 +985,10 @@ ul, ol { list-style: none; }
 
 @keyframes petalFall {
     0% { transform: translateY(0) rotate(0deg) translateX(0); opacity: 0; }
-    8% { opacity: 0.85; }
-    50% { transform: translateY(110px) rotate(180deg) translateX(var(--sway, 20px)); opacity: 0.7; }
-    90% { opacity: 0.4; }
-    100% { transform: translateY(240px) rotate(400deg) translateX(calc(var(--sway, 20px) * -1)); opacity: 0; }
+    8% { opacity: 0.8; }
+    50% { transform: translateY(115px) rotate(180deg) translateX(var(--sway, 20px)); opacity: 0.65; }
+    90% { opacity: 0.35; }
+    100% { transform: translateY(245px) rotate(400deg) translateX(calc(var(--sway, 20px) * -1)); opacity: 0; }
 }
 
 .hero-subtitle-anim {
