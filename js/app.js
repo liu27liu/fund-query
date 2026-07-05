@@ -293,15 +293,7 @@
                 <div class="hero-rose">
                     <div class="rose-wrap">
                         <div class="rose">
-                            <img class="rose-img" src="assets/rose-hero.png?v=1" alt="rose">
-                            <div class="droplets">
-                                <span class="drop" style="--dx:30%;--dy:25%;--ds:6px;--dd:3.2s"></span>
-                                <span class="drop" style="--dx:55%;--dy:40%;--ds:4px;--dd:3.6s"></span>
-                                <span class="drop" style="--dx:42%;--dy:60%;--ds:7px;--dd:4s"></span>
-                                <span class="drop" style="--dx:65%;--dy:30%;--ds:5px;--dd:3.4s"></span>
-                                <span class="drop" style="--dx:38%;--dy:45%;--ds:3px;--dd:3.8s"></span>
-                                <span class="drop" style="--dx:50%;--dy:70%;--ds:5px;--dd:4.2s"></span>
-                            </div>
+                            <img class="rose-img" src="assets/rose-clean.png?v=2" alt="rose">
                         </div>
                         <div class="rose-glow"></div>
                         <div class="petal-fall pf1"></div>
