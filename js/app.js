@@ -1305,30 +1305,34 @@
 
             if (myRequestId !== rankingRequestId) return;
 
-            // 合并实时估值数据
+            // 合并实时估值数据:仅在估值与官方数据方向一致时使用估值,避免脏数据
+            // (盘后官方净值已发布时,估值接口可能返回过期数据导致净值/涨跌幅矛盾)
             var dailyRanking = candidates.map(function (f) {
                 var est = pageEstimates.find(function (e) { return e.fundcode === f.code; });
+                var officialChange = parseFloat(f.change) || 0;
                 if (est && est.gszzl !== null && est.gszzl !== undefined) {
-                    // 有实时估值,用估值涨跌幅
-                    f.realtimeChange = est.gszzl;
-                    f.netValue = est.gsz;
-                    f.hasRealtime = true;
+                    var estChange = parseFloat(est.gszzl) || 0;
+                    // 仅当估值涨跌幅与官方涨跌幅同号(同涨同跌)且差异不大时,才使用估值
+                    if ((officialChange <= 0 && estChange <= 0) || (officialChange >= 0 && estChange >= 0)) {
+                        if (Math.abs(estChange - officialChange) < 3) {
+                            f.realtimeChange = est.gszzl;
+                            f.netValue = est.gsz;
+                            f.hasRealtime = true;
+                        } else {
+                            // 差异过大,估值可能过期,用官方数据
+                            f.realtimeChange = f.change;
+                            f.hasRealtime = false;
+                        }
+                    } else {
+                        // 方向相反,估值已过期,用官方数据
+                        f.realtimeChange = f.change;
+                        f.hasRealtime = false;
+                    }
                 } else {
-                    // 无估值,用API返回的涨跌幅
                     f.realtimeChange = f.change;
                     f.hasRealtime = false;
                 }
                 return f;
-            });
-
-            // 按实时估值涨跌幅重新排序(服务端按昨日涨跌幅排序,需用实时估值重排)
-            // order=desc: 涨幅榜从大到小; 用于跌榜时order=asc,从小到大
-            dailyRanking.sort(function (a, b) {
-                var va = (a.realtimeChange !== null && a.realtimeChange !== undefined) ? a.realtimeChange : a.change;
-                var vb = (b.realtimeChange !== null && b.realtimeChange !== undefined) ? b.realtimeChange : b.change;
-                va = parseFloat(va) || 0;
-                vb = parseFloat(vb) || 0;
-                return order === 'desc' ? (vb - va) : (va - vb);
             });
 
             // 写入缓存
