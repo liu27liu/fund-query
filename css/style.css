@@ -853,12 +853,15 @@ ul, ol { list-style: none; }
     66% { transform: translate(-50%, -50%) scale(1.03) rotate(-1.5deg); }
 }
 
-/* 玫瑰图片:不裁剪成圆形,保留花朵自然轮廓 */
+/* 玫瑰图片:边缘渐变融入横幅背景 */
 .rose-img {
     width: 100%;
     height: 100%;
     object-fit: contain;
-    filter: drop-shadow(0 6px 20px rgba(244, 63, 94, 0.3)) drop-shadow(0 2px 8px rgba(0, 0, 0, 0.12));
+    /* 用mask让边缘渐变透明,融入横幅背景 */
+    -webkit-mask-image: radial-gradient(ellipse 45% 45% at 50% 48%, #000 60%, transparent 95%);
+    mask-image: radial-gradient(ellipse 45% 45% at 50% 48%, #000 60%, transparent 95%);
+    filter: drop-shadow(0 4px 16px rgba(244, 63, 94, 0.25));
 }
 
 /* 玫瑰柔光晕(粉白) */
