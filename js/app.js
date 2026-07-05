@@ -293,7 +293,7 @@
                 <div class="hero-rose">
                     <div class="rose-wrap">
                         <div class="rose">
-                            <div class="petals"></div>
+                            <img class="rose-img" src="assets/rose-hero.png?v=1" alt="rose">
                             <div class="droplets">
                                 <span class="drop" style="--dx:30%;--dy:25%;--ds:6px;--dd:3.2s"></span>
                                 <span class="drop" style="--dx:55%;--dy:40%;--ds:4px;--dd:3.6s"></span>
@@ -566,9 +566,6 @@
         // Hero数字滚动动画
         animateHeroStats();
 
-        // 生成玫瑰花斐波那契螺旋花瓣
-        buildRosePetals();
-
         // 启动资讯自动更新
         startNewsAutoRefresh();
     }
@@ -670,35 +667,6 @@
             }
             requestAnimationFrame(step);
         });
-    }
-
-    // 生成玫瑰花花瓣:斐波那契螺旋排列(黄金角度137.5度)
-    // 风格:白粉色渐变、高心翘角杯状、带水珠
-    function buildRosePetals() {
-        var container = document.querySelector('.rose .petals');
-        if (!container) return;
-        var N = 26; // 花瓣总数
-        var goldenAngle = 137.508;
-        var html = '';
-        for (var i = 0; i < N; i++) {
-            // 从外向内: i=0最外层, i=N-1最内层花心
-            var t = i / (N - 1); // 0=最外, 1=最内
-            var angle = i * goldenAngle;
-            // 半径从外到内递减(杯状:内层高,外层低)
-            var radius = 88 - t * 66; // 外层88px, 内层22px
-            // 花瓣尺寸从外到内递减
-            var w = 78 - t * 50; // 外78px, 内28px
-            var h = 95 - t * 60; // 外95px, 内35px
-            // 高度抬升:内层花瓣更高(高心翘角)
-            var lift = t * 18; // 内层抬高18px
-            // 延迟:从外到内依次绽放
-            var delay = 0.5 + t * 2.4;
-            // 卷曲程度:外层外翻,内层内卷
-            var curlX = -8 + t * 35; // 外层-8度外翻,内层+27度内卷
-            var z = N - i;
-            html += '<div class="rp" style="--ang:' + angle.toFixed(2) + 'deg;--rad:' + radius.toFixed(1) + 'px;--w:' + w.toFixed(0) + 'px;--h:' + h.toFixed(0) + 'px;--dl:' + delay.toFixed(2) + 's;--cx:' + curlX.toFixed(0) + 'deg;--lift:' + lift.toFixed(0) + 'px;--z:' + z + ';--t:' + t.toFixed(2) + '"></div>';
-        }
-        container.innerHTML = html;
     }
 
     // ========== 持仓概览(首页) ==========
