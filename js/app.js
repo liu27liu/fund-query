@@ -293,22 +293,41 @@
                 <div class="hero-rose">
                     <div class="rose-wrap">
                         <div class="rose">
-                            <div class="petal petal-1"></div>
-                            <div class="petal petal-2"></div>
-                            <div class="petal petal-3"></div>
-                            <div class="petal petal-4"></div>
-                            <div class="petal petal-5"></div>
-                            <div class="petal petal-6"></div>
-                            <div class="petal petal-7"></div>
-                            <div class="petal petal-8"></div>
-                            <div class="rose-center"></div>
+                            <div class="petal-layer outer">
+                                <div class="petal" style="--a:0deg;--d:0.6s"></div>
+                                <div class="petal" style="--a:60deg;--d:0.7s"></div>
+                                <div class="petal" style="--a:120deg;--d:0.8s"></div>
+                                <div class="petal" style="--a:180deg;--d:0.9s"></div>
+                                <div class="petal" style="--a:240deg;--d:1.0s"></div>
+                                <div class="petal" style="--a:300deg;--d:1.1s"></div>
+                            </div>
+                            <div class="petal-layer middle">
+                                <div class="petal" style="--a:30deg;--d:1.3s"></div>
+                                <div class="petal" style="--a:102deg;--d:1.42s"></div>
+                                <div class="petal" style="--a:174deg;--d:1.54s"></div>
+                                <div class="petal" style="--a:246deg;--d:1.66s"></div>
+                                <div class="petal" style="--a:318deg;--d:1.78s"></div>
+                            </div>
+                            <div class="petal-layer inner">
+                                <div class="petal" style="--a:15deg;--d:2.0s"></div>
+                                <div class="petal" style="--a:105deg;--d:2.12s"></div>
+                                <div class="petal" style="--a:195deg;--d:2.24s"></div>
+                                <div class="petal" style="--a:285deg;--d:2.36s"></div>
+                            </div>
+                            <div class="petal-layer core">
+                                <div class="petal" style="--a:45deg;--d:2.6s"></div>
+                                <div class="petal" style="--a:165deg;--d:2.72s"></div>
+                                <div class="petal" style="--a:285deg;--d:2.84s"></div>
+                            </div>
+                            <div class="rose-bud"></div>
                         </div>
                         <div class="rose-glow"></div>
-                        <div class="petal-fall p1"></div>
-                        <div class="petal-fall p2"></div>
-                        <div class="petal-fall p3"></div>
-                        <div class="petal-fall p4"></div>
-                        <div class="petal-fall p5"></div>
+                        <div class="petal-fall pf1"></div>
+                        <div class="petal-fall pf2"></div>
+                        <div class="petal-fall pf3"></div>
+                        <div class="petal-fall pf4"></div>
+                        <div class="petal-fall pf5"></div>
+                        <div class="petal-fall pf6"></div>
                     </div>
                 </div>
                 <div class="hero-content">
