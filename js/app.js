@@ -1333,7 +1333,7 @@
 
                 if (myRequestId !== rankingRequestId) return;
 
-                // 合并实时估值:仅保留有今日实时估值的基金参与实时排名
+                // 合并实时估值:有今日实时估值的用估值,无估值的按0%算
                 poolCandidates = poolCandidates.map(function (f) {
                     var est = poolEstimates.find(function (e) { return e.fundcode === f.code; });
                     if (est && est.gszzl !== null && est.gszzl !== undefined && est.gszzl !== '' && parseFloat(est.gszzl) === parseFloat(est.gszzl)) {
@@ -1341,30 +1341,27 @@
                         f.netValue = est.gsz;
                         f.hasRealtime = true;
                     } else {
-                        // 无实时估值的基金标记,不参与实时排名
-                        f.realtimeChange = null;
+                        // 当日无实时估值,按0%算
+                        f.realtimeChange = 0;
                         f.hasRealtime = false;
                     }
                     return f;
                 });
 
-                // 过滤掉无实时估值的基金(不参与实时排名)
-                var candidatesWithEstimate = poolCandidates.filter(function (f) { return f.hasRealtime; });
-
                 // 按今日实时涨跌幅重新排序(desc:涨幅榜从大到小,asc:跌幅榜从小到大)
-                candidatesWithEstimate.sort(function (a, b) {
+                poolCandidates.sort(function (a, b) {
                     var va = parseFloat(a.realtimeChange) || 0;
                     var vb = parseFloat(b.realtimeChange) || 0;
                     return order === 'desc' ? (vb - va) : (va - vb);
                 });
 
-                // 缓存候选池(仅含有实时估值的基金)
+                // 缓存候选池
                 rankingCandidatePool = {
                     sortType: sortType,
                     order: order,
                     fundType: fundType,
-                    candidates: candidatesWithEstimate,
-                    total: candidatesWithEstimate.length,
+                    candidates: poolCandidates,
+                    total: poolCandidates.length,
                     time: Date.now()
                 };
             }
