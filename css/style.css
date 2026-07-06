@@ -2305,15 +2305,15 @@ ul, ol { list-style: none; }
     margin-top: 4px;
 }
 
-/* 盈亏颜色（在持仓总览中） */
+/* 盈亏颜色（在持仓总览中）- A股习惯：涨红跌绿 */
 .profit-positive {
-    color: #86efac;
-    text-shadow: 0 0 10px rgba(22,163,74,0.35);
+    color: var(--up);
+    font-weight: 600;
 }
 
 .profit-negative {
-    color: #fca5a5;
-    text-shadow: 0 0 10px rgba(225,29,72,0.35);
+    color: var(--down);
+    font-weight: 600;
 }
 
 /* 持仓表格：比普通表格更精致 */
