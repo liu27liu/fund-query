@@ -310,7 +310,6 @@
                     </div>
                 </div>
                 <div class="hero-quote" id="heroQuote">
-                    <div class="hero-quote-icon">"</div>
                     <div class="hero-quote-text">加载中...</div>
                     <div class="hero-quote-author">— 每日语录</div>
                 </div>

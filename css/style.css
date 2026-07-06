@@ -935,14 +935,6 @@ ul, ol { list-style: none; }
     animation: quoteFadeIn 1.2s ease 0.8s both;
 }
 
-.hero-quote-icon {
-    font-size: 56px;
-    font-family: Georgia, serif;
-    line-height: 0.8;
-    color: rgba(255, 255, 255, 0.2);
-    margin-bottom: 8px;
-}
-
 .hero-quote-text {
     font-size: 16px;
     font-weight: 500;
