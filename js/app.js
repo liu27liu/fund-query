@@ -1129,10 +1129,18 @@
             var colorClass = isUp ? 'market-up' : 'market-down';
             var sign = isUp ? '+' : '';
 
-            // 更新颜色class
-            card.className = 'market-card ' + colorClass;
+            // 更新颜色class(平滑切换,不闪烁)
+            if (card.classList.contains('market-up') && !isUp) {
+                card.classList.remove('market-up');
+                card.classList.add('market-down');
+            } else if (card.classList.contains('market-down') && isUp) {
+                card.classList.remove('market-down');
+                card.classList.add('market-up');
+            } else if (!card.classList.contains('market-up') && !card.classList.contains('market-down')) {
+                card.classList.add(colorClass);
+            }
 
-            // 更新价格
+            // 更新价格(仅改文本,不触动DOM结构)
             var priceEl = card.querySelector('.market-price');
             if (priceEl) priceEl.textContent = FundAPI.formatNum(idx.price);
 
@@ -1141,10 +1149,6 @@
             var changePctEl = card.querySelector('.market-change-pct');
             if (changeValEl) changeValEl.textContent = sign + FundAPI.formatNum(idx.change);
             if (changePctEl) changePctEl.textContent = sign + idx.changePercent.toFixed(2) + '%';
-
-            // 闪烁高亮
-            card.classList.add('flash-update');
-            setTimeout(function () { card.classList.remove('flash-update'); }, 600);
         });
     }
 
