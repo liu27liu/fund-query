@@ -8,6 +8,7 @@ import re
 import json
 import time
 import os
+import math
 import random
 import hashlib
 import threading
@@ -1142,6 +1143,194 @@ def _fetch_ranking(cache_key, sort_type, size, page, fund_type, order):
     except Exception as e:
         print(f'[排行异常]: {e}')
         return None
+
+
+# ========== 实时涨跌排名(全市场) ==========
+# 后台预加载锁,防止多次同时拉取全市场
+_realtime_rank_loading = {}
+_realtime_rank_lock_lock = threading.Lock()
+
+
+def _fetch_all_funds(fund_type, order):
+    """拉取全市场基金列表(按上一交易日涨跌幅排序)"""
+    url = 'https://fund.eastmoney.com/data/rankhandler.aspx'
+    st = 'asc' if order == 'asc' else 'desc'
+    params = {
+        'op': 'ph',
+        'dt': 'kf',
+        'ft': fund_type,
+        'rs': '',
+        'gs': 0,
+        'sc': 'rzdf',
+        'st': st,
+        'pi': 1,
+        'pn': 12000,  # 一次拉取全市场
+        'dx': 1
+    }
+    rank_headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'https://fund.eastmoney.com/data/fundranking.html'
+    }
+    resp = SESSION.get(url, params=params, headers=rank_headers, timeout=15)
+    text = resp.text
+
+    total_count = 0
+    count_match = re.search(r'allRecords:(\d+)', text)
+    if count_match:
+        total_count = int(count_match.group(1))
+
+    match = re.search(r'datas:\[(.+?)\]', text, re.DOTALL)
+    if not match:
+        return [], 0
+
+    raw_items = match.group(1).split('","')
+    results = []
+    for raw in raw_items:
+        raw = raw.strip('"').strip()
+        if not raw:
+            continue
+        parts = raw.split(',')
+        if len(parts) >= 7:
+            results.append({
+                'code': parts[0],
+                'name': parts[1],
+                'type': parse_fund_type(parts[2] if len(parts) > 2 else ''),
+                'netValue': safe_float(parts[4]) if len(parts) > 4 else 0,
+                'totalNetValue': safe_float(parts[5]) if len(parts) > 5 else 0,
+                'change': safe_float(parts[6]) if len(parts) > 6 else 0,
+            })
+    return results, total_count
+
+
+def _fetch_estimate_for_code(code):
+    """获取单只基金的实时估值"""
+    url = f'https://fundgz.1234567.com.cn/js/{code}.js'
+    params = {'rt': int(time.time() * 1000)}
+    try:
+        resp = SESSION.get(url, params=params, timeout=5)
+        text = resp.text.strip()
+        match = re.search(r'jsonpgz\((.+)\)', text)
+        if match:
+            data = json.loads(match.group(1))
+            gszzl = safe_float(data.get('gszzl'))
+            gsz = safe_float(data.get('gsz'))
+            if gszzl == gszzl:  # not NaN
+                return {'code': code, 'gszzl': gszzl, 'gsz': gsz}
+    except Exception:
+        pass
+    return None
+
+
+def _build_realtime_ranking(sort_type, order, fund_type):
+    """构建全市场实时涨跌排名(服务端并发拉取估值+排序)"""
+    # 1. 拉取全市场基金
+    all_funds, total = _fetch_all_funds(fund_type, order)
+    if not all_funds:
+        return {'funds': [], 'total': 0}
+
+    # 2. 并发拉取所有基金的实时估值(150并发)
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    estimates = {}
+    codes = [f['code'] for f in all_funds]
+    with ThreadPoolExecutor(max_workers=150) as executor:
+        future_map = {executor.submit(_fetch_estimate_for_code, c): c for c in codes}
+        for future in as_completed(future_map, timeout=60):
+            try:
+                result = future.result(timeout=5)
+                if result:
+                    estimates[result['code']] = result
+            except Exception:
+                pass
+
+    # 3. 合并实时估值:有估值的用估值,无估值的按0%算
+    for f in all_funds:
+        est = estimates.get(f['code'])
+        if est and est['gszzl'] is not None:
+            f['realtimeChange'] = est['gszzl']
+            f['netValue'] = est['gsz']
+            f['hasRealtime'] = True
+        else:
+            f['realtimeChange'] = 0
+            f['hasRealtime'] = False
+
+    # 4. 按今日实时涨跌幅排序
+    all_funds.sort(
+        key=lambda f: float(f['realtimeChange']) if f['realtimeChange'] is not None else 0,
+        reverse=(order == 'desc')
+    )
+
+    return {'funds': all_funds, 'total': len(all_funds)}
+
+
+@app.route('/api/ranking/realtime')
+def api_ranking_realtime():
+    """实时涨跌排名 - 全市场基金按今日实时估值涨跌幅排序,服务端缓存90秒"""
+    order = request.args.get('order', 'desc')  # desc:涨幅榜, asc:跌幅榜
+    fund_type = request.args.get('fundType', 'all')
+    page = int(request.args.get('page', '1'))
+    size = int(request.args.get('size', '20'))
+
+    cache_key = f'realtime_rank:{order}:{fund_type}'
+
+    # 检查缓存(90秒)
+    cached = _get_cache(cache_key, 90)
+    if cached:
+        start = (page - 1) * size
+        page_funds = cached['funds'][start:start + size]
+        return jsonify({
+            'funds': page_funds,
+            'total': cached['total'],
+            'totalPages': math.ceil(cached['total'] / size),
+            'page': page,
+            'cached': True
+        })
+
+    # 防止并发重复拉取(同key加锁)
+    with _realtime_rank_lock_lock:
+        if cache_key not in _realtime_rank_loading:
+            _realtime_rank_loading[cache_key] = threading.Lock()
+        lock = _realtime_rank_loading[cache_key]
+
+    acquired = lock.acquire(blocking=False)
+    if not acquired:
+        # 另一个线程正在拉取,等待最多60秒
+        acquired = lock.acquire(timeout=60)
+
+    # 再次检查缓存(可能其他线程已完成)
+    cached = _get_cache(cache_key, 90)
+    if cached:
+        if acquired:
+            lock.release()
+        start = (page - 1) * size
+        page_funds = cached['funds'][start:start + size]
+        return jsonify({
+            'funds': page_funds,
+            'total': cached['total'],
+            'totalPages': math.ceil(cached['total'] / size),
+            'page': page,
+            'cached': True
+        })
+
+    # 拉取全市场实时排名
+    try:
+        result = _build_realtime_ranking('RZDF', order, fund_type)
+        _set_cache(cache_key, result)
+    except Exception as e:
+        print(f'[实时排名异常]: {e}')
+        result = {'funds': [], 'total': 0}
+
+    if acquired:
+        lock.release()
+
+    start = (page - 1) * size
+    page_funds = result['funds'][start:start + size]
+    return jsonify({
+        'funds': page_funds,
+        'total': result['total'],
+        'totalPages': math.ceil(result['total'] / size),
+        'page': page,
+        'cached': False
+    })
 
 
 @app.route('/api/news')

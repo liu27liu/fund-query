@@ -247,6 +247,31 @@ const FundAPI = (function () {
     }
 
     /**
+     * 获取全市场实时涨跌排名(服务端排序+缓存)
+     */
+    async function getRealtimeRanking(order, fundType, page, size) {
+        order = order || 'desc';
+        fundType = fundType || 'all';
+        page = page || 1;
+        size = size || 20;
+        try {
+            const data = await fetchJSON('/api/ranking/realtime?order=' + order + '&fundType=' + fundType + '&page=' + page + '&size=' + size, 90000);
+            if (data && data.funds) {
+                return {
+                    funds: data.funds,
+                    total: data.total || 0,
+                    totalPages: data.totalPages || 0,
+                    cached: data.cached || false
+                };
+            }
+            return { funds: [], total: 0, totalPages: 0, cached: false };
+        } catch (e) {
+            console.warn('实时排名接口异常:', e);
+            return { funds: [], total: 0, totalPages: 0, cached: false };
+        }
+    }
+
+    /**
      * 热门基金池 - 每天随机展示8只
      */
     var HOT_FUND_POOL = [
@@ -521,6 +546,7 @@ const FundAPI = (function () {
         getFundDetail: getFundDetail,
         getFundRanking: getFundRanking,
         getFundRankingWithTotal: getFundRankingWithTotal,
+        getRealtimeRanking: getRealtimeRanking,
         getHotFunds: getHotFunds,
         getHotKeywords: getHotKeywords,
         getFundList: getFundList,
