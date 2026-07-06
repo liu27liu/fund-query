@@ -463,6 +463,18 @@ const FundAPI = (function () {
         }
     }
 
+    // ========== 每日励志语录 ==========
+    async function getDailyQuote() {
+        try {
+            const data = await fetchJSON('/api/quote');
+            if (data && data.text) return data;
+            return null;
+        } catch (e) {
+            console.warn('每日语录接口异常:', e);
+            return null;
+        }
+    }
+
     // ========== 大盘指数实时行情 ==========
     async function getMarketIndices() {
         try {
@@ -550,6 +562,7 @@ const FundAPI = (function () {
         getHotFunds: getHotFunds,
         getHotKeywords: getHotKeywords,
         getFundList: getFundList,
+        getDailyQuote: getDailyQuote,
         getNews: getNews,
         resetNewsCursor: function () { newsSortEnd = ''; },
         getMarketIndices: getMarketIndices,

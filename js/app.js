@@ -309,6 +309,11 @@
                         </div>
                     </div>
                 </div>
+                <div class="hero-quote" id="heroQuote">
+                    <div class="hero-quote-icon">"</div>
+                    <div class="hero-quote-text">加载中...</div>
+                    <div class="hero-quote-author">— 每日语录</div>
+                </div>
             </div>
 
             <div id="portfolioOverview"></div>
@@ -541,6 +546,9 @@
         // 预加载所有portal区块数据(不等点击,页面加载即并行获取)
         preloadPortalSections();
 
+        // 加载每日励志语录
+        loadDailyQuote();
+
         // 启动首页自动刷新
         startHomeAutoRefresh();
 
@@ -651,6 +659,18 @@
             }
             requestAnimationFrame(step);
         });
+    }
+
+    // 加载每日励志语录
+    async function loadDailyQuote() {
+        var quoteEl = document.getElementById('heroQuote');
+        if (!quoteEl) return;
+        var data = await FundAPI.getDailyQuote();
+        if (!data) return;
+        var textEl = quoteEl.querySelector('.hero-quote-text');
+        var authorEl = quoteEl.querySelector('.hero-quote-author');
+        if (textEl) textEl.textContent = data.text;
+        if (authorEl) authorEl.textContent = '— ' + data.author;
     }
 
     // ========== 持仓概览(首页) ==========

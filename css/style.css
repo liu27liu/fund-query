@@ -924,6 +924,45 @@ ul, ol { list-style: none; }
     margin-top: 2px;
 }
 
+/* 每日励志语录 */
+.hero-quote {
+    position: absolute;
+    right: 40px;
+    top: 50%;
+    transform: translateY(-50%);
+    max-width: 280px;
+    z-index: 2;
+    animation: quoteFadeIn 1.2s ease 0.8s both;
+}
+
+.hero-quote-icon {
+    font-size: 56px;
+    font-family: Georgia, serif;
+    line-height: 0.8;
+    color: rgba(255, 255, 255, 0.2);
+    margin-bottom: 8px;
+}
+
+.hero-quote-text {
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    margin-bottom: 10px;
+}
+
+.hero-quote-author {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+    text-align: right;
+}
+
+@keyframes quoteFadeIn {
+    from { opacity: 0; transform: translateY(-50%) translateX(20px); }
+    to { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+
 /* 区块标题 */
 .section-title {
     font-size: 18px;
@@ -3724,6 +3763,10 @@ select.form-input {
     .hero-stats {
         gap: 18px;
         flex-wrap: wrap;
+    }
+
+    .hero-quote {
+        display: none;
     }
 
     .hero-stat .num {
