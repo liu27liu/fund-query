@@ -1505,7 +1505,7 @@
 
         container.innerHTML = `
             <div class="ranking-info-bar">
-                <span>全市场共 <strong>${totalCount}</strong> 只基金，第 ${page}/${totalPages} 页（${changeColTitle}排序）</span>
+                <span>实时排名前 <strong>${totalCount}</strong> 只基金，第 ${page}/${totalPages} 页（${changeColTitle}排序）</span>
             </div>
             <div class="ranking-table-fixed">
                 <table class="fund-table">
