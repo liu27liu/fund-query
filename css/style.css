@@ -3766,7 +3766,12 @@ select.form-input {
     }
 
     .hero-quote {
-        display: none;
+        max-width: 220px;
+        right: 22px;
+    }
+
+    .hero-quote-text {
+        font-size: 14px;
     }
 
     .hero-stat .num {
@@ -4026,6 +4031,9 @@ select.form-input {
         flex-direction: column;
         gap: 12px;
         align-items: flex-start;
+    }
+    .hero-quote {
+        display: none;
     }
 
     /* 持仓页按钮堆叠 */
