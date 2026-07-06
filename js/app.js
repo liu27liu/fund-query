@@ -177,6 +177,7 @@
         if (path !== '/' && path !== '') {
             stopHomeAutoRefresh();
             stopNewsAutoRefresh();
+            stopMarketAutoRefresh();
         }
 
         // 更新导航高亮
@@ -548,6 +549,9 @@
 
         // 启动资讯自动更新
         startNewsAutoRefresh();
+
+        // 启动大盘指数自动刷新(独立定时器,15秒一次)
+        startMarketAutoRefresh();
     }
 
     // 预加载所有portal区块,实现点开即显示
@@ -1059,6 +1063,70 @@
                 </div>
             `;
         }).join('');
+    }
+
+    // ========== 大盘指数自动刷新(独立定时器,像资讯一样实时更新) ==========
+    var marketAutoRefreshTimer = null;
+    var MARKET_REFRESH_INTERVAL = 15; // 大盘指数刷新间隔(秒)
+
+    function startMarketAutoRefresh() {
+        stopMarketAutoRefresh();
+        marketAutoRefreshTimer = setInterval(function () {
+            var path = location.hash.slice(1) || '/';
+            if (path !== '/' && path !== '') {
+                stopMarketAutoRefresh();
+                return;
+            }
+            // 静默刷新大盘指数(不重建DOM,只更新数值)
+            silentRefreshMarketIndices();
+        }, MARKET_REFRESH_INTERVAL * 1000);
+    }
+
+    function stopMarketAutoRefresh() {
+        if (marketAutoRefreshTimer) { clearInterval(marketAutoRefreshTimer); marketAutoRefreshTimer = null; }
+    }
+
+    // 静默刷新:只更新已有卡片的数值和涨跌,不重建DOM(避免闪烁)
+    async function silentRefreshMarketIndices() {
+        var container = document.getElementById('marketDashboard');
+        if (!container) return;
+        var cards = container.querySelectorAll('.market-card');
+        if (cards.length === 0) return; // 还没加载过,跳过
+
+        var indices = await FundAPI.getMarketIndices();
+        if (!indices || indices.length === 0) return;
+
+        // 构建code->data映射
+        var dataMap = {};
+        indices.forEach(function (idx) { dataMap[idx.code] = idx; });
+
+        // 逐个更新已有卡片
+        cards.forEach(function (card) {
+            var code = card.dataset.code;
+            var idx = dataMap[code];
+            if (!idx) return;
+
+            var isUp = idx.changePercent >= 0;
+            var colorClass = isUp ? 'market-up' : 'market-down';
+            var sign = isUp ? '+' : '';
+
+            // 更新颜色class
+            card.className = 'market-card ' + colorClass;
+
+            // 更新价格
+            var priceEl = card.querySelector('.market-price');
+            if (priceEl) priceEl.textContent = FundAPI.formatNum(idx.price);
+
+            // 更新涨跌值和百分比
+            var changeValEl = card.querySelector('.market-change-val');
+            var changePctEl = card.querySelector('.market-change-pct');
+            if (changeValEl) changeValEl.textContent = sign + FundAPI.formatNum(idx.change);
+            if (changePctEl) changePctEl.textContent = sign + idx.changePercent.toFixed(2) + '%';
+
+            // 闪烁高亮
+            card.classList.add('flash-update');
+            setTimeout(function () { card.classList.remove('flash-update'); }, 600);
+        });
     }
 
     // ========== 7x24实时资讯 ==========
@@ -2741,17 +2809,11 @@
         statusEl.textContent = (isSuccess ? '已更新 ' : '更新失败 ') + timeStr;
     }
 
-    // 刷新首页数据：大盘指数 + 板块行情 + 涨跌榜 + 持仓概览 + 资讯
-    // 并行加载所有数据，大幅缩短总等待时间
+    // 刷新首页数据：板块行情 + 涨跌榜 + 持仓概览
+    // 大盘指数和资讯由独立的自动刷新定时器处理,不在此处刷新
     async function refreshHomeData() {
         var tasks = [];
-        // 仅刷新已加载过的区块,避免冷启动时突然并发请求
-        // 1. 大盘指数
-        var marketSection = document.getElementById('marketSection');
-        if (marketSection && marketSection.dataset.loaded === 'true') {
-            tasks.push(loadMarketIndices());
-        }
-        // 2. 赛道板块
+        // 1. 赛道板块
         var sectorSection = document.getElementById('sectorSection');
         if (sectorSection && sectorSection.dataset.loaded === 'true') {
             var activeSectorTab = document.querySelector('.sector-tab.active');
