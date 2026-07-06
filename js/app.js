@@ -726,7 +726,7 @@
                         <div class="summary-value ${profitClass}">${profitSign}${formatMoney(totals.totalHoldingProfit)}</div>
                     </div>
                     <div class="summary-item">
-                        <div class="summary-label">收益率</div>
+                        <div class="summary-label">持仓收益率</div>
                         <div class="summary-value ${profitClass}">${profitSign}${(totals.totalProfitRate * 100).toFixed(2)}%</div>
                     </div>
                 </div>
@@ -2099,7 +2099,7 @@
                         <div class="summary-value ${profitClass}" data-summary="holdingProfit">${profitSign}${formatMoney(totals.totalHoldingProfit)}</div>
                     </div>
                     <div class="summary-item">
-                        <div class="summary-label">收益率</div>
+                        <div class="summary-label">持仓收益率</div>
                         <div class="summary-value ${profitClass}" data-summary="profitRate">${profitSign}${(totals.totalProfitRate * 100).toFixed(2)}%</div>
                     </div>
                     <div class="summary-item">
@@ -2337,7 +2337,7 @@
                         <div class="summary-value ${profitClass}" data-summary="holdingProfit">${profitSign}${formatMoney(totals.totalHoldingProfit)}</div>
                     </div>
                     <div class="summary-item">
-                        <div class="summary-label">收益率</div>
+                        <div class="summary-label">持仓收益率</div>
                         <div class="summary-value ${profitClass}" data-summary="profitRate">${profitSign}${(totals.totalProfitRate * 100).toFixed(2)}%</div>
                     </div>
                     <div class="summary-item">
@@ -2477,6 +2477,8 @@
             var calc = Store.calcPositionProfit(p, currentNav, dailyChange);
             var pClass = calc.holdingProfit >= 0 ? 'profit-positive' : 'profit-negative';
             var pSign = calc.holdingProfit >= 0 ? '+' : '';
+            var dClass = FundAPI.getChangeClass(dailyChange);
+            var dSign = parseFloat(dailyChange) >= 0 ? '+' : '';
             var est = estimates.find(function (e) { return e.fundcode === p.code; });
             var displayName = (est && est.name) || p.name;
             var clearedBadge = p.isCleared ? '<span class="cleared-badge">已清仓</span>' : '';
@@ -2498,6 +2500,11 @@
                     <td class="num-cell" data-cell="rate" data-code="${p.code}">
                         <span class="change-badge ${pClass === 'profit-positive' ? 'bg-up' : 'bg-down'}">
                             ${pSign}${(calc.holdingProfitRate * 100).toFixed(2)}%
+                        </span>
+                    </td>
+                    <td class="num-cell" data-cell="dailyChange" data-code="${p.code}">
+                        <span class="change-badge ${dClass === 'up' ? 'bg-up' : dClass === 'down' ? 'bg-down' : 'bg-flat'}">
+                            ${dSign}${parseFloat(dailyChange).toFixed(2)}%
                         </span>
                     </td>
                     <td class="action-cell">
@@ -2523,7 +2530,7 @@
                         <span class="group-stat">市值 <strong>¥${formatMoney(groupTotals.totalValue)}</strong></span>
                         <span class="group-stat">成本 <strong>¥${formatMoney(groupTotals.totalCost)}</strong></span>
                         <span class="group-stat ${profitClass}">收益 <strong>${profitSign}${formatMoney(groupTotals.totalHoldingProfit)}</strong></span>
-                        <span class="group-stat ${profitClass}">收益率 <strong>${profitSign}${(groupTotals.totalProfitRate * 100).toFixed(2)}%</strong></span>
+                        <span class="group-stat ${profitClass}">持仓收益率 <strong>${profitSign}${(groupTotals.totalProfitRate * 100).toFixed(2)}%</strong></span>
                         <span class="group-stat ${cumClass}">累计 <strong>${cumSign}${formatMoney(groupTotals.totalCumulativeProfit)}</strong></span>
                     </div>
                 </div>
@@ -2538,7 +2545,8 @@
                                 <th class="text-right">最新净值</th>
                                 <th class="text-right">持仓市值</th>
                                 <th class="text-right">持仓收益</th>
-                                <th class="text-right">收益率</th>
+                                <th class="text-right">持仓收益率</th>
+                                <th class="text-right">日涨跌幅</th>
                                 <th class="text-right">操作</th>
                             </tr>
                         </thead>
@@ -2660,6 +2668,8 @@
             var calc = Store.calcPositionProfit(p, currentNav, dailyChange);
             var pClass = calc.holdingProfit >= 0 ? 'profit-positive' : 'profit-negative';
             var pSign = calc.holdingProfit >= 0 ? '+' : '';
+            var dClass = FundAPI.getChangeClass(dailyChange);
+            var dSign = parseFloat(dailyChange) >= 0 ? '+' : '';
 
             updateTableCell('nav', p.code, FundAPI.formatNum(currentNav));
             updateTableCell('value', p.code, '¥' + formatMoney(calc.currentValue));
@@ -2667,6 +2677,9 @@
             updateTableCell('rate', p.code,
                 '<span class="change-badge ' + (pClass === 'profit-positive' ? 'bg-up' : 'bg-down') + '">' +
                 pSign + (calc.holdingProfitRate * 100).toFixed(2) + '%</span>');
+            updateTableCell('dailyChange', p.code,
+                '<span class="change-badge ' + (dClass === 'up' ? 'bg-up' : dClass === 'down' ? 'bg-down' : 'bg-flat') + '">' +
+                dSign + parseFloat(dailyChange).toFixed(2) + '%</span>');
         });
 
         updateRefreshStatus(true);
@@ -2712,7 +2725,7 @@
             stats[1].innerHTML = '成本 <strong>¥' + formatMoney(gTotals.totalCost) + '</strong>';
             stats[2].innerHTML = '收益 <strong>' + pSign + formatMoney(gTotals.totalHoldingProfit) + '</strong>';
             stats[2].className = 'group-stat ' + pClass;
-            stats[3].innerHTML = '收益率 <strong>' + pSign + (gTotals.totalProfitRate * 100).toFixed(2) + '%</strong>';
+            stats[3].innerHTML = '持仓收益率 <strong>' + pSign + (gTotals.totalProfitRate * 100).toFixed(2) + '%</strong>';
             stats[3].className = 'group-stat ' + pClass;
             stats[4].innerHTML = '累计 <strong>' + cSign + formatMoney(gTotals.totalCumulativeProfit) + '</strong>';
             stats[4].className = 'group-stat ' + cClass;
