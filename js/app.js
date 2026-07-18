@@ -364,13 +364,10 @@
                     <span class="collapse-icon">▾</span>
                 </div>
                 <div class="market-dashboard" id="marketDashboard">
-                    <div style="display:flex;gap:12px;overflow:hidden;">
-                        <div class="market-card skeleton" style="width:200px;height:90px;flex-shrink:0;"></div>
-                        <div class="market-card skeleton" style="width:200px;height:90px;flex-shrink:0;"></div>
-                        <div class="market-card skeleton" style="width:200px;height:90px;flex-shrink:0;"></div>
-                        <div class="market-card skeleton" style="width:200px;height:90px;flex-shrink:0;"></div>
-                        <div class="market-card skeleton" style="width:200px;height:90px;flex-shrink:0;"></div>
-                    </div>
+                    <div class="market-card skeleton" style="height: 90px;"></div>
+                    <div class="market-card skeleton" style="height: 90px;"></div>
+                    <div class="market-card skeleton" style="height: 90px;"></div>
+                    <div class="market-card skeleton" style="height: 90px;"></div>
                 </div>
             </div>
 
@@ -1045,7 +1042,7 @@
         if (bkCode) loadSectorFundsPage(bkCode, sectorName);
     };
 
-    // ========== 大盘指数看板(跑马灯) ==========
+    // ========== 大盘指数看板 ==========
     async function loadMarketIndices() {
         var container = document.getElementById('marketDashboard');
         if (!container) return;
@@ -1053,17 +1050,28 @@
         var indices = await FundAPI.getMarketIndices();
 
         if (indices.length === 0) {
-            container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">暂无大盘数据</div>';
+            container.innerHTML = '<div style="grid-column: 1/-1; padding: 20px; text-align: center; color: var(--text-secondary);">暂无大盘数据</div>';
             return;
         }
 
-        // 生成卡片HTML(不包含区域分隔符,跑马灯只显示纯卡片)
-        var cardsHTML = indices.map(function (idx) {
+        container.innerHTML = indices.map(function (idx) {
             var isUp = idx.changePercent >= 0;
             var colorClass = isUp ? 'market-up' : 'market-down';
             var sign = isUp ? '+' : '';
             var arrow = isUp ? '▲' : '▼';
+            var divider = '';
+            if (idx.showRegion) {
+                var emoji = '📊';
+                if (idx.showRegion === 'A股') emoji = '🇨🇳';
+                else if (idx.showRegion === '港股') emoji = '🇭🇰';
+                else if (idx.showRegion === '美股') emoji = '🇺🇸';
+                else if (idx.showRegion === '欧洲') emoji = '🇪🇺';
+                else if (idx.showRegion === '亚太') emoji = '🌏';
+                else if (idx.showRegion === '商品') emoji = '🛢️';
+                divider = '<div class="market-section-divider">' + emoji + ' ' + idx.showRegion + '指数</div>';
+            }
             return `
+                ${divider}
                 <div class="market-card ${colorClass}" data-code="${idx.code}">
                     <div class="market-name">${idx.name}</div>
                     <div class="market-price">${FundAPI.formatNum(idx.price)}</div>
@@ -1074,11 +1082,6 @@
                 </div>
             `;
         }).join('');
-
-        // 复制一份实现无缝循环,根据数量动态计算滚动速度
-        var duration = Math.max(20, indices.length * 1.2);
-        container.innerHTML = '<div class="market-track" style="--marquee-duration: ' + duration + 's">' +
-            cardsHTML + cardsHTML + '</div>';
     }
 
     // ========== 大盘指数自动刷新(独立定时器,像资讯一样实时更新) ==========
@@ -1106,9 +1109,7 @@
     async function silentRefreshMarketIndices() {
         var container = document.getElementById('marketDashboard');
         if (!container) return;
-        var track = container.querySelector('.market-track');
-        if (!track) return;
-        var cards = track.querySelectorAll('.market-card');
+        var cards = container.querySelectorAll('.market-card');
         if (cards.length === 0) return;
 
         var indices = await FundAPI.getMarketIndices();
