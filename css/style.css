@@ -1717,21 +1717,6 @@ ul, ol { list-style: none; }
     background: linear-gradient(135deg, #f0fdf4, #ffffff);
 }
 
-/* 左侧色条(在跑马灯边框之下) */
-.market-card::after {
-    content: '';
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 3px;
-    height: calc(100% - 6px);
-    border-radius: 2px;
-    z-index: 1;
-}
-
-.market-card.market-up::after { background: linear-gradient(180deg, #f87171, #dc2626); }
-.market-card.market-down::after { background: linear-gradient(180deg, #34d399, #059669); }
-
 @keyframes borderRotate {
     to { --border-angle: 360deg; }
 }
