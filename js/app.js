@@ -1058,6 +1058,7 @@
             var isUp = idx.changePercent >= 0;
             var colorClass = isUp ? 'market-up' : 'market-down';
             var sign = isUp ? '+' : '';
+            var arrow = isUp ? '▲' : '▼';
             // 使用服务端返回的区域标签
             var divider = '';
             if (idx.showRegion) {
@@ -1077,7 +1078,7 @@
                     <div class="market-price">${FundAPI.formatNum(idx.price)}</div>
                     <div class="market-change">
                         <span class="market-change-val">${sign}${FundAPI.formatNum(idx.change)}</span>
-                        <span class="market-change-pct">${sign}${idx.changePercent.toFixed(2)}%</span>
+                        <span class="market-change-pct">${arrow} ${sign}${idx.changePercent.toFixed(2)}%</span>
                     </div>
                 </div>
             `;
@@ -1148,7 +1149,10 @@
             var changeValEl = card.querySelector('.market-change-val');
             var changePctEl = card.querySelector('.market-change-pct');
             if (changeValEl) changeValEl.textContent = sign + FundAPI.formatNum(idx.change);
-            if (changePctEl) changePctEl.textContent = sign + idx.changePercent.toFixed(2) + '%';
+            if (changePctEl) {
+                var arrow = isUp ? '▲' : '▼';
+                changePctEl.textContent = arrow + ' ' + sign + idx.changePercent.toFixed(2) + '%';
+            }
         });
     }
 

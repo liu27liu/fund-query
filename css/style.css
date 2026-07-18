@@ -1651,7 +1651,7 @@ ul, ol { list-style: none; }
 .market-dashboard {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 14px;
+    gap: 12px;
     margin-bottom: 28px;
 }
 
@@ -1661,22 +1661,32 @@ ul, ol { list-style: none; }
     align-items: center;
     gap: 8px;
     font-size: 13px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    padding: 8px 0 2px;
-    border-top: 1px dashed var(--border-color);
+    font-weight: 700;
+    color: var(--text-primary);
+    padding: 12px 4px 6px;
     margin-top: 4px;
+    letter-spacing: 0.5px;
+}
+
+.market-section-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, var(--border-color), transparent);
 }
 
 .market-card {
     background: var(--card-bg);
-    border-radius: var(--radius);
-    padding: 16px 20px;
-    box-shadow: var(--card-shadow);
+    border-radius: 10px;
+    padding: 14px 16px 14px 20px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
     border: 1px solid var(--border-light);
-    transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
+    transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease);
     position: relative;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 90px;
 }
 
 .market-card::before {
@@ -1684,30 +1694,36 @@ ul, ol { list-style: none; }
     position: absolute;
     top: 0;
     left: 0;
-    width: 4px;
+    width: 3px;
     height: 100%;
+    border-radius: 0 2px 2px 0;
 }
 
-.market-card.market-up::before { background: var(--up); }
-.market-card.market-down::before { background: var(--down); }
+.market-card.market-up::before { background: linear-gradient(180deg, #f87171, #dc2626); }
+.market-card.market-down::before { background: linear-gradient(180deg, #34d399, #059669); }
 
 .market-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+    border-color: var(--border-color);
 }
 
 .market-name {
-    font-size: 13px;
-    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-tertiary);
     margin-bottom: 6px;
+    letter-spacing: 0.3px;
 }
 
 .market-price {
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 800;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
     color: var(--text);
     font-family: var(--font-num);
+    letter-spacing: -0.5px;
+    line-height: 1.2;
 }
 
 .market-card.market-up .market-price { color: var(--up); }
@@ -1716,26 +1732,44 @@ ul, ol { list-style: none; }
 .market-change {
     display: flex;
     gap: 8px;
-    align-items: baseline;
+    align-items: center;
+    margin-top: auto;
 }
 
 .market-change-val {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
+    font-family: var(--font-num);
 }
 
 .market-change-pct {
-    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 12px;
     font-weight: 700;
+    font-family: var(--font-num);
+    padding: 2px 8px;
+    border-radius: 6px;
+    line-height: 1.5;
 }
 
-.market-card.market-up .market-change-val,
-.market-card.market-up .market-change-pct { color: var(--up); }
-.market-card.market-down .market-change-val,
-.market-card.market-down .market-change-pct { color: var(--down); }
+.market-card.market-up .market-change-val { color: var(--up); }
+.market-card.market-up .market-change-pct {
+    color: #fff;
+    background: linear-gradient(135deg, #f87171, #dc2626);
+}
+
+.market-card.market-down .market-change-val { color: var(--down); }
+.market-card.market-down .market-change-pct {
+    color: #fff;
+    background: linear-gradient(135deg, #34d399, #059669);
+}
 
 @media (max-width: 768px) {
     .market-dashboard { grid-template-columns: repeat(2, 1fr); }
+    .market-card { padding: 12px 14px 12px 16px; min-height: 80px; }
+    .market-price { font-size: 18px; }
 }
 
 /* ========== 赛道行业板块看板 ========== */
