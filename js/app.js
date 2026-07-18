@@ -1157,6 +1157,42 @@
     // ========== 7x24实时资讯 ==========
     var newsCurrentPage = 1;
     var newsPageSize = 15;
+    window._newsDataMap = window._newsDataMap || {};
+
+    // 打开资讯全文
+    window.openNewsDetail = function (idx) {
+        var item = window._newsDataMap[idx];
+        if (!item || !item.url) return;
+        // 用iframe弹窗打开原文链接
+        var overlay = document.createElement('div');
+        overlay.className = 'news-detail-overlay';
+        overlay.onclick = function (e) {
+            if (e.target === overlay) closeNewsDetail();
+        };
+        overlay.innerHTML =
+            '<div class="news-detail-modal">' +
+            '  <div class="news-detail-header">' +
+            '    <div class="news-detail-title-text">' + (item.title || '') + '</div>' +
+            '    <button class="news-detail-close" onclick="closeNewsDetail()">&times;</button>' +
+            '  </div>' +
+            '  <div class="news-detail-body">' +
+            '    <iframe src="' + item.url + '" sandbox="allow-scripts allow-same-origin allow-popups" style="width:100%;height:100%;border:none;"></iframe>' +
+            '  </div>' +
+            '</div>';
+        document.body.appendChild(overlay);
+        requestAnimationFrame(function () { overlay.classList.add('active'); });
+        document.body.style.overflow = 'hidden';
+    };
+
+    window.closeNewsDetail = function () {
+        var overlay = document.querySelector('.news-detail-overlay');
+        if (!overlay) return;
+        overlay.classList.remove('active');
+        setTimeout(function () {
+            overlay.remove();
+            document.body.style.overflow = '';
+        }, 300);
+    };
 
     async function loadNews(page, isLoadMore) {
         var container = document.getElementById('newsFeed');
@@ -1187,7 +1223,7 @@
             return;
         }
 
-        var newsHtml = news.map(function (item) {
+        var newsHtml = news.map(function (item, idx) {
             var time = item.time || '';
             // 提取时分
             var timeShort = time;
@@ -1195,19 +1231,28 @@
                 var match = time.match(/(\d{2}:\d{2})/);
                 if (match) timeShort = match[1];
             }
+            var newsUrl = item.url || '';
+            var onclickAttr = newsUrl ? ' onclick="openNewsDetail(' + idx + ')"' : '';
             return `
-                <div class="news-item">
+                <div class="news-item"${onclickAttr} data-idx="${idx}">
                     <div class="news-time">${timeShort}</div>
                     <div class="news-content">
                         <div class="news-title">${item.title}</div>
                         <div class="news-summary">${item.summary || ''}</div>
                         <div class="news-meta">
                             <span class="news-full-time">${time}</span>
+                            ${newsUrl ? '<span class="news-read-more">点击阅读全文 ›</span>' : ''}
                         </div>
                     </div>
                 </div>
             `;
         }).join('');
+
+        // 存储新闻URL映射
+        window._newsDataMap = window._newsDataMap || {};
+        news.forEach(function (item, idx) {
+            window._newsDataMap[idx] = item;
+        });
 
         if (isLoadMore) {
             container.insertAdjacentHTML('beforeend', newsHtml);
@@ -1288,12 +1333,17 @@
                     var match = time.match(/(\d{2}:\d{2})/);
                     if (match) timeShort = match[1];
                 }
-                return '<div class="news-item news-item-new">' +
+                var newsUrl = item.url || '';
+                var globalIdx = Object.keys(window._newsDataMap).length + i;
+                window._newsDataMap[globalIdx] = item;
+                var clickHtml = newsUrl ? ' onclick="openNewsDetail(' + globalIdx + ')"' : '';
+                var readMoreHtml = newsUrl ? '<span class="news-read-more">点击阅读全文 ›</span>' : '';
+                return '<div class="news-item news-item-new"' + clickHtml + ' data-idx="' + globalIdx + '">' +
                     '<div class="news-time">' + timeShort + '</div>' +
                     '<div class="news-content">' +
                     '<div class="news-title">' + item.title + '</div>' +
                     '<div class="news-summary">' + (item.summary || '') + '</div>' +
-                    '<div class="news-meta"><span class="news-full-time">' + time + '</span></div>' +
+                    '<div class="news-meta"><span class="news-full-time">' + time + '</span>' + readMoreHtml + '</div>' +
                     '</div></div>';
             }).join('');
 

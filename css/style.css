@@ -2205,8 +2205,9 @@ ul, ol { list-style: none; }
     display: flex;
     gap: 16px;
     padding: 14px 0;
-    border-bottom: 1px solid var(--border-light);
+    border-bottom: 1px solid var(--border-color);
     transition: background 0.2s var(--ease);
+    cursor: pointer;
 }
 
 .news-item:last-child {
@@ -2267,6 +2268,99 @@ ul, ol { list-style: none; }
     color: var(--primary);
     padding: 1px 8px;
     border-radius: 3px;
+}
+
+/* 点击阅读全文链接 */
+.news-read-more {
+    color: var(--primary);
+    font-size: 12px;
+    font-weight: 500;
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.news-read-more:hover {
+    text-decoration: underline;
+}
+
+/* 资讯全文弹窗 */
+.news-detail-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s var(--ease);
+    padding: 20px;
+}
+
+.news-detail-overlay.active {
+    opacity: 1;
+}
+
+.news-detail-modal {
+    background: #fff;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 800px;
+    height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+    transform: translateY(20px) scale(0.97);
+    transition: transform 0.3s var(--ease);
+}
+
+.news-detail-overlay.active .news-detail-modal {
+    transform: translateY(0) scale(1);
+}
+
+.news-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.news-detail-title-text {
+    flex: 1;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.news-detail-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    font-size: 18px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.2s;
+}
+
+.news-detail-close:hover {
+    background: var(--border-color);
+}
+
+.news-detail-body {
+    flex: 1;
+    overflow: hidden;
 }
 
 .news-load-more-wrap {
