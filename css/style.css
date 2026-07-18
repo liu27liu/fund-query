@@ -2204,8 +2204,8 @@ ul, ol { list-style: none; }
 .news-item {
     display: flex;
     gap: 16px;
-    padding: 14px 0;
-    border-bottom: 1px solid var(--border-color);
+    padding: 14px 20px 14px 0;
+    border-bottom: 1px solid #e8e8e8;
     transition: background 0.2s var(--ease);
     cursor: pointer;
 }
@@ -2217,7 +2217,7 @@ ul, ol { list-style: none; }
 .news-item:hover {
     background: linear-gradient(90deg, var(--primary-light) 0%, transparent 100%);
     margin: 0 -12px;
-    padding: 14px 12px;
+    padding: 14px 12px 14px 0;
     border-radius: var(--radius-xs);
 }
 
