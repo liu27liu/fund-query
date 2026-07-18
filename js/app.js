@@ -364,10 +364,13 @@
                     <span class="collapse-icon">▾</span>
                 </div>
                 <div class="market-dashboard" id="marketDashboard">
-                    <div class="market-card skeleton" style="height: 90px;"></div>
-                    <div class="market-card skeleton" style="height: 90px;"></div>
-                    <div class="market-card skeleton" style="height: 90px;"></div>
-                    <div class="market-card skeleton" style="height: 90px;"></div>
+                    <div style="display:flex;gap:12px;overflow:hidden;">
+                        <div class="market-card skeleton" style="width:200px;height:90px;flex-shrink:0;"></div>
+                        <div class="market-card skeleton" style="width:200px;height:90px;flex-shrink:0;"></div>
+                        <div class="market-card skeleton" style="width:200px;height:90px;flex-shrink:0;"></div>
+                        <div class="market-card skeleton" style="width:200px;height:90px;flex-shrink:0;"></div>
+                        <div class="market-card skeleton" style="width:200px;height:90px;flex-shrink:0;"></div>
+                    </div>
                 </div>
             </div>
 
@@ -1042,7 +1045,7 @@
         if (bkCode) loadSectorFundsPage(bkCode, sectorName);
     };
 
-    // ========== 大盘指数看板 ==========
+    // ========== 大盘指数看板(跑马灯) ==========
     async function loadMarketIndices() {
         var container = document.getElementById('marketDashboard');
         if (!container) return;
@@ -1050,29 +1053,17 @@
         var indices = await FundAPI.getMarketIndices();
 
         if (indices.length === 0) {
-            container.innerHTML = '<div style="grid-column: 1/-1; padding: 20px; text-align: center; color: var(--text-secondary);">暂无大盘数据</div>';
+            container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">暂无大盘数据</div>';
             return;
         }
 
-        container.innerHTML = indices.map(function (idx) {
+        // 生成卡片HTML(不包含区域分隔符,跑马灯只显示纯卡片)
+        var cardsHTML = indices.map(function (idx) {
             var isUp = idx.changePercent >= 0;
             var colorClass = isUp ? 'market-up' : 'market-down';
             var sign = isUp ? '+' : '';
             var arrow = isUp ? '▲' : '▼';
-            // 使用服务端返回的区域标签
-            var divider = '';
-            if (idx.showRegion) {
-                var emoji = '📊';
-                if (idx.showRegion === 'A股') emoji = '🇨🇳';
-                else if (idx.showRegion === '港股') emoji = '🇭🇰';
-                else if (idx.showRegion === '美股') emoji = '🇺🇸';
-                else if (idx.showRegion === '欧洲') emoji = '🇪🇺';
-                else if (idx.showRegion === '亚太') emoji = '🌏';
-                else if (idx.showRegion === '商品') emoji = '🛢️';
-                divider = '<div class="market-section-divider">' + emoji + ' ' + idx.showRegion + '指数</div>';
-            }
             return `
-                ${divider}
                 <div class="market-card ${colorClass}" data-code="${idx.code}">
                     <div class="market-name">${idx.name}</div>
                     <div class="market-price">${FundAPI.formatNum(idx.price)}</div>
@@ -1083,6 +1074,11 @@
                 </div>
             `;
         }).join('');
+
+        // 复制一份实现无缝循环,根据数量动态计算滚动速度
+        var duration = Math.max(20, indices.length * 1.2);
+        container.innerHTML = '<div class="market-track" style="--marquee-duration: ' + duration + 's">' +
+            cardsHTML + cardsHTML + '</div>';
     }
 
     // ========== 大盘指数自动刷新(独立定时器,像资讯一样实时更新) ==========
@@ -1110,8 +1106,10 @@
     async function silentRefreshMarketIndices() {
         var container = document.getElementById('marketDashboard');
         if (!container) return;
-        var cards = container.querySelectorAll('.market-card');
-        if (cards.length === 0) return; // 还没加载过,跳过
+        var track = container.querySelector('.market-track');
+        if (!track) return;
+        var cards = track.querySelectorAll('.market-card');
+        if (cards.length === 0) return;
 
         var indices = await FundAPI.getMarketIndices();
         if (!indices || indices.length === 0) return;
@@ -1120,14 +1118,13 @@
         var dataMap = {};
         indices.forEach(function (idx) { dataMap[idx.code] = idx; });
 
-        // 逐个更新已有卡片
+        // 逐个更新所有卡片(跑马灯有两组,都要更新)
         cards.forEach(function (card) {
             var code = card.dataset.code;
             var idx = dataMap[code];
             if (!idx) return;
 
             var isUp = idx.changePercent >= 0;
-            var colorClass = isUp ? 'market-up' : 'market-down';
             var sign = isUp ? '+' : '';
 
             // 更新颜色class(平滑切换,不闪烁)
@@ -1138,7 +1135,7 @@
                 card.classList.remove('market-down');
                 card.classList.add('market-up');
             } else if (!card.classList.contains('market-up') && !card.classList.contains('market-down')) {
-                card.classList.add(colorClass);
+                card.classList.add(isUp ? 'market-up' : 'market-down');
             }
 
             // 更新价格(仅改文本,不触动DOM结构)
