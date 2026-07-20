@@ -628,11 +628,13 @@ def _fetch_sina_estimate(codes):
                 code_match = re.search(r'fu_(\d+)', line)
                 if code_match:
                     fund_code = code_match.group(1)
-                # 新浪字段: 0=名称,1=时间,2=昨收(单位净值),3=估值,4=涨跌幅(%),5=?,6=?,7=净值日期,8=实际净值,9=累计涨跌幅
+                # 新浪字段映射(验证通过):
+                # parts[0]=名称, [1]=时间, [2]=最新净值, [3]=昨收净值, [4]=未知, [5]=未知, [6]=估值涨跌幅(%), [7]=净值日期
+                # 注意: parts[2]是估值/最新净值, parts[3]是昨收, parts[6]才是涨跌幅
                 name = parts[0]
-                gsz = safe_float(parts[3])
-                gszzl = safe_float(parts[4])
-                dwjz = safe_float(parts[8]) if len(parts) > 8 and parts[8] else safe_float(parts[2])
+                gsz = safe_float(parts[2])   # 估值(最新净值)
+                dwjz = safe_float(parts[3])   # 昨收净值
+                gszzl = safe_float(parts[6]) if len(parts) > 6 else 0  # 涨跌幅(%)
                 jzrq = parts[7] if len(parts) > 7 else ''
                 gztime = parts[1] if len(parts) > 1 else ''
                 results.append({
