@@ -597,31 +597,68 @@ def api_search():
         return jsonify({'error': str(e)}), 500
 
 
+def _fetch_sina_estimate(codes):
+    """通过新浪财经接口获取基金实时估值(2026年fundgz接口已下线,改用新浪)"""
+    if not codes:
+        return []
+    results = []
+    headers = {'Referer': 'https://finance.sina.com.cn/'}
+    # 新浪单次请求建议不超过50个,分批处理
+    batch_size = 50
+    for i in range(0, len(codes), batch_size):
+        batch = codes[i:i + batch_size]
+        sina_codes = ','.join([f'fu_{c}' for c in batch])
+        url = f'http://hq.sinajs.cn/list={sina_codes}'
+        try:
+            resp = SESSION.get(url, headers=headers, timeout=10)
+            resp.encoding = 'gbk'
+            for line in resp.text.strip().split('\n'):
+                line = line.strip()
+                if not line:
+                    continue
+                start = line.find('"')
+                end = line.rfind('"')
+                if start < 0 or end <= start:
+                    continue
+                data_str = line[start + 1:end]
+                parts = data_str.split(',')
+                if len(parts) < 5:
+                    continue
+                fund_code = ''
+                code_match = re.search(r'fu_(\d+)', line)
+                if code_match:
+                    fund_code = code_match.group(1)
+                # 新浪字段: 0=名称,1=时间,2=昨收(单位净值),3=估值,4=涨跌幅(%),5=?,6=?,7=净值日期,8=实际净值,9=累计涨跌幅
+                name = parts[0]
+                gsz = safe_float(parts[3])
+                gszzl = safe_float(parts[4])
+                dwjz = safe_float(parts[8]) if len(parts) > 8 and parts[8] else safe_float(parts[2])
+                jzrq = parts[7] if len(parts) > 7 else ''
+                gztime = parts[1] if len(parts) > 1 else ''
+                results.append({
+                    'fundcode': fund_code,
+                    'name': name,
+                    'jzrq': jzrq,
+                    'dwjz': dwjz,
+                    'gsz': gsz,
+                    'gszzl': gszzl,
+                    'gztime': gztime
+                })
+        except Exception as e:
+            print(f'[新浪估值异常] batch {i//batch_size}: {e}')
+    return results
+
+
 @app.route('/api/estimate')
 def api_estimate():
-    """实时估值 - 对接天天基金fundgz"""
+    """实时估值 - 通过新浪财经接口"""
     code = request.args.get('code', '').strip()
     if not code:
         return jsonify(None)
-
-    url = f'https://fundgz.1234567.com.cn/js/{code}.js'
-    params = {'rt': int(time.time() * 1000)}
     try:
-        resp = SESSION.get(url, params=params, timeout=8)
-        text = resp.text.strip()
-        # 解析 jsonpgz({...}) 格式
-        match = re.search(r'jsonpgz\((.+)\)', text)
-        if match:
-            data = json.loads(match.group(1))
-            return jsonify({
-                'fundcode': data.get('fundcode', ''),
-                'name': data.get('name', ''),
-                'jzrq': data.get('jzrq', ''),
-                'dwjz': safe_float(data.get('dwjz')),
-                'gsz': safe_float(data.get('gsz')),
-                'gszzl': safe_float(data.get('gszzl')),
-                'gztime': data.get('gztime', '')
-            })
+        results = _fetch_sina_estimate([code])
+        if results:
+            return jsonify(results[0])
         return jsonify(None)
     except Exception as e:
         print(f'[估值异常] {code}: {e}')
@@ -630,7 +667,7 @@ def api_estimate():
 
 @app.route('/api/estimate/batch')
 def api_estimate_batch():
-    """批量实时估值 - 并发请求提高速度, 带5秒缓存"""
+    """批量实时估值 - 通过新浪财经接口, 带秒级缓存"""
     codes = request.args.get('codes', '').strip()
     if not codes:
         return jsonify([])
@@ -644,43 +681,8 @@ def api_estimate_batch():
         return jsonify(cached)
 
     code_list = [c.strip() for c in codes.split(',') if c.strip()]
-    results = []
-    results_lock = threading.Lock()
-
-    def fetch_one(code):
-        url = f'https://fundgz.1234567.com.cn/js/{code}.js'
-        params = {'rt': int(time.time() * 1000)}
-        try:
-            resp = SESSION.get(url, params=params, timeout=5)
-            text = resp.text.strip()
-            match = re.search(r'jsonpgz\((.+)\)', text)
-            if match:
-                data = json.loads(match.group(1))
-                return {
-                    'fundcode': data.get('fundcode', ''),
-                    'name': data.get('name', ''),
-                    'jzrq': data.get('jzrq', ''),
-                    'dwjz': safe_float(data.get('dwjz')),
-                    'gsz': safe_float(data.get('gsz')),
-                    'gszzl': safe_float(data.get('gszzl')),
-                    'gztime': data.get('gztime', '')
-                }
-        except Exception as e:
-            print(f'[批量估值异常] {code}: {e}')
-        return None
-
-    # 使用线程池并发请求
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    with ThreadPoolExecutor(max_workers=30) as executor:
-        future_to_code = {executor.submit(fetch_one, code): code for code in code_list}
-        for future in as_completed(future_to_code, timeout=12):
-            try:
-                result = future.result(timeout=5)
-                if result:
-                    with results_lock:
-                        results.append(result)
-            except Exception:
-                pass
+    # 新浪支持一次批量查询,无需并发
+    results = _fetch_sina_estimate(code_list)
 
     # 写入缓存
     _set_cache(cache_key, results)
