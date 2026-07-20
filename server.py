@@ -598,12 +598,17 @@ def api_search():
 
 
 def _fetch_sina_estimate(codes):
-    """通过新浪财经接口获取基金实时估值(2026年fundgz接口已下线,改用新浪)"""
+    """通过新浪财经接口获取基金实时估值(2026年fundgz接口已下线,改用新浪)
+
+    新浪字段(验证通过):
+    [0]=名称 [1]=时间 [2]=盘中估值 [3]=昨日单位净值 [4]=昨日累计净值
+    [5]=未知 [6]=估值涨跌幅(%) [7]=净值日期 [8]=累计净值估算 [9]=累计涨跌幅估算
+    注意: p8/p9不是实际净值/涨跌幅,新浪只提供估值
+    """
     if not codes:
         return []
     results = []
     headers = {'Referer': 'https://finance.sina.com.cn/'}
-    # 新浪单次请求建议不超过50个,分批处理
     batch_size = 50
     for i in range(0, len(codes), batch_size):
         batch = codes[i:i + batch_size]
@@ -622,36 +627,18 @@ def _fetch_sina_estimate(codes):
                     continue
                 data_str = line[start + 1:end]
                 parts = data_str.split(',')
-                if len(parts) < 5:
+                if len(parts) < 7:
                     continue
                 fund_code = ''
                 code_match = re.search(r'fu_(\d+)', line)
                 if code_match:
                     fund_code = code_match.group(1)
-                # 新浪字段映射(验证通过):
-                # parts[0]=名称, [1]=时间, [2]=估值, [3]=昨收净值, [4]=未知, [5]=未知
-                # parts[6]=估值涨跌幅(%), [7]=净值日期, [8]=实际净值, [9]=实际净值涨跌幅(%)
                 name = parts[0]
-                estimate_nav = safe_float(parts[2])   # 估值
-                prev_nav = safe_float(parts[3])        # 昨收净值
-                est_change = safe_float(parts[6]) if len(parts) > 6 else 0  # 估值涨跌幅
+                gsz = safe_float(parts[2])     # 盘中估值
+                dwjz = safe_float(parts[3])    # 昨日单位净值
+                gszzl = safe_float(parts[6])   # 估值涨跌幅(%)
                 jzrq = parts[7] if len(parts) > 7 else ''
                 gztime = parts[1] if len(parts) > 1 else ''
-
-                # 判断是否已公布实际净值: parts[8]有值且不等于昨收
-                actual_nav = safe_float(parts[8]) if len(parts) > 8 and parts[8] else 0
-                actual_change = safe_float(parts[9]) if len(parts) > 9 and parts[9] else 0
-                has_actual = actual_nav > 0 and abs(actual_nav - prev_nav) > 0.0001
-
-                # 如果已公布实际净值,优先使用实际净值和涨跌幅
-                if has_actual:
-                    gsz = actual_nav
-                    gszzl = actual_change
-                    dwjz = actual_nav  # dwjz语义:最新单位净值
-                else:
-                    gsz = estimate_nav
-                    gszzl = est_change
-                    dwjz = prev_nav  # 盘中时dwjz为昨收(与原fundgz行为一致)
                 results.append({
                     'fundcode': fund_code,
                     'name': name,
@@ -666,17 +653,73 @@ def _fetch_sina_estimate(codes):
     return results
 
 
+def _fetch_actual_nav_batch(codes):
+    """从东方财富历史净值接口批量获取今日实际净值
+
+    收盘后需要用实际净值替代估值,因为估值是盘中估算不等于真实净值
+    返回 {code: {'dwjz': 实际净值, 'gszzl': 涨跌幅, 'jzrq': 日期}}
+    """
+    if not codes:
+        return {}
+    results = {}
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    def fetch_one(code):
+        try:
+            url = 'https://api.fund.eastmoney.com/f10/lsjz'
+            params = {'fundCode': code, 'pageIndex': 1, 'pageSize': 2}
+            headers = {'Referer': 'https://fundf10.eastmoney.com/'}
+            resp = SESSION.get(url, params=params, headers=headers, timeout=5)
+            data = resp.json()
+            items = data.get('Data', {}).get('LSJZList', [])
+            if len(items) >= 1:
+                today = items[0]
+                nav = safe_float(today.get('DWJZ', 0))
+                date_str = today.get('FSRQ', '')
+                # 涨跌幅 = (今日净值 - 昨日净值) / 昨日净值
+                if len(items) >= 2:
+                    prev = safe_float(items[1].get('DWJZ', 0))
+                    change_pct = (nav - prev) / prev * 100 if prev > 0 else 0
+                else:
+                    change_pct = 0
+                return (code, {'dwjz': nav, 'gszzl': change_pct, 'jzrq': date_str})
+        except Exception as e:
+            print(f'[实际净值获取异常] {code}: {e}')
+        return None
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(fetch_one, c): c for c in codes}
+        for f in as_completed(futures, timeout=30):
+            result = f.result()
+            if result:
+                results[result[0]] = result[1]
+    return results
+
+
 @app.route('/api/estimate')
 def api_estimate():
-    """实时估值 - 通过新浪财经接口"""
+    """实时估值 - 新浪估值 + 收盘后东方财富实际净值"""
     code = request.args.get('code', '').strip()
     if not code:
         return jsonify(None)
     try:
         results = _fetch_sina_estimate([code])
-        if results:
-            return jsonify(results[0])
-        return jsonify(None)
+        if not results:
+            return jsonify(None)
+        result = results[0]
+        # 收盘后补充实际净值
+        now = time.localtime()
+        is_after_close = now.tm_hour > 15 or (now.tm_hour == 15 and now.tm_min >= 30)
+        today_str = time.strftime('%Y-%m-%d')
+        if is_after_close:
+            actual_map = _fetch_actual_nav_batch([code])
+            if code in actual_map and actual_map[code].get('jzrq', '') == today_str:
+                actual = actual_map[code]
+                result['gsz'] = actual['dwjz']
+                result['gszzl'] = actual['gszzl']
+                result['dwjz'] = actual['dwjz']
+                result['jzrq'] = actual['jzrq']
+        return jsonify(result)
     except Exception as e:
         print(f'[估值异常] {code}: {e}')
         return jsonify(None)
@@ -698,11 +741,37 @@ def api_estimate_batch():
         return jsonify(cached)
 
     code_list = [c.strip() for c in codes.split(',') if c.strip()]
-    # 新浪支持一次批量查询,无需并发
+    # 新浪获取估值(盘中实时数据)
     results = _fetch_sina_estimate(code_list)
 
-    # 写入缓存
-    _set_cache(cache_key, results)
+    # 如果新浪数据中有jzrq(净值日期),且不等于今天,或者当前时间已过15:30(收盘后)
+    # 则尝试从东方财富获取今日实际净值来补充
+    now = time.localtime()
+    is_after_close = now.tm_hour > 15 or (now.tm_hour == 15 and now.tm_min >= 30)
+    today_str = time.strftime('%Y-%m-%d')
+    if is_after_close and results:
+        code_set = [r['fundcode'] for r in results]
+        # 实际净值缓存60秒(收盘后变化慢)
+        actual_key = f'actual_nav:{today_str}'
+        actual_map = _get_cache(actual_key, 60)
+        if actual_map is None:
+            actual_map = _fetch_actual_nav_batch(code_set)
+            _set_cache(actual_key, actual_map)
+        # 合并: 如果东方财富有今日实际净值,用实际净值替代估值
+        for r in results:
+            code = r['fundcode']
+            if code in actual_map:
+                actual = actual_map[code]
+                # 只在东方财富的净值日期=今天时才替代(避免周末用周五数据)
+                if actual.get('jzrq', '') == today_str:
+                    r['gsz'] = actual['dwjz']
+                    r['gszzl'] = actual['gszzl']
+                    r['dwjz'] = actual['dwjz']
+                    r['jzrq'] = actual['jzrq']
+
+    # 写入缓存(缓存时间短,因为收盘后实际净值会逐渐公布)
+    cache_ttl = 60 if is_after_close else 5
+    _set_cache(cache_key, results, cache_ttl)
     return jsonify(results)
 
 
