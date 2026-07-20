@@ -732,11 +732,15 @@ def api_estimate_batch():
     if not codes:
         return jsonify([])
 
-    # 5秒缓存:盘中估值变化快但短时间内重复请求可复用
+    # 盘中5秒缓存,收盘后60秒缓存
+    now = time.localtime()
+    is_after_close = now.tm_hour > 15 or (now.tm_hour == 15 and now.tm_min >= 30)
+    est_cache_ttl = 60 if is_after_close else 5
+
     cache_key = f'batch_est:{codes}'
     if len(cache_key) > 500:
         cache_key = f'batch_est:{hashlib.md5(codes.encode()).hexdigest()}'
-    cached = _get_cache(cache_key, 5)
+    cached = _get_cache(cache_key, est_cache_ttl)
     if cached is not None:
         return jsonify(cached)
 
@@ -744,10 +748,7 @@ def api_estimate_batch():
     # 新浪获取估值(盘中实时数据)
     results = _fetch_sina_estimate(code_list)
 
-    # 如果新浪数据中有jzrq(净值日期),且不等于今天,或者当前时间已过15:30(收盘后)
-    # 则尝试从东方财富获取今日实际净值来补充
-    now = time.localtime()
-    is_after_close = now.tm_hour > 15 or (now.tm_hour == 15 and now.tm_min >= 30)
+    # 收盘后尝试从东方财富获取今日实际净值来补充
     today_str = time.strftime('%Y-%m-%d')
     if is_after_close and results:
         code_set = [r['fundcode'] for r in results]
@@ -769,9 +770,9 @@ def api_estimate_batch():
                     r['dwjz'] = actual['dwjz']
                     r['jzrq'] = actual['jzrq']
 
-    # 写入缓存(缓存时间短,因为收盘后实际净值会逐渐公布)
-    cache_ttl = 60 if is_after_close else 5
-    _set_cache(cache_key, results, cache_ttl)
+    # 写入缓存(收盘后60秒,盘中5秒)
+    # 注: ttl在读端控制, _set_cache只记录写入时间
+    _set_cache(cache_key, results)
     return jsonify(results)
 
 
