@@ -629,14 +629,29 @@ def _fetch_sina_estimate(codes):
                 if code_match:
                     fund_code = code_match.group(1)
                 # 新浪字段映射(验证通过):
-                # parts[0]=名称, [1]=时间, [2]=最新净值, [3]=昨收净值, [4]=未知, [5]=未知, [6]=估值涨跌幅(%), [7]=净值日期
-                # 注意: parts[2]是估值/最新净值, parts[3]是昨收, parts[6]才是涨跌幅
+                # parts[0]=名称, [1]=时间, [2]=估值, [3]=昨收净值, [4]=未知, [5]=未知
+                # parts[6]=估值涨跌幅(%), [7]=净值日期, [8]=实际净值, [9]=实际净值涨跌幅(%)
                 name = parts[0]
-                gsz = safe_float(parts[2])   # 估值(最新净值)
-                dwjz = safe_float(parts[3])   # 昨收净值
-                gszzl = safe_float(parts[6]) if len(parts) > 6 else 0  # 涨跌幅(%)
+                estimate_nav = safe_float(parts[2])   # 估值
+                prev_nav = safe_float(parts[3])        # 昨收净值
+                est_change = safe_float(parts[6]) if len(parts) > 6 else 0  # 估值涨跌幅
                 jzrq = parts[7] if len(parts) > 7 else ''
                 gztime = parts[1] if len(parts) > 1 else ''
+
+                # 判断是否已公布实际净值: parts[8]有值且不等于昨收
+                actual_nav = safe_float(parts[8]) if len(parts) > 8 and parts[8] else 0
+                actual_change = safe_float(parts[9]) if len(parts) > 9 and parts[9] else 0
+                has_actual = actual_nav > 0 and abs(actual_nav - prev_nav) > 0.0001
+
+                # 如果已公布实际净值,优先使用实际净值和涨跌幅
+                if has_actual:
+                    gsz = actual_nav
+                    gszzl = actual_change
+                    dwjz = actual_nav  # dwjz语义:最新单位净值
+                else:
+                    gsz = estimate_nav
+                    gszzl = est_change
+                    dwjz = prev_nav  # 盘中时dwjz为昨收(与原fundgz行为一致)
                 results.append({
                     'fundcode': fund_code,
                     'name': name,
