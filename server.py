@@ -335,6 +335,36 @@ NEWS_SESSION.headers.update({
     'Accept': '*/*',
 })
 
+# 股票行情专用session(Referer需指向行情页)
+STOCK_SESSION = requests.Session()
+STOCK_SESSION.headers.update({
+    'User-Agent': HEADERS['User-Agent'],
+    'Referer': 'https://quote.eastmoney.com/',
+    'Accept': '*/*',
+})
+
+# 股票市场筛选预设
+STOCK_MARKET_FS = {
+    'all': 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23',
+    'sh': 'm:1+t:2,m:1+t:23',
+    'sz': 'm:0+t:6,m:0+t:80',
+    'cyb': 'm:0+t:80',
+    'kcb': 'm:1+t:23',
+}
+
+# 排序字段映射
+STOCK_SORT_FIELDS = {
+    'changePercent': 'f3',
+    'changeAmount': 'f4',
+    'amount': 'f6',
+    'mainFlow': 'f62',
+    'turnover': 'f8',
+    'volume': 'f5',
+}
+
+# 行情+资金流合并字段
+STOCK_LIST_FIELDS = 'f2,f3,f4,f5,f6,f7,f8,f10,f12,f14,f15,f16,f17,f18,f62,f63,f64,f65,f66,f69,f70,f71,f72,f75,f76,f77,f78,f81,f82,f83,f84,f184'
+
 
 @app.route('/')
 def index():
@@ -1700,6 +1730,193 @@ def _fetch_market_indices():
     except Exception as e:
         print(f'[大盘指数异常]: {e}')
         return []
+
+
+@app.route('/api/stocks')
+def api_stocks():
+    """股票实时行情列表(行情+资金流向合并) - 东方财富push2"""
+    fs = request.args.get('fs', 'all')
+    fid = request.args.get('fid', 'f3')
+    po = request.args.get('po', '1')
+    pn = request.args.get('pn', '1')
+    pz = request.args.get('pz', '50')
+    keyword = request.args.get('keyword', '').strip()
+
+    # 市场筛选映射
+    market_fs = STOCK_MARKET_FS.get(fs, STOCK_MARKET_FS['all'])
+
+    # 缓存: 交易时段10秒, 非交易时段300秒
+    cache_key = f'stocks_{fs}_{fid}_{po}_{pn}_{pz}'
+    cache_ttl = 10 if not _is_market_closed() else 300
+    cached = _get_cache(cache_key, cache_ttl)
+    if cached is not None:
+        # 关键词过滤(在缓存数据上做)
+        if keyword:
+            kw = keyword.lower()
+            cached['list'] = [s for s in cached['list'] if kw in s.get('code','').lower() or kw in s.get('name','')]
+            cached['total'] = len(cached['list'])
+        return jsonify(cached)
+
+    url = 'https://push2.eastmoney.com/api/qt/clist/get'
+    params = {
+        'fid': fid,
+        'po': po,
+        'pz': pz,
+        'pn': pn,
+        'np': 1,
+        'fltt': 2,
+        'invt': 2,
+        'fs': market_fs,
+        'fields': STOCK_LIST_FIELDS,
+    }
+    try:
+        resp = STOCK_SESSION.get(url, params=params, timeout=15)
+        data = resp.json()
+        result = {'total': 0, 'list': []}
+        if data.get('Data') and data['Data'].get('Diff'):
+            diff = data['Data']['Diff']
+            result['total'] = data['Data'].get('TotalCount', len(diff))
+            stocks = []
+            for item in diff:
+                stocks.append({
+                    'code': str(item.get('f12', '')),
+                    'name': item.get('f14', ''),
+                    'price': item.get('f2', 0),
+                    'changePercent': item.get('f3', 0),
+                    'changeAmount': item.get('f4', 0),
+                    'volume': item.get('f5', 0),
+                    'amount': item.get('f6', 0),
+                    'amplitude': item.get('f7', 0),
+                    'turnover': item.get('f8', 0),
+                    'high': item.get('f15', 0),
+                    'low': item.get('f16', 0),
+                    'open': item.get('f17', 0),
+                    'prevClose': item.get('f18', 0),
+                    # 资金流向
+                    'mainFlow': item.get('f62', 0),
+                    'mainFlowRatio': item.get('f184', 0),
+                    'superLargeFlow': item.get('f63', 0),
+                    'superLargeIn': item.get('f65', 0),
+                    'superLargeOut': item.get('f66', 0),
+                    'largeFlow': item.get('f69', 0),
+                    'largeIn': item.get('f71', 0),
+                    'largeOut': item.get('f72', 0),
+                    'mediumFlow': item.get('f75', 0),
+                    'mediumIn': item.get('f77', 0),
+                    'mediumOut': item.get('f78', 0),
+                    'smallFlow': item.get('f81', 0),
+                    'smallIn': item.get('f83', 0),
+                    'smallOut': item.get('f84', 0),
+                })
+            result['list'] = stocks
+            _set_cache(cache_key, result)
+        # 关键词过滤
+        if keyword:
+            kw = keyword.lower()
+            result['list'] = [s for s in result['list'] if kw in s.get('code','').lower() or kw in s.get('name','')]
+            result['total'] = len(result['list'])
+        return jsonify(result)
+    except Exception as e:
+        print(f'[股票列表异常] {e}')
+        return jsonify({'total': 0, 'list': []})
+
+
+@app.route('/api/stocks/detail')
+def api_stock_detail():
+    """个股详情(基本面+资金流向) - 东方财富push2 stock/get"""
+    secid = request.args.get('secid', '')
+    if not secid:
+        return jsonify(None)
+
+    cache_key = f'stock_detail_{secid}'
+    cache_ttl = 8 if not _is_market_closed() else 300
+    cached = _get_cache(cache_key, cache_ttl)
+    if cached is not None:
+        return jsonify(cached)
+
+    url = 'https://push2.eastmoney.com/api/qt/stock/get'
+    params = {
+        'secid': secid,
+        'fields': 'f43,f44,f45,f46,f47,f48,f50,f51,f52,f55,f57,f58,f60,f116,f117,f162,f167,f168,f169,f170,f171,f137,f140,f143,f146,f149,f193,f194,f195,f196,f197,f198,f199,f200,f201,f202,f203,f204,f205,f206',
+        'fltt': 2,
+        'invt': 2,
+    }
+    try:
+        resp = STOCK_SESSION.get(url, params=params, timeout=10)
+        data = resp.json()
+        if data.get('data'):
+            d = data['data']
+            result = {
+                'code': str(d.get('f57', '')),
+                'name': d.get('f58', ''),
+                'market': secid.split('.')[0] if '.' in secid else '',
+                'price': d.get('f43', 0),
+                'high': d.get('f44', 0),
+                'low': d.get('f45', 0),
+                'open': d.get('f46', 0),
+                'volume': d.get('f47', 0),
+                'amount': d.get('f48', 0),
+                'volumeRatio': d.get('f50', 0),
+                'limitUp': d.get('f51', 0),
+                'limitDown': d.get('f52', 0),
+                'pe': d.get('f162', 0),
+                'pb': d.get('f167', 0),
+                'totalMarketCap': d.get('f116', 0),
+                'floatMarketCap': d.get('f117', 0),
+                'turnover': d.get('f168', 0),
+                'prevClose': d.get('f60', 0),
+                'changePercent': d.get('f170', 0),
+                # 资金流向
+                'mainFlow': d.get('f137', 0),
+                'superLargeFlow': d.get('f140', 0),
+                'largeFlow': d.get('f143', 0),
+                'mediumFlow': d.get('f146', 0),
+                'smallFlow': d.get('f149', 0),
+            }
+            _set_cache(cache_key, result)
+            return jsonify(result)
+        return jsonify(None)
+    except Exception as e:
+        print(f'[个股详情异常] {secid}: {e}')
+        return jsonify(None)
+
+
+@app.route('/api/stocks/flow')
+def api_stock_flow():
+    """个股分时资金流向(当日分钟级) - 东方财富push2 fflow/day/get"""
+    secid = request.args.get('secid', '')
+    if not secid:
+        return jsonify({'timeline': [], 'summary': {}})
+
+    cache_key = f'stock_flow_{secid}'
+    cache_ttl = 8 if not _is_market_closed() else 300
+    cached = _get_cache(cache_key, cache_ttl)
+    if cached is not None:
+        return jsonify(cached)
+
+    url = 'https://push2.eastmoney.com/api/qt/stock/fflow/day/get'
+    params = {
+        'lmt': 0,
+        'klt': 101,
+        'secid': secid,
+        'fields1': 'f1,f2,f3,f7',
+        'fields2': 'f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65,f66,f67,f68,f69,f70',
+    }
+    try:
+        resp = STOCK_SESSION.get(url, params=params, timeout=10)
+        data = resp.json()
+        result = {'timeline': [], 'summary': {}}
+        if data.get('data'):
+            d = data['data']
+            timeline = d.get('trend', [])
+            summary = d.get('sum', [])
+            result['timeline'] = timeline or []
+            result['summary'] = summary or []
+            _set_cache(cache_key, result)
+        return jsonify(result)
+    except Exception as e:
+        print(f'[个股资金流异常] {secid}: {e}')
+        return jsonify({'timeline': [], 'summary': {}})
 
 
 @app.route('/api/sectors')

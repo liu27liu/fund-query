@@ -130,7 +130,8 @@
             T('text_nav_home', '首页'),
             T('text_nav_portfolio', '持仓'),
             T('text_nav_favorites', '自选'),
-            T('text_nav_search', '搜索')
+            T('text_nav_search', '搜索'),
+            T('text_nav_stocks', '股票行情')
         ];
         navLinks.forEach(function (link, i) {
             if (navTexts[i] != null) link.textContent = navTexts[i];
@@ -188,6 +189,9 @@
         // 关闭搜索建议
         searchSuggest.classList.remove('active');
 
+        // 离开股票行情页时清除自动刷新
+        if (typeof stockState !== 'undefined' && stockState.timer) { clearInterval(stockState.timer); stockState.timer = null; }
+
         // 路由分发
         if (path === '/' || path === '') {
             renderHome();
@@ -209,6 +213,13 @@
         } else if (path === '/fund') {
             var code = getQueryParam(query, 'code');
             if (code) openDetail(code);
+        } else if (path === '/stocks') {
+            renderStockMarket();
+        } else if (path === '/stock') {
+            var sCode = getQueryParam(query, 'code');
+            var sMarket = getQueryParam(query, 'market') || '1';
+            if (sCode) renderStockDetail(sMarket + '.' + sCode);
+            else renderStockMarket();
         } else {
             renderHome();
         }
@@ -4828,6 +4839,405 @@
 
         // 路由
         window.addEventListener('hashchange', router);
+    }
+
+    // ========== 股票行情 ==========
+    var stockState = {
+        fs: 'all', fid: 'f3', po: '1',
+        page: 1, size: 50, keyword: '',
+        loading: false, timer: null, requestId: 0,
+    };
+
+    function renderStockMarket() {
+        var main = document.getElementById('app');
+        if (!main) return;
+        stockState.page = 1;
+        stockState.requestId++;
+
+        main.innerHTML = `
+    <div class="stock-market-page">
+        <div class="page-header">
+            <h2 class="page-title">股票实时行情</h2>
+            <p class="page-subtitle" style="font-size:13px;color:var(--text-secondary)">全市场A股实时行情 · 主力资金流向</p>
+        </div>
+
+        <div class="stock-filter-bar">
+            <div class="stock-market-tabs">
+                <span class="ranking-tab ${stockState.fs==='all'?'active':''}" data-fs="all">全部A股</span>
+                <span class="ranking-tab ${stockState.fs==='sh'?'active':''}" data-fs="sh">上证</span>
+                <span class="ranking-tab ${stockState.fs==='sz'?'active':''}" data-fs="sz">深证</span>
+                <span class="ranking-tab ${stockState.fs==='cyb'?'active':''}" data-fs="cyb">创业板</span>
+                <span class="ranking-tab ${stockState.fs==='kcb'?'active':''}" data-fs="kcb">科创板</span>
+            </div>
+            <div class="stock-sort-tabs">
+                <span class="sort-tab ${stockState.fid==='f3'?'active':''}" data-fid="f3" data-po="1">涨幅榜</span>
+                <span class="sort-tab ${stockState.fid==='f3'?'active':''}" data-fid="f3" data-po="0">跌幅榜</span>
+                <span class="sort-tab ${stockState.fid==='f6'?'active':''}" data-fid="f6" data-po="1">成交额</span>
+                <span class="sort-tab ${stockState.fid==='f62'?'active':''}" data-fid="f62" data-po="1">主力流入</span>
+                <span class="sort-tab ${stockState.fid==='f62'?'active':''}" data-fid="f62" data-po="0">主力流出</span>
+                <span class="sort-tab ${stockState.fid==='f8'?'active':''}" data-fid="f8" data-po="1">换手率</span>
+            </div>
+            <div class="stock-search-bar">
+                <input type="text" class="stock-search-input" id="stockSearchInput" placeholder="搜索股票代码或名称..." value="${stockState.keyword}">
+            </div>
+        </div>
+
+        <div id="stockTableContainer">
+            <div style="padding:40px;text-align:center"><div class="loader" style="margin:0 auto 12px"></div>正在加载股票行情...</div>
+        </div>
+        <div id="stockPagination"></div>
+        <div id="stockRefreshBar" class="ranking-info-bar" style="margin-top:12px"></div>
+    </div>`;
+
+        bindStockEvents();
+        loadStockList();
+        startStockAutoRefresh();
+    }
+
+    function bindStockEvents() {
+        // 市场Tab
+        document.querySelectorAll('.stock-market-tabs .ranking-tab').forEach(function(tab) {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.stock-market-tabs .ranking-tab').forEach(function(t) { t.classList.remove('active'); });
+                this.classList.add('active');
+                stockState.fs = this.dataset.fs;
+                stockState.page = 1;
+                loadStockList();
+            });
+        });
+
+        // 排序Tab
+        document.querySelectorAll('.stock-sort-tabs .sort-tab').forEach(function(tab) {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.stock-sort-tabs .sort-tab').forEach(function(t) { t.classList.remove('active'); });
+                this.classList.add('active');
+                stockState.fid = this.dataset.fid;
+                stockState.po = this.dataset.po;
+                stockState.page = 1;
+                loadStockList();
+            });
+        });
+
+        // 搜索
+        var searchInput = document.getElementById('stockSearchInput');
+        if (searchInput) {
+            var searchTimer = null;
+            searchInput.addEventListener('input', function() {
+                clearTimeout(searchTimer);
+                var val = this.value.trim();
+                searchTimer = setTimeout(function() {
+                    stockState.keyword = val;
+                    stockState.page = 1;
+                    loadStockList();
+                }, 300);
+            });
+        }
+    }
+
+    async function loadStockList() {
+        if (stockState.loading) return;
+        stockState.loading = true;
+        var myReqId = ++stockState.requestId;
+        var container = document.getElementById('stockTableContainer');
+        if (!container) { stockState.loading = false; return; }
+
+        try {
+            var data = await FundAPI.getStockList({
+                fs: stockState.fs,
+                fid: stockState.fid,
+                po: stockState.po,
+                pn: stockState.page,
+                pz: stockState.size,
+                keyword: stockState.keyword,
+            });
+            if (myReqId !== stockState.requestId) { stockState.loading = false; return; }
+
+            var stocks = data.list || [];
+            var total = data.total || 0;
+            var totalPages = Math.ceil(total / stockState.size);
+
+            if (stocks.length === 0) {
+                container.innerHTML = '<div class="empty-state"><div class="icon">📊</div><h3>暂无数据</h3><p>未找到匹配的股票</p></div>';
+            } else {
+                renderStockTable(container, stocks);
+                renderStockPagination(total, totalPages);
+            }
+
+            // 更新信息栏
+            var infoBar = document.getElementById('stockRefreshBar');
+            if (infoBar) {
+                var upCount = stocks.filter(function(s) { return s.changePercent > 0; }).length;
+                var downCount = stocks.filter(function(s) { return s.changePercent < 0; }).length;
+                var totalMainFlow = stocks.reduce(function(sum, s) { return sum + (s.mainFlow || 0); }, 0);
+                infoBar.innerHTML = '共 ' + total + ' 只股票 | 涨 <span class="text-up">' + upCount + '</span> | 跌 <span class="text-down">' + downCount + '</span> | 主力净流入 <span class="' + (totalMainFlow >= 0 ? 'text-up' : 'text-down') + '">' + formatFlowMoney(totalMainFlow) + '</span> | 已更新 ' + FundAPI.formatDate(new Date(), 'HH:mm:ss');
+            }
+        } catch (e) {
+            console.warn('加载股票列表失败:', e);
+        } finally {
+            stockState.loading = false;
+        }
+    }
+
+    function renderStockTable(container, stocks) {
+        var startRank = (stockState.page - 1) * stockState.size;
+        var html = '<div class="stock-table-wrap"><table class="fund-table stock-table"><thead><tr>' +
+            '<th style="width:50px">#</th>' +
+            '<th>代码</th><th>名称</th>' +
+            '<th class="text-right">最新价</th>' +
+            '<th class="text-right">涨跌幅</th>' +
+            '<th class="text-right">成交额</th>' +
+            '<th class="text-right">换手率</th>' +
+            '<th class="text-right">主力净流入</th>' +
+            '<th class="text-right">超大单</th>' +
+            '<th class="text-right">大单</th>' +
+            '<th class="text-right">中单</th>' +
+            '<th class="text-right">小单</th>' +
+            '</tr></thead><tbody>';
+
+        stocks.forEach(function(s, i) {
+            var rank = startRank + i + 1;
+            var cc = s.changePercent >= 0 ? 'up' : s.changePercent < 0 ? 'down' : 'flat';
+            var mfc = s.mainFlow >= 0 ? 'up' : 'down';
+            html += '<tr class="stock-row" data-code="' + s.code + '" data-market="' + (s.market || (s.code.startsWith('6') ? '1' : '0')) + '">' +
+                '<td class="rank-cell">' + rank + '</td>' +
+                '<td><span class="fund-code">' + s.code + '</span></td>' +
+                '<td class="fund-name-cell"><span class="fund-name">' + s.name + '</span></td>' +
+                '<td class="text-right num-cell">' + FundAPI.formatNum(s.price) + '</td>' +
+                '<td class="text-right"><span class="change-badge bg-' + cc + '">' + FundAPI.formatChange(s.changePercent) + '</span></td>' +
+                '<td class="text-right num-cell">' + formatFlowMoney(s.amount) + '</td>' +
+                '<td class="text-right num-cell">' + (s.turnover || 0).toFixed(2) + '%</td>' +
+                '<td class="text-right num-cell"><span class="text-' + mfc + '">' + formatFlowMoney(s.mainFlow) + '</span></td>' +
+                '<td class="text-right num-cell"><span class="text-' + (s.superLargeFlow >= 0 ? 'up' : 'down') + '">' + formatFlowMoney(s.superLargeFlow) + '</span></td>' +
+                '<td class="text-right num-cell"><span class="text-' + (s.largeFlow >= 0 ? 'up' : 'down') + '">' + formatFlowMoney(s.largeFlow) + '</span></td>' +
+                '<td class="text-right num-cell"><span class="text-' + (s.mediumFlow >= 0 ? 'up' : 'down') + '">' + formatFlowMoney(s.mediumFlow) + '</span></td>' +
+                '<td class="text-right num-cell"><span class="text-' + (s.smallFlow >= 0 ? 'up' : 'down') + '">' + formatFlowMoney(s.smallFlow) + '</span></td>' +
+                '</tr>';
+        });
+
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+
+        // 行点击事件
+        container.querySelectorAll('.stock-row').forEach(function(row) {
+            row.style.cursor = 'pointer';
+            row.addEventListener('click', function() {
+                var code = this.dataset.code;
+                var market = this.dataset.market;
+                location.hash = '/stock?code=' + code + '&market=' + market;
+            });
+        });
+    }
+
+    function renderStockPagination(total, totalPages) {
+        var pag = document.getElementById('stockPagination');
+        if (!pag) return;
+        var p = stockState.page, maxShow = 5;
+        var startP = Math.max(1, p - Math.floor(maxShow / 2));
+        var endP = Math.min(totalPages, startP + maxShow - 1);
+        if (endP - startP < maxShow - 1) startP = Math.max(1, endP - maxShow + 1);
+
+        var html = '<div class="ranking-pagination">';
+        html += '<button class="pg-btn" data-p="1" ' + (p <= 1 ? 'disabled' : '') + '>首页</button>';
+        html += '<button class="pg-btn" data-p="' + (p - 1) + '" ' + (p <= 1 ? 'disabled' : '') + '>上一页</button>';
+        for (var i = startP; i <= endP; i++) {
+            html += '<button class="pg-btn ' + (i === p ? 'active' : '') + '" data-p="' + i + '">' + i + '</button>';
+        }
+        html += '<button class="pg-btn" data-p="' + (p + 1) + '" ' + (p >= totalPages ? 'disabled' : '') + '>下一页</button>';
+        html += '<button class="pg-btn" data-p="' + totalPages + '" ' + (p >= totalPages ? 'disabled' : '') + '>末页</button>';
+        html += '<span style="margin-left:12px;color:var(--text-secondary);font-size:13px">共 ' + totalPages + ' 页</span>';
+        html += '</div>';
+        pag.innerHTML = html;
+
+        pag.querySelectorAll('.pg-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var newP = parseInt(this.dataset.p);
+                if (newP >= 1 && newP <= totalPages && newP !== stockState.page) {
+                    stockState.page = newP;
+                    loadStockList();
+                    document.getElementById('stockTableContainer').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+    }
+
+    function startStockAutoRefresh() {
+        if (stockState.timer) clearInterval(stockState.timer);
+        stockState.timer = setInterval(function() {
+            if (document.querySelector('.stock-market-page')) {
+                loadStockList();
+            } else {
+                clearInterval(stockState.timer);
+                stockState.timer = null;
+            }
+        }, 15000);
+    }
+
+    function formatFlowMoney(val) {
+        if (val === undefined || val === null || val === 0) return '0';
+        var abs = Math.abs(val);
+        var sign = val >= 0 ? '+' : '';
+        if (abs >= 100000000) return sign + (abs / 100000000).toFixed(2) + '亿';
+        if (abs >= 10000) return sign + (abs / 10000).toFixed(2) + '万';
+        return sign + abs.toFixed(0);
+    }
+
+    // ========== 个股详情 ==========
+    function renderStockDetail(secid) {
+        var main = document.getElementById('app');
+        if (!main) return;
+
+        main.innerHTML = `
+    <div class="stock-detail-page">
+        <div class="detail-back-btn" onclick="location.hash='/stocks'">
+            <span style="font-size:20px">&#8592;</span> 返回股票列表
+        </div>
+        <div id="stockDetailContent">
+            <div style="padding:80px;text-align:center"><div class="loader" style="margin:0 auto 16px"></div><p style="color:var(--text-secondary)">正在加载股票详情...</p></div>
+        </div>
+    </div>`;
+
+        loadStockDetailData(secid);
+    }
+
+    async function loadStockDetailData(secid) {
+        var container = document.getElementById('stockDetailContent');
+        if (!container) return;
+
+        try {
+            var [detail, flow] = await Promise.all([
+                FundAPI.getStockDetail(secid),
+                FundAPI.getStockFlow(secid),
+            ]);
+
+            if (!detail) {
+                container.innerHTML = '<div class="empty-state"><div class="icon">&#128564;</div><h3>加载失败</h3><p>无法获取该股票数据</p></div>';
+                return;
+            }
+
+            var cc = detail.changePercent >= 0 ? 'up' : 'down';
+            var mfc = (detail.mainFlow || 0) >= 0 ? 'up' : 'down';
+            var code = detail.code;
+            var market = detail.market || '1';
+
+            container.innerHTML = `
+        <div class="detail-header">
+            <div class="detail-title-row">
+                <span class="detail-fund-name">${detail.name}</span>
+                <span class="detail-fund-code">${code}</span>
+                <span class="change-badge bg-${cc}" style="font-size:16px;padding:4px 12px">${FundAPI.formatChange(detail.changePercent)}</span>
+            </div>
+            <div class="detail-metrics">
+                <div class="metric-item">
+                    <div class="metric-label">最新价</div>
+                    <div class="metric-value ${cc === 'up' ? 'text-up' : 'text-down'}">${FundAPI.formatNum(detail.price)}</div>
+                    <div class="metric-sub ${cc === 'up' ? 'text-up' : 'text-down'}">${(detail.changeAmount || 0) >= 0 ? '+' : ''}${(detail.changeAmount || 0).toFixed(2)}</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">今开</div>
+                    <div class="metric-value">${FundAPI.formatNum(detail.open)}</div>
+                    <div class="metric-sub">昨收 ${FundAPI.formatNum(detail.prevClose)}</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">最高</div>
+                    <div class="metric-value text-up">${FundAPI.formatNum(detail.high)}</div>
+                    <div class="metric-sub text-down">最低 ${FundAPI.formatNum(detail.low)}</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">成交额</div>
+                    <div class="metric-value">${formatFlowMoney(detail.amount)}</div>
+                    <div class="metric-sub">换手 ${((detail.turnover || 0)).toFixed(2)}%</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">总市值</div>
+                    <div class="metric-value">${formatFlowMoney(detail.totalMarketCap)}</div>
+                    <div class="metric-sub">流通 ${formatFlowMoney(detail.floatMarketCap)}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="detail-body" style="padding:0 16px 32px">
+            <div class="detail-section" style="margin-bottom:20px">
+                <div class="detail-section-title"><span>&#128176;</span> 资金流向</div>
+                <div class="stock-flow-grid">
+                    <div class="stock-flow-card ${mfc === 'up' ? 'flow-positive' : 'flow-negative'}">
+                        <div class="flow-label">主力净流入</div>
+                        <div class="flow-value ${mfc === 'up' ? 'text-up' : 'text-down'}">${formatFlowMoney(detail.mainFlow)}</div>
+                        <div class="flow-ratio">${((detail.mainFlowRatio || 0)).toFixed(2)}%</div>
+                    </div>
+                    <div class="stock-flow-card">
+                        <div class="flow-label">超大单</div>
+                        <div class="flow-value ${(detail.superLargeFlow || 0) >= 0 ? 'text-up' : 'text-down'}">${formatFlowMoney(detail.superLargeFlow)}</div>
+                    </div>
+                    <div class="stock-flow-card">
+                        <div class="flow-label">大单</div>
+                        <div class="flow-value ${(detail.largeFlow || 0) >= 0 ? 'text-up' : 'text-down'}">${formatFlowMoney(detail.largeFlow)}</div>
+                    </div>
+                    <div class="stock-flow-card">
+                        <div class="flow-label">中单</div>
+                        <div class="flow-value ${(detail.mediumFlow || 0) >= 0 ? 'text-up' : 'text-down'}">${formatFlowMoney(detail.mediumFlow)}</div>
+                    </div>
+                    <div class="stock-flow-card">
+                        <div class="flow-label">小单</div>
+                        <div class="flow-value ${(detail.smallFlow || 0) >= 0 ? 'text-up' : 'text-down'}">${formatFlowMoney(detail.smallFlow)}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <div class="detail-section-title"><span>&#128200;</span> 分时资金流向</div>
+                <div id="stockFlowChart" style="width:100%;height:350px"></div>
+            </div>
+        </div>`;
+
+            // 绘制分时资金流向图
+            if (flow && flow.timeline && flow.timeline.length > 0) {
+                renderStockFlowChart(flow.timeline);
+            }
+        } catch (e) {
+            console.warn('加载股票详情失败:', e);
+        }
+    }
+
+    function renderStockFlowChart(timeline) {
+        var chartEl = document.getElementById('stockFlowChart');
+        if (!chartEl) return;
+        // 等ECharts加载
+        if (typeof echarts === 'undefined') {
+            var checkTimer = setInterval(function() {
+                if (typeof echarts !== 'undefined') {
+                    clearInterval(checkTimer);
+                    _drawStockFlowChart(chartEl, timeline);
+                }
+            }, 500);
+            setTimeout(function() { clearInterval(checkTimer); }, 10000);
+        } else {
+            _drawStockFlowChart(chartEl, timeline);
+        }
+    }
+
+    function _drawStockFlowChart(el, timeline) {
+        var chart = echarts.init(el);
+        var times = [], mainData = [], retailData = [];
+        timeline.forEach(function(item) {
+            var t = item.time || '';
+            if (t.length === 8) t = t.substring(0, 5);
+            times.push(t);
+            mainData.push(parseFloat(item.mainForceNetIn || 0) / 10000);
+            retailData.push(parseFloat(item.smallForceNetIn || 0) / 10000);
+        });
+
+        chart.setOption({
+            tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+            legend: { data: ['主力', '散户'], top: 0 },
+            grid: { left: 60, right: 20, top: 35, bottom: 30 },
+            xAxis: { type: 'category', data: times, axisLabel: { fontSize: 11 } },
+            yAxis: { type: 'value', name: '万元', axisLabel: { fontSize: 11 } },
+            series: [
+                { name: '主力', type: 'line', data: mainData, smooth: true, lineStyle: { color: '#dc2626', width: 2 }, itemStyle: { color: '#dc2626' }, areaStyle: { color: 'rgba(220,38,38,0.08)' } },
+                { name: '散户', type: 'line', data: retailData, smooth: true, lineStyle: { color: '#059669', width: 2 }, itemStyle: { color: '#059669' }, areaStyle: { color: 'rgba(5,150,105,0.08)' } },
+            ]
+        });
+        window.addEventListener('resize', function() { chart.resize(); });
     }
 
     function closeModal() {

@@ -4531,3 +4531,31 @@ select.form-input {
         font-size: 12px;
     }
 }
+
+/* ========== 股票行情 ========== */
+.stock-market-page, .stock-detail-page { max-width: var(--max-w); margin: 0 auto; padding: 16px; }
+.stock-filter-bar { margin-bottom: 16px; }
+.stock-market-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.stock-sort-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.sort-tab { padding: 4px 14px; border-radius: var(--radius-pill); font-size: 13px; background: var(--bg-secondary); color: var(--text-secondary); cursor: pointer; border: 1px solid transparent; transition: all 0.2s; }
+.sort-tab:hover { background: var(--bg-tertiary); color: var(--text); }
+.sort-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.stock-search-input { width: 100%; max-width: 300px; padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; outline: none; transition: border-color 0.2s; background: var(--card-bg); color: var(--text); }
+.stock-search-input:focus { border-color: var(--primary); }
+.stock-search-bar { margin-bottom: 12px; }
+.stock-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: var(--radius); border: 1px solid var(--border-light); }
+.stock-table { min-width: 900px; }
+.stock-row:hover { background: var(--bg-hover); }
+.stock-detail-page .detail-back-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; margin-bottom: 16px; border-radius: var(--radius-sm); cursor: pointer; color: var(--primary); font-size: 14px; transition: background 0.2s; }
+.stock-detail-page .detail-back-btn:hover { background: var(--primary-light); }
+.stock-flow-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 12px; }
+.stock-flow-card { padding: 14px; border-radius: var(--radius-sm); background: var(--bg-secondary); text-align: center; }
+.stock-flow-card.flow-positive { border-left: 3px solid var(--up); }
+.stock-flow-card.flow-negative { border-left: 3px solid var(--down); }
+.flow-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+.flow-value { font-size: 18px; font-weight: 700; font-family: var(--font-num); margin-bottom: 2px; }
+.flow-ratio { font-size: 12px; color: var(--text-tertiary); }
+@media (max-width: 768px) {
+    .stock-flow-grid { grid-template-columns: repeat(3, 1fr); }
+    .stock-table { font-size: 13px; }
+}

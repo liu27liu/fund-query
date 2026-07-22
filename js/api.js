@@ -523,6 +523,38 @@ const FundAPI = (function () {
         }
     }
 
+    // ========== 股票实时行情 ==========
+
+    async function getStockList(params) {
+        var query = Object.keys(params || {}).map(function(k) {
+            return k + '=' + encodeURIComponent(params[k] || '');
+        }).join('&');
+        try {
+            return await fetchJSON('/api/stocks?' + query, 15000);
+        } catch (e) {
+            console.warn('股票列表接口异常:', e);
+            return { list: [], total: 0 };
+        }
+    }
+
+    async function getStockDetail(secid) {
+        try {
+            return await fetchJSON('/api/stocks/detail?secid=' + secid, 8000);
+        } catch (e) {
+            console.warn('个股详情接口异常:', e);
+            return null;
+        }
+    }
+
+    async function getStockFlow(secid) {
+        try {
+            return await fetchJSON('/api/stocks/flow?secid=' + secid, 8000);
+        } catch (e) {
+            console.warn('个股资金流接口异常:', e);
+            return { timeline: [], summary: [] };
+        }
+    }
+
     // ========== 基金经理排行榜 ==========
     async function getFundManagers(page, pageSize, fundType) {
         page = page || 1;
@@ -571,6 +603,9 @@ const FundAPI = (function () {
         getSectorFunds: getSectorFunds,
         getFundManagers: getFundManagers,
         getFundHoldings: getFundHoldings,
+        getStockList: getStockList,
+        getStockDetail: getStockDetail,
+        getStockFlow: getStockFlow,
         parseFundType: parseFundType,
         getTypeColor: getTypeColor,
         formatNum: formatNum,
