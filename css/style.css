@@ -435,8 +435,8 @@ ul, ol { list-style: none; }
 /* ========== 门户卡片网格 ========== */
 .portal-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 18px;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
     margin-bottom: 32px;
 }
 
@@ -512,6 +512,10 @@ ul, ol { list-style: none; }
     background: linear-gradient(135deg, #ea580c, #f97316);
     box-shadow: 0 4px 14px rgba(234, 88, 12, 0.3);
 }
+.portal-icon.icon-red {
+    background: linear-gradient(135deg, #dc2626, #ef4444);
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.3);
+}
 .portal-icon.icon-cyan {
     background: linear-gradient(135deg, #0891b2, #06b6d4);
     box-shadow: 0 4px 14px rgba(8, 145, 178, 0.3);
@@ -559,6 +563,113 @@ ul, ol { list-style: none; }
     color: var(--primary);
 }
 
+/* ========== 首页股票行情看板 ========== */
+.home-stock-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+    align-items: center;
+}
+.home-stock-tabs {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.home-stock-sort {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
+}
+.hst-tab, .hst-sort {
+    padding: 5px 12px;
+    border-radius: var(--radius-pill);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+.hst-tab:hover, .hst-sort:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+.hst-tab.active, .hst-sort.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+    font-weight: 500;
+}
+.home-stock-stats {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.hst-stat {
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+    background: var(--bg-tertiary);
+}
+.hst-stat.up { color: #ef4444; background: rgba(239, 68, 68, 0.08); }
+.hst-stat.down { color: #22c55e; background: rgba(34, 197, 94, 0.08); }
+.hst-stat.time { color: var(--text-tertiary); margin-left: auto; }
+.home-stock-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.home-stock-table thead th {
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    font-size: 12px;
+    border-bottom: 1px solid var(--border-light);
+    white-space: nowrap;
+}
+.home-stock-table tbody tr {
+    border-bottom: 1px solid var(--border-light);
+    transition: background 0.15s;
+    cursor: pointer;
+}
+.home-stock-table tbody tr:hover {
+    background: var(--bg-hover);
+}
+.home-stock-table tbody td {
+    padding: 8px 10px;
+    white-space: nowrap;
+}
+.hst-rank {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    background: var(--bg-tertiary);
+    margin-right: 4px;
+}
+.hst-rank.rank-top {
+    background: linear-gradient(135deg, #f59e0b, #fbbf24);
+    color: #fff;
+}
+.hst-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+.hst-num {
+    font-variant-numeric: tabular-nums;
+    font-family: 'DIN Alternate', 'Roboto Mono', monospace;
+}
+
 @media (max-width: 768px) {
     .portal-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -576,6 +687,11 @@ ul, ol { list-style: none; }
     }
     .portal-title { font-size: 14px; }
     .portal-desc { font-size: 11px; }
+    .home-stock-header { flex-direction: column; align-items: stretch; }
+    .home-stock-sort { margin-left: 0; }
+    .home-stock-table { font-size: 12px; }
+    .home-stock-table tbody td { padding: 6px 8px; }
+    .hst-stat.time { margin-left: 0; }
 }
 
 /* ========== 区块锚点 ========== */
