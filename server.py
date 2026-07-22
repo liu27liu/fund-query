@@ -369,33 +369,115 @@ STOCK_LIST_FIELDS = 'f2,f3,f4,f5,f6,f7,f8,f10,f12,f14,f15,f16,f17,f18,f62,f63,f6
 _all_stock_list = None  # [{code, secid, market}]
 
 def _load_all_stocks():
-    """启动时预加载全量A股代码列表 - 多数据源fallback"""
+    """预加载全量A股代码列表 - 多数据源fallback, 优先东财clist并行翻页"""
     global _all_stock_list
     if _all_stock_list is not None:
         return _all_stock_list
+
+    # 辅助: 根据代码判断市场
+    def _market_of(code):
+        if code.startswith(('0', '3')):
+            return '0'
+        return '1'
+
     stocks = []
 
-    # 方案1: 新浪全量接口
+    # 方案1: 东方财富 clist/get (全市场, 并行翻页)
+    try:
+        import requests
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        url = 'https://push2delay.eastmoney.com/api/qt/clist/get'
+        params_base = {
+            'pz': 100, 'po': 1, 'np': 1, 'fltt': 2, 'invt': 2,
+            'fid': 'f12',
+            'fs': 'm:0+t:6,m:0+t:13,m:0+t:80,m:1+t:2,m:1+t:23,m:1+t:24',
+            'fields': 'f12,f14'
+        }
+
+        # 先获取第一页, 同时得到总数
+        r = requests.get(url, params=dict(params_base, pn=1), timeout=15)
+        data = r.json()
+        total = data.get('data', {}).get('total', 0)
+        diff = data.get('data', {}).get('diff', [])
+
+        if diff:
+            for item in diff:
+                code = item.get('f12', '')
+                name = item.get('f14', '')
+                if code:
+                    m = _market_of(code)
+                    stocks.append({'code': code, 'name': name, 'secid': m + '.' + code, 'market': m})
+
+            # 先设置第一批数据, 让API立即可用(后台继续加载)
+            _all_stock_list = stocks.copy()
+            print(f'[股票代码列表] 东财clist首批{len(stocks)}只, 总数{total}, 后台加载中...', flush=True)
+
+            total_pages = (total + 99) // 100
+            if total_pages > 1:
+                def fetch_page(pn):
+                    try:
+                        rr = requests.get(url, params=dict(params_base, pn=pn), timeout=15)
+                        dd = rr.json()
+                        return dd.get('data', {}).get('diff', [])
+                    except Exception:
+                        return []
+
+                with ThreadPoolExecutor(max_workers=10) as ex:
+                    futures = {ex.submit(fetch_page, pn): pn for pn in range(2, total_pages + 1)}
+                    for future in as_completed(futures):
+                        for item in future.result():
+                            code = item.get('f12', '')
+                            name = item.get('f14', '')
+                            if code:
+                                m = _market_of(code)
+                                stocks.append({'code': code, 'name': name, 'secid': m + '.' + code, 'market': m})
+
+                # 去重并更新全局列表
+                seen = set()
+                unique = []
+                for s in stocks:
+                    if s['code'] not in seen:
+                        seen.add(s['code'])
+                        unique.append(s)
+
+                _all_stock_list = unique
+                print(f'[股票代码列表] 东财clist加载完成, 共{len(unique)}只', flush=True)
+                return unique
+            else:
+                print(f'[股票代码列表] 东财clist加载完成, 共{len(stocks)}只', flush=True)
+                return stocks
+    except Exception as e:
+        print(f'[股票代码列表] 东财clist方案失败: {e}')
+
+    # 方案2: 新浪全量接口(翻页)
     try:
         import requests as req
-        for market_id, prefix, market in [('sh', '1', '1'), ('sz', '0', '0')]:
+        url = 'http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData'
+        for page in range(1, 60):
             try:
-                url = f'http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData'
-                params = {'page': 1, 'num': 5000, 'sort': 'symbol', 'asc': 0, 'node': 'hs_a', '_s_r_a': 'sort'}
+                params = {'page': page, 'num': 100, 'sort': 'symbol', 'asc': 1, 'node': 'hs_a'}
                 r = req.get(url, params=params, headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.sina.com.cn/'}, timeout=20)
                 r.encoding = 'gbk'
                 text = r.text.strip()
-                if text.startswith('['):
-                    items = json.loads(text)
-                    seen = set(s['code'] for s in stocks)
-                    for item in items:
-                        symbol = item.get('symbol', '')
-                        code = symbol.replace(market_id, '') if symbol else ''
-                        if code and code not in seen and len(code) == 6:
-                            seen.add(code)
-                            stocks.append({'code': code, 'name': item.get('name', ''), 'secid': prefix + '.' + code, 'market': prefix})
+                if not text.startswith('['):
+                    break
+                items = json.loads(text)
+                if not items:
+                    break
+                seen = set(s['code'] for s in stocks)
+                for item in items:
+                    symbol = item.get('symbol', '')
+                    code = item.get('code', '')
+                    if not code and symbol:
+                        code = symbol.replace('sh', '').replace('sz', '').replace('bj', '')
+                    if code and code not in seen and len(code) == 6:
+                        seen.add(code)
+                        m = _market_of(code)
+                        stocks.append({'code': code, 'name': item.get('name', ''), 'secid': m + '.' + code, 'market': m})
             except Exception as e:
-                print(f'[股票代码列表] 新浪{market_id}失败: {e}')
+                print(f'[股票代码列表] 新浪翻页失败 page={page}: {e}')
+                break
         if stocks:
             _all_stock_list = stocks
             print(f'[股票代码列表] 新浪方案成功, 共{len(stocks)}只', flush=True)
@@ -403,8 +485,7 @@ def _load_all_stocks():
     except Exception as e:
         print(f'[股票代码列表] 新浪方案失败: {e}')
 
-    # 方案2: 嵌入热门股票列表(fallback)
-    # 沪深300成分股代码列表(2024年)
+    # 方案3: fallback 沪深300
     hs300 = "600000,600004,600006,600007,600008,600009,600010,600011,600012,600015,600016,600017,600018,600019,600020,600021,600022,600023,600025,600026,600027,600028,600029,600030,600031,600033,600036,600038,600048,600049,600050,600061,600062,600063,600064,600066,600067,600068,600069,600070,600071,600072,600073,600074,600075,600076,600077,600078,600079,600080,600081,600082,600083,600085,600086,600088,600089,600090,600094,600095,600096,600097,600098,600099,600100,600104,600105,600106,600107,600108,600109,600110,600111,600112,600113,600114,600115,600116,600117,600118,600119,600120,600121,600122,600123,600125,600126,600127,600128,600129,600130,600131,600132,600133,600135,600136,600137,600138,600139,600141,600143,600145,600146,600148,600149,600150,600151,600153,600155,600156,600157,600158,600159,600160,600161,600162,600163,600165,600166,600167,600168,600169,600170,600171,600172,600173,600175,600176,600177,600178,600179,600180,600181,600182,600183,600184,600185,600186,600187,600188,600189,600190,600191,600192,600193,600195,600196,600197,600198,600199,600200,600201,600202,600203,600206,600207,600208,600209,600210,600211,600212,600213,600215,600216,600217,600218,600219,600220,600221,600222,600223,600225,600226,600227,600228,600229,600230,600231,600232,600233,600234,600235,600236,600237,600238,600239,600240,600241,600242,600243,600245,600246,600247,600248,600249,600250,600251,600252,600253,600256,600257,600258,600259,600260,600261,600262,600263,600265,600266,600267,600268,600269,600270,600271,600272,600273,600275,600276,600277,600278,600279,600280,600281,600282,600283,600284,600285,600286,600287,600288,600289,600290,600291,600292,600293,600295,600297,600298,600299,600300,600301,600302,600303,600304,600305,600306,600307,600308,600309,600310,600311,600312,600313,600315,600316,600317,600318,600319,600320,600321,600322,600323,600325,600326,600327,600328,600329,600330,600331,600332,600333,600334,600335,600336,600337,600338,600339,600340,600341,600342,600343,600345,600346,600348,600349,600350,600351,600352,600353,600354,600355,600356,600357,600358,600359,600360,600361,600362,600363,600366,600367,600368,600369,600370,600371,600372,600373,600375,600376,600377,600378,600379,600380,600381,600382,600383,600385,600386,600387,600388,600389,600390,600392,600393,600394,600395,600396,600397,600398,600399,600400,600401,600402,600403,600405,600406,600407,600408,600409,600410,600411,600415,600418,600420,600422,600423,600425,600426,600428,600429,600430,600432,600433,600435,600436,600438,600446,600448,600449,600452,600456,600458,600459,600460,600461,600462,600463,600465,600466,600467,600468,600469,600470,600474,600475,600476,600477,600478,600479,600480,600481,600482,600483,600485,600486,600487,600488,600489,600490,600491,600493,600494,600495,600496,600497,600498,600499,600500,600501,600502,600503,600504,600505,600506,600507,600508,600509,600510,600511,600512,600513,600514,600515,600516,600517,600518,600519,600520,600521,600522,600523,600525,600526,600527,600528,600529,600530,600531,600532,600533,600535,600536,600537,600538,600539,600540,600541,600542,600543,600545,600546,600547,600548,600549,600550,600551,600552,600553,600555,600556,600557,600558,600559,600560,600561,600562,600563,600565,600566,600567,600568,600569,600570,600571,600572,600573,600575,600576,600577,600578,600579,600580,600581,600582,600583,600584,600585,600586,600587,600588,600589,600590,600591,600592,600593,600594,600595,600596,600597,600598,600599,600600,600601,600602,600603,600604,600605,600606,600608,600609,600610,600611,600612,600614,600615,600616,600617,600618,600619,600620,600622,600623,600624,600626,600627,600628,600630,600633,600634,600635,600636,600637,600638,600639,600640,600641,600642,600643,600645,600647,600648,600649,600650,600651,600653,600654,600655,600656,600657,600658,600659,600660,600661,600662,600663,600664,600665,600666,600667,600668,600669,600670,600671,600672,600673,600674,600675,600676,600677,600678,600679,600680,600681,600682,600683,600684,600685,600686,600687,600688,600689,600690,600691,600692,600693,600694,600695,600696,600697,600698,600699,600701,600702,600703,600704,600705,600706,600707,600708,600709,600710,600711,600712,600713,600714,600715,600716,600717,600718,600719,600722,600723,600724,600725,600726,600727,600728,600729,600730,600731,600733,600734,600735,600736,600737,600738,600739,600740,600741,600742,600743,600745,600746,600747,600748,600749,600750,600751,600752,600753,600754,600755,600756,600757,600758,600759,600760,600761,600763,600764,600765,600766,600767,600768,600769,600770,600771,600772,600773,600775,600776,600777,600778,600779,600780,600781,600782,600783,600784,600785,600786,600787,600788,600789,600790,600793,600795,600796,600797,600798,600799,600800,600801,600802,600803,600804,600805,600806,600807,600808,600809,600810,600811,600812,600814,600815,600816,600817,600818,600819,600820,600821,600822,600823,600824,600825,600826,600827,600828,600829,600830,600831,600832,600833,600835,600836,600837,600838,600839,600840,600841,600842,600843,600845,600846,600847,600848,600849,600850,600851,600852,600853,600854,600855,600856,600857,600858,600859,600860,600861,600862,600863,600864,600865,600866,600867,600868,600869,600870,600871,600872,600873,600874,600875,600876,600877,600878,600879,600880,600881,600882,600883,600884,600885,600886,600887,600888,600889,600890,600891,600892,600893,600894,600895,600896,600897,600898,600899,600900,600901,600903,600904,600905,600906,600907,600908,600909,600910,600911,600912,600913,600915,600916,600917,600918,600919,600920,600921,600922,600923,600925,600926,600927,600928,600929,600930,600931,600932,600933,600934,600935,600936,600937,600938,600939,600940,600941,600942,600943,600945,600946,600947,600948,600949,600950,600951,600953,600955,600956,600957,600958,600959,600960,600961,600962,600963,600965,600966,600967,600968,600969,600970,600971,600972,600973,600976,600977,600978,600979,600980,600981,600982,600983,600985,600986,600987,600988,600989,600990,600991,600992,600993,600995,600996,600997,600998,600999,601001,601003,601006,601007,601008,601009,601010,601011,601012,601016,601018,601019,601020,601021,601022,601023,601025,601026,601027,601028,601031,601033,601036,601038,601039,601041,601044,601055,601058,601060,601066,601069,601077,601079,601083,601086,601088,601089,601090,601098,601099,601100,601101,601106,601107,601108,601109,601111,601112,601113,601115,601116,601117,601118,601119,601120,601127,601128,601136,601137,601138,601139,601155,601158,601162,601163,601166,601167,601168,601169,601171,601173,601175,601177,601179,601185,601186,601188,601189,601190,601191,601195,601196,601198,601199,601200,601206,601208,601211,601212,601216,601217,601219,601222,601225,601226,601228,601229,601231,601233,601236,601238,601239,601288,601298,601318,601319,601328,601336,601338,601360,601368,601369,601377,601390,601398,601399,601500,601555,601567,601579,601580,601589,601598,601599,601601,601615,601618,601628,601633,601636,601678,601689,601699,601700,601717,601727,601728,601766,601777,601788,601798,601800,601808,601810,601811,601816,601817,601819,601825,601838,601839,601857,601858,601859,601860,601866,601869,601872,601877,601878,601880,601881,601882,601883,601888,601889,601890,601891,601892,601899,601901,601908,601919,601933,601939,601946,601952,601958,601959,601962,601965,601966,601985,601988,601992,601995,601997,601998,601999,603000,603123,603259,603260,603267,603277,603288,603366,603367,603368,603369,603383,603444,603501,603515,603517,603528,603589,603603,603658,603679,603680,603683,603688,603767,603768,603769,603833,603899,603986,603987,603988,603989,603990,604086,605117,605123,605186,605188,605195,605199,605208,605369,605577,605580,605688,605699,605798,605800,605827,605838,605858,605859,605870,605877,605880,605888,605899,605927,605929,606005,606010,606015,606016,606028,606036,606037,606066,606078,606088,606098,606100,606108,606109,606115,606122,606168,606169,606185,606198,606210,606236,606255,606269,606278,606299,606332,606380,606385,606405,606518,606588,606606,606608,606615,606617,606633,606639,606656,606680,606682,606690,606738,606777,606780,606808,606818,606830,606837,606855,606860,606863,606864,606880,606898,606906,606909,606936,606985,606987,606990,607005,607012,607017,607018,607021,607032,607036,607037,607058,607075,607077,607086,607098,607108,607109,607111,607117,607118,607119,607120,607122,607126,607128,607129,607132,607138,607139,607168,607175,607179,607180,607181,607188,607195,607207,607210,607215,607219,607225,607231,607236,607252,607261,607268,607272,607275,607277,607278,607287,607289,607290,607299,607318,607328,607330,607333,607335,607337,607339,607340,607345,607360,607365,607370,607373,607378,607381,607383,607385,607387,607390,607398,607404,607406,607416,607418,607426,607428,607429,607430,607433,607435,607438,607439,607442,607449,607451,607455,607456,607458,607460,607461,607468,607472,607475,607481,607488,607493,607498,607500,607501,607505,607508,607515,607516,607518,607519,607520,607525,607528,607535,607537,607540,607552,607558,607559,607565,607567,607568,607571,607577,607580,607581,607582,607583,607587,607588,607589,607591,607592,607593,607595,607596,607599,607600,607601,607606,607607,607608,607609,607610,607612,607613,607615,607617,607619,607621,607623,607625,607628,607629,607630,607633,607635,607636,607638,607639,607640,607642,607643,607644,607645,607646,607648,607650,607651,607653,607655,607656,607657,607658,607660,607662,607663,607665,607666,607668,607669,607670,607671,607672,607675,607678,607680,607681,607682,607683,607684,607686,607687,607689,607690,607692,607693,607694,607695,607696,607697,607698,607699,607701,607702,607704,607705,607706,607707,607710,607711,607712,607713,607715,607716,607717,607718,607719,607721,607722,607723,607724,607725,607726,607727,607728,607729,607730,607732,607733,607735,607737,607739,607740,607742,607743,607744,607745,607746,607747,607748,607750,607751,607752,607753,607754,607755,607756,607757,607758,607759,607760,607761,607762,607763,607764,607765,607766,607767,607768,607769,607770,607772,607773,607775,607776,607777,607778,607780,607782,607783,607785,607786,607788,607789,607790,607791,607792,607793,607794,607795,607796,607797,607798,607799,607800,607802,607803,607804,607806,607807,607808,607809,607810,607812,607813,607815,607816,607817,607818,607819,607820,607822,607823,607824,607825,607826,607828,607830,607831,607832,607833,607834,607835,607836,607837,607838,607839,607840,607841,607842,607843,607845,607846,607847,607849,607850,607851,607852,607853,607854,607855,607856,607857,607858,607859,607860,607861,607862,607863,607864,607865,607866,607867,607868,607869,607870,607871,607872,607873,607874,607875,607876,607877,607878,607879,607880,607881,607882,607883,607885,607886,607887,607888,607889,607891,607893,607894,607895,607896,607897,607898,607899,607900,607901,607903,607904,607905,607906,607907,607908,607909,607910,607911,607912,607913,607915,607916,607917,607918,607920,607921,607922,607923,607925,607926,607927,607928,607929,607930,607931,607932,607933,607935,607936,607937,607939,607940,607942,607943,607945,607946,607947,607948,607949,607950,607952,607953,607955,607956,607957,607958,607959,607960,607962,607965,607966,607967,607968,607969,607970,607971,607972,607973,607975,607976,607977,607978,607980,607981,607982,607985,607986,607987,607988,607989,607990,607991,607992,607993,607995,607996,607997,607998,607999"
     for code in hs300.split(','):
         if len(code) == 6:
@@ -513,7 +594,7 @@ def api_fund_list():
     order = request.args.get('order', 'desc')
     page = int(request.args.get('page', 1))
     size = int(request.args.get('size', 50))
-    keyword = request.args.get('keyword', '').strip()
+    keyword = (request.form.get('keyword', '') or '').strip() or request.args.get('keyword', '').strip()
 
     # 映射参数
     ths_type = fund_type if fund_type in THS_FUND_TYPES else 'all'
@@ -1729,7 +1810,7 @@ def _fetch_market_indices():
         ('商品', '100.UDI,100.GC00Y,100.SI00Y,100.CL00Y,100.NG00Y'),
     ]
     secids = ','.join(codes for _, codes in regions)
-    url = 'https://push2.eastmoney.com/api/qt/ulist.np/get'
+    url = 'https://push2delay.eastmoney.com/api/qt/ulist.np/get'
     params = {
         'fltt': 2,
         'np': 3,
@@ -1785,42 +1866,15 @@ def _fetch_market_indices():
         return []
 
 
-@app.route('/api/stocks')
+@app.route('/api/stocks', methods=['GET', 'POST'])
 def api_stocks():
-    """股票实时行情列表(ulist.np/get批量查询,绕过clist/get封锁)"""
+    """股票实时行情列表 - 使用东财clist/get原生分页排序"""
     fs = request.args.get('fs', 'all')
     fid = request.args.get('fid', 'f3')
-    po = request.args.get('po', '1')
-    pn = request.args.get('pn', '1')
-    pz = request.args.get('pz', '50')
-    keyword = request.args.get('keyword', '').strip()
-
-    # 确保股票列表已加载
-    stocks = _all_stock_list
-    if not stocks:
-        stocks = _load_all_stocks()
-    if not stocks:
-        return jsonify({'total': 0, 'list': []})
-
-    # 市场筛选
-    market_filter = {
-        'all': lambda s: True,
-        'sh': lambda s: s['market'] == '1' and not s['code'].startswith('68'),
-        'sz': lambda s: s['market'] == '0' and not s['code'].startswith('3'),
-        'cyb': lambda s: s['code'].startswith('3'),
-        'kcb': lambda s: s['code'].startswith('68'),
-    }
-    filter_fn = market_filter.get(fs, market_filter['all'])
-    filtered = [s for s in stocks if filter_fn(s)]
-
-    # 关键词过滤
-    if keyword:
-        kw = keyword.lower()
-        filtered = [s for s in filtered if kw in s['code'].lower() or kw in s['name']]
-
-    total = len(filtered)
-    if total == 0:
-        return jsonify({'total': 0, 'list': []})
+    po = request.args.get('po', '1')  # 1=降序, 0=升序
+    pn = int(request.args.get('pn', '1'))
+    pz = int(request.args.get('pz', '50'))
+    keyword = (request.form.get('keyword', '') or '').strip() or request.args.get('keyword', '').strip()
 
     # 缓存: 交易时段10秒, 非交易时段300秒
     cache_key = f'stocks_{fs}_{fid}_{po}_{pn}_{pz}_{keyword[:20]}'
@@ -1829,89 +1883,119 @@ def api_stocks():
     if cached is not None:
         return jsonify(cached)
 
-    # 获取当前页数据(多取一些用于排序)
-    # 先粗排: 从全量数据中取一批用于排序
-    fetch_count = min(total, 200)  # 每次最多取200只做排序
-    # 调用 ulist.np/get 批量获取行情
-    page_start = (int(pn) - 1) * int(pz)
-    # 取当前页附近的fetch_count只
-    batch_end = min(page_start + fetch_count + int(pz), total)
-    batch_start = max(0, page_start - fetch_count)
-    batch = filtered[batch_start:batch_end]
+    # 如果有关键词搜索, 需要从本地列表匹配后用secids查询
+    if keyword:
+        all_stocks = _all_stock_list
+        if not all_stocks:
+            all_stocks = _load_all_stocks()
+        if not all_stocks:
+            return jsonify({'total': 0, 'list': []})
 
-    secids = ','.join([s['secid'] for s in batch])
-    url = 'https://push2.eastmoney.com/api/qt/ulist.np/get'
+        kw = keyword.lower()
+        matched = [s for s in all_stocks if kw in s['code'].lower() or kw in s['name']]
+        if not matched:
+            return jsonify({'total': 0, 'list': []})
+
+        total = len(matched)
+        # 分页截取匹配的股票
+        page_start = (pn - 1) * pz
+        page_matched = matched[page_start:page_start + pz]
+        secids = ','.join([s['secid'] for s in page_matched])
+
+        url = 'https://push2delay.eastmoney.com/api/qt/ulist.np/get'
+        params = {
+            'fltt': 2, 'np': 1, 'invt': 2,
+            'secids': secids,
+            'fields': STOCK_LIST_FIELDS,
+        }
+        try:
+            resp = STOCK_SESSION.get(url, params=params, timeout=15)
+            data = resp.json()
+            result_list = []
+            if data.get('data') and data['data'].get('diff'):
+                quote_map = {}
+                for item in data['data']['diff']:
+                    code = str(item.get('f12', ''))
+                    quote_map[code] = item
+
+                for s in page_matched:
+                    code = s['code']
+                    if code not in quote_map:
+                        continue
+                    item = quote_map[code]
+                    result_list.append(_build_stock_item(code, s, item))
+
+            result = {'total': total, 'list': result_list}
+            _set_cache(cache_key, result)
+            return jsonify(result)
+        except Exception as e:
+            print(f'[股票搜索异常] {keyword}: {e}')
+            return jsonify({'total': total, 'list': []})
+
+    # 无关键词: 使用clist/get原生分页排序
+    market_fs = STOCK_MARKET_FS.get(fs, STOCK_MARKET_FS['all'])
+    url = 'https://push2delay.eastmoney.com/api/qt/clist/get'
     params = {
-        'fltt': 2,
-        'np': 1,
-        'invt': 2,
-        'secids': secids,
+        'pn': pn, 'pz': pz, 'po': po, 'np': 1,
+        'fltt': 2, 'invt': 2,
+        'fid': fid,
+        'fs': market_fs,
         'fields': STOCK_LIST_FIELDS,
     }
 
     try:
         resp = STOCK_SESSION.get(url, params=params, timeout=15)
         data = resp.json()
+        total = data.get('data', {}).get('total', 0)
+        diffs = data.get('data', {}).get('diff', [])
+
         result_list = []
-        if data.get('data') and data['data'].get('diff'):
-            quote_map = {}
-            for item in data['data']['diff']:
-                code = str(item.get('f12', ''))
-                quote_map[code] = item
+        for item in diffs:
+            code = str(item.get('f12', ''))
+            name = item.get('f14', '')
+            market = '0' if code.startswith(('0', '3')) else '1'
+            result_list.append(_build_stock_item(code, {'name': name, 'market': market, 'secid': market + '.' + code}, item))
 
-            for s in filtered:
-                code = s['code']
-                if code not in quote_map:
-                    continue
-                item = quote_map[code]
-                result_list.append({
-                    'code': code,
-                    'name': item.get('f14', s['name']),
-                    'market': s['market'],
-                    'price': item.get('f2', 0),
-                    'changePercent': item.get('f3', 0),
-                    'changeAmount': item.get('f4', 0),
-                    'volume': item.get('f5', 0),
-                    'amount': item.get('f6', 0),
-                    'amplitude': item.get('f7', 0),
-                    'turnover': item.get('f8', 0),
-                    'high': item.get('f15', 0),
-                    'low': item.get('f16', 0),
-                    'open': item.get('f17', 0),
-                    'prevClose': item.get('f18', 0),
-                    'mainFlow': item.get('f62', 0),
-                    'mainFlowRatio': item.get('f184', 0),
-                    'superLargeFlow': item.get('f63', 0),
-                    'superLargeIn': item.get('f65', 0),
-                    'superLargeOut': item.get('f66', 0),
-                    'largeFlow': item.get('f69', 0),
-                    'largeIn': item.get('f71', 0),
-                    'largeOut': item.get('f72', 0),
-                    'mediumFlow': item.get('f75', 0),
-                    'mediumIn': item.get('f77', 0),
-                    'mediumOut': item.get('f78', 0),
-                    'smallFlow': item.get('f81', 0),
-                    'smallIn': item.get('f83', 0),
-                    'smallOut': item.get('f84', 0),
-                })
-
-        # 排序
-        reverse = po == '1'
-        result_list.sort(
-            key=lambda x: float(x.get(fid, 0) or 0),
-            reverse=reverse
-        )
-
-        # 分页截取
-        p_start = page_start - batch_start
-        page_data = result_list[p_start:p_start + int(pz)]
-
-        result = {'total': total, 'list': page_data}
+        result = {'total': total, 'list': result_list}
         _set_cache(cache_key, result)
         return jsonify(result)
     except Exception as e:
-        print(f'[股票列表异常] {e}')
-        return jsonify({'total': total, 'list': []})
+        print(f'[股票列表异常] {fs} {fid} pn={pn}: {e}')
+        return jsonify({'total': 0, 'list': []})
+
+
+def _build_stock_item(code, meta, item):
+    """构建统一的股票数据项"""
+    return {
+        'code': code,
+        'name': item.get('f14', meta.get('name', '')),
+        'market': meta.get('market', '0'),
+        'price': item.get('f2', 0),
+        'changePercent': item.get('f3', 0),
+        'changeAmount': item.get('f4', 0),
+        'volume': item.get('f5', 0),
+        'amount': item.get('f6', 0),
+        'amplitude': item.get('f7', 0),
+        'turnover': item.get('f8', 0),
+        'high': item.get('f15', 0),
+        'low': item.get('f16', 0),
+        'open': item.get('f17', 0),
+        'prevClose': item.get('f18', 0),
+        'mainFlow': item.get('f62', 0),
+        'mainFlowRatio': item.get('f184', 0),
+        'superLargeFlow': item.get('f63', 0),
+        'superLargeIn': item.get('f65', 0),
+        'superLargeOut': item.get('f66', 0),
+        'largeFlow': item.get('f69', 0),
+        'largeIn': item.get('f71', 0),
+        'largeOut': item.get('f72', 0),
+        'mediumFlow': item.get('f75', 0),
+        'mediumIn': item.get('f77', 0),
+        'mediumOut': item.get('f78', 0),
+        'smallFlow': item.get('f81', 0),
+        'smallIn': item.get('f83', 0),
+        'smallOut': item.get('f84', 0),
+    }
 
 
 @app.route('/api/stocks/detail')
@@ -1927,7 +2011,7 @@ def api_stock_detail():
     if cached is not None:
         return jsonify(cached)
 
-    url = 'https://push2.eastmoney.com/api/qt/stock/get'
+    url = 'https://push2delay.eastmoney.com/api/qt/stock/get'
     params = {
         'secid': secid,
         'fields': 'f43,f44,f45,f46,f47,f48,f50,f51,f52,f55,f57,f58,f60,f116,f117,f162,f167,f168,f169,f170,f171,f137,f140,f143,f146,f149,f193,f194,f195,f196,f197,f198,f199,f200,f201,f202,f203,f204,f205,f206',
@@ -1987,9 +2071,10 @@ def api_stock_flow():
     if cached is not None:
         return jsonify(cached)
 
-    url = 'https://push2.eastmoney.com/api/qt/stock/fflow/day/get'
+    # 使用 kline 接口获取日K线资金流向（day/get在部分网络环境不可用）
+    url = 'https://push2delay.eastmoney.com/api/qt/stock/fflow/kline/get'
     params = {
-        'lmt': 0,
+        'lmt': 30,
         'klt': 101,
         'secid': secid,
         'fields1': 'f1,f2,f3,f7',
@@ -2001,10 +2086,34 @@ def api_stock_flow():
         result = {'timeline': [], 'summary': {}}
         if data.get('data'):
             d = data['data']
-            timeline = d.get('trend', [])
-            summary = d.get('sum', [])
-            result['timeline'] = timeline or []
-            result['summary'] = summary or []
+            klines = d.get('klines', [])
+            timeline = []
+            for k in klines:
+                parts = k.split(',')
+                if len(parts) >= 8:
+                    timeline.append({
+                        'date': parts[0],
+                        'mainFlow': float(parts[1] or 0),
+                        'smallFlow': float(parts[2] or 0),
+                        'mediumFlow': float(parts[3] or 0),
+                        'largeFlow': float(parts[4] or 0),
+                        'superLargeFlow': float(parts[5] or 0),
+                        'mainFlowRatio': float(parts[6] or 0),
+                        'superLargeFlowRatio': float(parts[7] or 0),
+                    })
+            # 最近一条作为 summary
+            summary = {}
+            if timeline:
+                latest = timeline[-1]
+                summary = {
+                    'mainFlow': latest['mainFlow'],
+                    'superLargeFlow': latest['superLargeFlow'],
+                    'largeFlow': latest['largeFlow'],
+                    'mediumFlow': latest['mediumFlow'],
+                    'smallFlow': latest['smallFlow'],
+                }
+            result['timeline'] = timeline
+            result['summary'] = summary
             _set_cache(cache_key, result)
         return jsonify(result)
     except Exception as e:
@@ -2529,7 +2638,7 @@ def _fetch_index_sectors():
 
     # 方案1: push2指数实时行情
     try:
-        url = 'https://push2.eastmoney.com/api/qt/ulist.np/get'
+        url = 'https://push2delay.eastmoney.com/api/qt/ulist.np/get'
         params = {
             'fltt': '2',
             'secids': secid_str,
@@ -2959,7 +3068,7 @@ def api_fund_holdings():
                         secids.append('1.' + sc)
                     else:
                         secids.append('0.' + sc)
-                qurl = 'https://push2.eastmoney.com/api/qt/ulist.np/get'
+                qurl = 'https://push2delay.eastmoney.com/api/qt/ulist.np/get'
                 qresp = SESSION.get(qurl, params={
                     'fltt': '2', 'fields': 'f2,f3,f12,f14',
                     'secids': ','.join(secids)

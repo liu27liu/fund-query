@@ -4155,6 +4155,32 @@ select.form-input {
         padding: 8px 12px;
         font-size: 13px;
     }
+
+    /* 股票表格保持横向滚动布局 */
+    .stock-table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .stock-table,
+    .stock-table tbody,
+    .stock-table thead {
+        display: table;
+        min-width: 1100px;
+    }
+    .stock-table tbody tr {
+        display: table-row;
+    }
+    .stock-table td,
+    .stock-table th {
+        display: table-cell;
+        text-align: inherit;
+        padding: 12px 16px;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+    .stock-table th {
+        font-weight: 600;
+    }
 }
 
 /* ---- 小屏手机适配 (<=480px) ---- */
@@ -4544,7 +4570,8 @@ select.form-input {
 .stock-search-input:focus { border-color: var(--primary); }
 .stock-search-bar { margin-bottom: 12px; }
 .stock-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: var(--radius); border: 1px solid var(--border-light); }
-.stock-table { min-width: 900px; }
+.stock-table { min-width: 1100px; table-layout: auto; }
+.stock-table th { white-space: nowrap; }
 .stock-row:hover { background: var(--bg-hover); }
 .stock-detail-page .detail-back-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; margin-bottom: 16px; border-radius: var(--radius-sm); cursor: pointer; color: var(--primary); font-size: 14px; transition: background 0.2s; }
 .stock-detail-page .detail-back-btn:hover { background: var(--primary-light); }

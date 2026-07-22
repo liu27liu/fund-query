@@ -526,6 +526,22 @@ const FundAPI = (function () {
     // ========== 股票实时行情 ==========
 
     async function getStockList(params) {
+        // 中文关键词通过POST发送避免URL编码问题
+        if (params.keyword && /[^\x00-\x7F]/.test(params.keyword)) {
+            try {
+                const resp = await fetch('/api/stocks?fs=' + encodeURIComponent(params.fs || 'all') + '&fid=' + encodeURIComponent(params.fid || 'f3') + '&po=' + encodeURIComponent(params.po || '1') + '&pn=' + encodeURIComponent(params.pn || '1') + '&pz=' + encodeURIComponent(params.pz || '50'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'keyword=' + encodeURIComponent(params.keyword),
+                    signal: (function() { const c = new AbortController(); setTimeout(function() { c.abort(); }, 15000); return c.signal; })()
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                return await resp.json();
+            } catch (e) {
+                console.warn('股票列表接口异常:', e);
+                return { list: [], total: 0 };
+            }
+        }
         var query = Object.keys(params || {}).map(function(k) {
             return k + '=' + encodeURIComponent(params[k] || '');
         }).join('&');

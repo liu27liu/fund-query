@@ -4870,11 +4870,11 @@
                 <span class="ranking-tab ${stockState.fs==='kcb'?'active':''}" data-fs="kcb">科创板</span>
             </div>
             <div class="stock-sort-tabs">
-                <span class="sort-tab ${stockState.fid==='f3'?'active':''}" data-fid="f3" data-po="1">涨幅榜</span>
-                <span class="sort-tab ${stockState.fid==='f3'?'active':''}" data-fid="f3" data-po="0">跌幅榜</span>
+                <span class="sort-tab ${stockState.fid==='f3' && stockState.po==='1'?'active':''}" data-fid="f3" data-po="1">涨幅榜</span>
+                <span class="sort-tab ${stockState.fid==='f3' && stockState.po==='0'?'active':''}" data-fid="f3" data-po="0">跌幅榜</span>
                 <span class="sort-tab ${stockState.fid==='f6'?'active':''}" data-fid="f6" data-po="1">成交额</span>
-                <span class="sort-tab ${stockState.fid==='f62'?'active':''}" data-fid="f62" data-po="1">主力流入</span>
-                <span class="sort-tab ${stockState.fid==='f62'?'active':''}" data-fid="f62" data-po="0">主力流出</span>
+                <span class="sort-tab ${stockState.fid==='f62' && stockState.po==='1'?'active':''}" data-fid="f62" data-po="1">主力流入</span>
+                <span class="sort-tab ${stockState.fid==='f62' && stockState.po==='0'?'active':''}" data-fid="f62" data-po="0">主力流出</span>
                 <span class="sort-tab ${stockState.fid==='f8'?'active':''}" data-fid="f8" data-po="1">换手率</span>
             </div>
             <div class="stock-search-bar">
@@ -5219,11 +5219,11 @@
         var chart = echarts.init(el);
         var times = [], mainData = [], retailData = [];
         timeline.forEach(function(item) {
-            var t = item.time || '';
-            if (t.length === 8) t = t.substring(0, 5);
+            var t = item.date || item.time || '';
+            if (t.length === 8 && t.indexOf(':') > 0) t = t.substring(0, 5);
             times.push(t);
-            mainData.push(parseFloat(item.mainForceNetIn || 0) / 10000);
-            retailData.push(parseFloat(item.smallForceNetIn || 0) / 10000);
+            mainData.push((parseFloat(item.mainFlow || item.mainForceNetIn || 0) / 10000).toFixed(2));
+            retailData.push((parseFloat(item.smallFlow || item.smallForceNetIn || 0) / 10000).toFixed(2));
         });
 
         chart.setOption({
