@@ -459,6 +459,21 @@
                     <button class="news-load-more-btn" id="newsLoadMoreBtn" style="display:none;">${T('text_load_more_news', '加载更多资讯')}</button>
                 </div>
             </div>
+
+            <!-- 股票实时行情 -->
+            <div class="portal-section" id="stockSection" data-loaded="false">
+                <div class="section-title collapsible-header" data-target="stockDashboard">
+                    <span class="pulse-dot"></span>
+                    股票实时行情
+                    <span class="collapse-icon">▾</span>
+                </div>
+                <div class="stock-dashboard" id="stockDashboard">
+                    <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
+                        <div class="loader" style="margin: 0 auto 12px;"></div>
+                        正在加载股票行情...
+                    </div>
+                </div>
+            </div>
         `;
 
         // 门户卡片点击：显示对应区块，懒加载数据
@@ -483,6 +498,7 @@
                     else if (targetId === 'sectorSection') loadSectors('行业板块');
                     else if (targetId === 'rankingSection') loadRanking(currentRankingType, currentRankingOrder, currentFundType);
                     else if (targetId === 'newsSection') loadNews(1);
+                    else if (targetId === 'stockSection') loadHomeStockDashboard();
                 }
 
                 // 平滑滚动到区块
@@ -4839,6 +4855,98 @@
 
         // 路由
         window.addEventListener('hashchange', router);
+    }
+
+    // ========== 首页股票行情看板 ==========
+    var homeStockState = { fs: 'all', fid: 'f3', po: '1', page: 1, size: 15 };
+
+    function loadHomeStockDashboard() {
+        var container = document.getElementById('stockDashboard');
+        if (!container) return;
+        container.innerHTML = `
+            <div class="stock-filter-bar" style="margin-bottom:12px;flex-wrap:wrap;">
+                <div class="stock-market-tabs">
+                    <span class="ranking-tab ${homeStockState.fs==='all'?'active':''}" data-hfs="all">全部A股</span>
+                    <span class="ranking-tab ${homeStockState.fs==='sh'?'active':''}" data-hfs="sh">上证</span>
+                    <span class="ranking-tab ${homeStockState.fs==='sz'?'active':''}" data-hfs="sz">深证</span>
+                    <span class="ranking-tab ${homeStockState.fs==='cyb'?'active':''}" data-hfs="cyb">创业板</span>
+                    <span class="ranking-tab ${homeStockState.fs==='kcb'?'active':''}" data-hfs="kcb">科创板</span>
+                </div>
+                <div class="stock-sort-tabs" style="margin-top:8px;">
+                    <span class="sort-tab ${homeStockState.fid==='f3' && homeStockState.po==='1'?'active':''}" data-hfid="f3" data-hpo="1">涨幅榜</span>
+                    <span class="sort-tab ${homeStockState.fid==='f3' && homeStockState.po==='0'?'active':''}" data-hfid="f3" data-hpo="0">跌幅榜</span>
+                    <span class="sort-tab ${homeStockState.fid==='f6'?'active':''}" data-hfid="f6" data-hpo="1">成交额</span>
+                </div>
+            </div>
+            <div id="homeStockTable" style="min-height:200px;">
+                <div style="padding:20px;text-align:center;color:var(--text-secondary)"><div class="loader" style="margin:0 auto 10px"></div>加载中...</div>
+            </div>
+            <div style="text-align:center;margin-top:12px;">
+                <a href="#/stocks" class="btn btn-primary" style="display:inline-block;">查看更多股票 →</a>
+            </div>
+        `;
+        _fetchHomeStocks();
+
+        // 绑定筛选事件
+        container.querySelectorAll('[data-hfs]').forEach(function(el) {
+            el.addEventListener('click', function() {
+                homeStockState.fs = this.dataset.hfs;
+                homeStockState.page = 1;
+                _fetchHomeStocks();
+                // 更新UI激活状态
+                container.querySelectorAll('[data-hfs]').forEach(function(t) { t.classList.remove('active'); });
+                this.classList.add('active');
+            });
+        });
+        // 绑定排序事件
+        container.querySelectorAll('[data-hfid]').forEach(function(el) {
+            el.addEventListener('click', function() {
+                homeStockState.fid = this.dataset.hfid;
+                homeStockState.po = this.dataset.hpo;
+                homeStockState.page = 1;
+                _fetchHomeStocks();
+                container.querySelectorAll('[data-hfid]').forEach(function(t) { t.classList.remove('active'); });
+                this.classList.add('active');
+            });
+        });
+    }
+
+    async function _fetchHomeStocks() {
+        var container = document.getElementById('homeStockTable');
+        if (!container) return;
+        container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary)"><div class="loader" style="margin:0 auto 10px"></div>加载中...</div>';
+        try {
+            var data = await FundAPI.getStockList({
+                fs: homeStockState.fs, fid: homeStockState.fid, po: homeStockState.po,
+                pn: homeStockState.page, pz: homeStockState.size
+            });
+            var list = data.list || [];
+            if (list.length === 0) {
+                container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary)">暂无数据</div>';
+                return;
+            }
+            var html = '<table class="stock-table" style="font-size:13px;"><thead><tr>' +
+                '<th style="width:70px">代码</th><th style="min-width:80px">名称</th>' +
+                '<th style="width:70px">最新价</th><th style="width:60px">涨跌幅</th>' +
+                '<th style="width:80px">成交额</th><th style="width:80px">主力净流入</th>' +
+                '</tr></thead><tbody>';
+            list.forEach(function(item) {
+                var cc = item.changePercent >= 0 ? 'up' : 'down';
+                var mfc = (item.mainFlow || 0) >= 0 ? 'up' : 'down';
+                html += '<tr onclick="location.hash=\'#/stock/' + item.code + '\'" style="cursor:pointer">' +
+                    '<td>' + item.code + '</td>' +
+                    '<td>' + item.name + '</td>' +
+                    '<td class="' + cc + '">¥' + formatPrice(item.price) + '</td>' +
+                    '<td class="' + cc + '">' + (item.changePercent >= 0 ? '+' : '') + item.changePercent.toFixed(2) + '%</td>' +
+                    '<td>' + formatFlowMoney(item.amount) + '</td>' +
+                    '<td class="' + mfc + '">' + (item.mainFlow >= 0 ? '+' : '') + formatFlowMoney(item.mainFlow) + '</td>' +
+                    '</tr>';
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        } catch (e) {
+            container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary)">加载失败</div>';
+        }
     }
 
     // ========== 股票行情 ==========

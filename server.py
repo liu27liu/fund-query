@@ -345,10 +345,10 @@ STOCK_SESSION.headers.update({
 
 # 股票市场筛选预设
 STOCK_MARKET_FS = {
-    'all': 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23',
-    'sh': 'm:1+t:2,m:1+t:23',
-    'sz': 'm:0+t:6,m:0+t:80',
-    'cyb': 'm:0+t:80',
+    'all': 'm:0+t:6,m:0+t:13,m:0+t:80,m:1+t:2,m:1+t:23',
+    'sh': 'm:1+t:2',
+    'sz': 'm:0+t:6',
+    'cyb': 'm:0+t:13,m:0+t:80',
     'kcb': 'm:1+t:23',
 }
 
