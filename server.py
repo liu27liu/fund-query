@@ -1772,6 +1772,10 @@ def api_stocks():
     try:
         resp = STOCK_SESSION.get(url, params=params, timeout=15)
         data = resp.json()
+        # 调试日志
+        err_code = data.get('ErrCode', 'no_errcode')
+        if err_code != 0:
+            print(f'[股票列表] push2返回ErrCode={err_code}, Msg={data.get("ErrMsg","")}, keys={list(data.keys())}')
         result = {'total': 0, 'list': []}
         if data.get('Data') and data['Data'].get('Diff'):
             diff = data['Data']['Diff']
