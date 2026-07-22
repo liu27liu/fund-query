@@ -602,6 +602,25 @@ ul, ol { list-style: none; }
     border-color: var(--primary);
     font-weight: 500;
 }
+.home-stock-search {
+    margin-bottom: 10px;
+}
+.home-stock-search input {
+    width: 100%;
+    max-width: 300px;
+    padding: 8px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-pill);
+    font-size: 13px;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.home-stock-search input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
 .home-stock-stats {
     display: flex;
     gap: 10px;
