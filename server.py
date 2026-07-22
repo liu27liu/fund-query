@@ -365,6 +365,58 @@ STOCK_SORT_FIELDS = {
 # 行情+资金流合并字段
 STOCK_LIST_FIELDS = 'f2,f3,f4,f5,f6,f7,f8,f10,f12,f14,f15,f16,f17,f18,f62,f63,f64,f65,f66,f69,f70,f71,f72,f75,f76,f77,f78,f81,f82,f83,f84,f184'
 
+# 全量A股代码列表(启动时预加载)
+_all_stock_list = None  # [{code, name, secid, market_type}]
+
+def _load_all_stocks():
+    """启动时预加载全量A股代码列表"""
+    global _all_stock_list
+    if _all_stock_list is not None:
+        return _all_stock_list
+    try:
+        url = 'https://datacenter-web.eastmoney.com/api/data/v1/get'
+        params = {
+            'reportName': 'RPT_LICO_FN_CPD',
+            'columns': 'SECUCODE,SECURITY_CODE,SECURITY_NAME_ABBR',
+            'filter': '(TRADE_MARKET_CODE!="8")',
+            'pageSize': 5000,
+            'pageNumber': 1,
+            'sortColumns': 'SECURITY_CODE',
+            'sortTypes': 1,
+            'source': 'WEB',
+            'client': 'WEB',
+        }
+        resp = STOCK_SESSION.get(url, params=params, timeout=30)
+        data = resp.json()
+        if data.get('result') and data['result'].get('data'):
+            stocks = []
+            seen = set()
+            for item in data['result']['data']:
+                code = str(item.get('SECURITY_CODE', ''))
+                name = item.get('SECURITY_NAME_ABBR', '')
+                secucode = item.get('SECUCODE', '')
+                if code and code not in seen and len(code) == 6 and code.isdigit():
+                    seen.add(code)
+                    # secid: 0.深市, 1.沪市
+                    market = '0' if code.startswith(('0', '3')) else '1'
+                    secid = market + '.' + code
+                    stocks.append({
+                        'code': code,
+                        'name': name,
+                        'secid': secid,
+                        'market': market,
+                    })
+            _all_stock_list = stocks
+            print(f'[股票代码列表] 预加载完成, 共{len(stocks)}只')
+            return stocks
+    except Exception as e:
+        print(f'[股票代码列表] 加载失败: {e}')
+    return []
+
+# 应用启动时预加载
+import threading
+threading.Thread(target=_load_all_stocks, daemon=True).start()
+
 
 @app.route('/')
 def index():
@@ -1734,7 +1786,7 @@ def _fetch_market_indices():
 
 @app.route('/api/stocks')
 def api_stocks():
-    """股票实时行情列表(行情+资金流向合并) - 东方财富push2"""
+    """股票实时行情列表(ulist.np/get批量查询,绕过clist/get封锁)"""
     fs = request.args.get('fs', 'all')
     fid = request.args.get('fid', 'f3')
     po = request.args.get('po', '1')
@@ -1742,49 +1794,79 @@ def api_stocks():
     pz = request.args.get('pz', '50')
     keyword = request.args.get('keyword', '').strip()
 
-    # 市场筛选映射
-    market_fs = STOCK_MARKET_FS.get(fs, STOCK_MARKET_FS['all'])
+    # 确保股票列表已加载
+    stocks = _all_stock_list
+    if not stocks:
+        stocks = _load_all_stocks()
+    if not stocks:
+        return jsonify({'total': 0, 'list': []})
+
+    # 市场筛选
+    market_filter = {
+        'all': lambda s: True,
+        'sh': lambda s: s['market'] == '1' and not s['code'].startswith('68'),
+        'sz': lambda s: s['market'] == '0' and not s['code'].startswith('3'),
+        'cyb': lambda s: s['code'].startswith('3'),
+        'kcb': lambda s: s['code'].startswith('68'),
+    }
+    filter_fn = market_filter.get(fs, market_filter['all'])
+    filtered = [s for s in stocks if filter_fn(s)]
+
+    # 关键词过滤
+    if keyword:
+        kw = keyword.lower()
+        filtered = [s for s in filtered if kw in s['code'].lower() or kw in s['name']]
+
+    total = len(filtered)
+    if total == 0:
+        return jsonify({'total': 0, 'list': []})
 
     # 缓存: 交易时段10秒, 非交易时段300秒
-    cache_key = f'stocks_{fs}_{fid}_{po}_{pn}_{pz}'
+    cache_key = f'stocks_{fs}_{fid}_{po}_{pn}_{pz}_{keyword[:20]}'
     cache_ttl = 10 if not _is_market_closed() else 300
     cached = _get_cache(cache_key, cache_ttl)
     if cached is not None:
-        # 关键词过滤(在缓存数据上做)
-        if keyword:
-            kw = keyword.lower()
-            cached['list'] = [s for s in cached['list'] if kw in s.get('code','').lower() or kw in s.get('name','')]
-            cached['total'] = len(cached['list'])
         return jsonify(cached)
 
-    url = 'https://push2.eastmoney.com/api/qt/clist/get'
+    # 获取当前页数据(多取一些用于排序)
+    # 先粗排: 从全量数据中取一批用于排序
+    fetch_count = min(total, 200)  # 每次最多取200只做排序
+    # 调用 ulist.np/get 批量获取行情
+    page_start = (int(pn) - 1) * int(pz)
+    # 取当前页附近的fetch_count只
+    batch_end = min(page_start + fetch_count + int(pz), total)
+    batch_start = max(0, page_start - fetch_count)
+    batch = filtered[batch_start:batch_end]
+
+    secids = ','.join([s['secid'] for s in batch])
+    url = 'https://push2.eastmoney.com/api/qt/ulist.np/get'
     params = {
-        'fid': fid,
-        'po': po,
-        'pz': pz,
-        'pn': pn,
-        'np': 1,
         'fltt': 2,
+        'np': 1,
         'invt': 2,
-        'fs': market_fs,
+        'secids': secids,
         'fields': STOCK_LIST_FIELDS,
     }
+
     try:
         resp = STOCK_SESSION.get(url, params=params, timeout=15)
         data = resp.json()
-        # 调试日志
-        err_code = data.get('ErrCode', 'no_errcode')
-        if err_code != 0:
-            print(f'[股票列表] push2返回ErrCode={err_code}, Msg={data.get("ErrMsg","")}, keys={list(data.keys())}')
-        result = {'total': 0, 'list': []}
-        if data.get('Data') and data['Data'].get('Diff'):
-            diff = data['Data']['Diff']
-            result['total'] = data['Data'].get('TotalCount', len(diff))
-            stocks = []
-            for item in diff:
-                stocks.append({
-                    'code': str(item.get('f12', '')),
-                    'name': item.get('f14', ''),
+        result_list = []
+        if data.get('data') and data['data'].get('diff'):
+            quote_map = {}
+            for item in data['data']['diff']:
+                code = str(item.get('f12', ''))
+                quote_map[code] = item
+
+            for s in filtered:
+                code = s['code']
+                if code not in quote_map:
+                    continue
+                item = quote_map[code]
+                result_list.append({
+                    'code': code,
+                    'name': item.get('f14', s['name']),
+                    'market': s['market'],
                     'price': item.get('f2', 0),
                     'changePercent': item.get('f3', 0),
                     'changeAmount': item.get('f4', 0),
@@ -1796,7 +1878,6 @@ def api_stocks():
                     'low': item.get('f16', 0),
                     'open': item.get('f17', 0),
                     'prevClose': item.get('f18', 0),
-                    # 资金流向
                     'mainFlow': item.get('f62', 0),
                     'mainFlowRatio': item.get('f184', 0),
                     'superLargeFlow': item.get('f63', 0),
@@ -1812,17 +1893,24 @@ def api_stocks():
                     'smallIn': item.get('f83', 0),
                     'smallOut': item.get('f84', 0),
                 })
-            result['list'] = stocks
-            _set_cache(cache_key, result)
-        # 关键词过滤
-        if keyword:
-            kw = keyword.lower()
-            result['list'] = [s for s in result['list'] if kw in s.get('code','').lower() or kw in s.get('name','')]
-            result['total'] = len(result['list'])
+
+        # 排序
+        reverse = po == '1'
+        result_list.sort(
+            key=lambda x: float(x.get(fid, 0) or 0),
+            reverse=reverse
+        )
+
+        # 分页截取
+        p_start = page_start - batch_start
+        page_data = result_list[p_start:p_start + int(pz)]
+
+        result = {'total': total, 'list': page_data}
+        _set_cache(cache_key, result)
         return jsonify(result)
     except Exception as e:
         print(f'[股票列表异常] {e}')
-        return jsonify({'total': 0, 'list': []})
+        return jsonify({'total': total, 'list': []})
 
 
 @app.route('/api/stocks/detail')
