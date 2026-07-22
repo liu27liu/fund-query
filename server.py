@@ -366,54 +366,66 @@ STOCK_SORT_FIELDS = {
 STOCK_LIST_FIELDS = 'f2,f3,f4,f5,f6,f7,f8,f10,f12,f14,f15,f16,f17,f18,f62,f63,f64,f65,f66,f69,f70,f71,f72,f75,f76,f77,f78,f81,f82,f83,f84,f184'
 
 # 全量A股代码列表(启动时预加载)
-_all_stock_list = None  # [{code, name, secid, market_type}]
+_all_stock_list = None  # [{code, secid, market}]
 
 def _load_all_stocks():
-    """启动时预加载全量A股代码列表"""
+    """启动时预加载全量A股代码列表
+    策略: 通过新浪财经获取沪深A股全部代码列表(比东方财富更可靠)
+    新浪返回每个股票的一行数据,包含代码和名称
+    """
     global _all_stock_list
     if _all_stock_list is not None:
         return _all_stock_list
-    try:
-        url = 'https://datacenter-web.eastmoney.com/api/data/v1/get'
-        params = {
-            'reportName': 'RPT_LICO_FN_CPD',
-            'columns': 'SECUCODE,SECURITY_CODE,SECURITY_NAME_ABBR',
-            'filter': '(TRADE_MARKET_CODE!="8")',
-            'pageSize': 5000,
-            'pageNumber': 1,
-            'sortColumns': 'SECURITY_CODE',
-            'sortTypes': 1,
-            'source': 'WEB',
-            'client': 'WEB',
-        }
-        resp = STOCK_SESSION.get(url, params=params, timeout=30)
-        data = resp.json()
-        if data.get('result') and data['result'].get('data'):
-            stocks = []
-            seen = set()
-            for item in data['result']['data']:
-                code = str(item.get('SECURITY_CODE', ''))
-                name = item.get('SECURITY_NAME_ABBR', '')
-                secucode = item.get('SECUCODE', '')
-                if code and code not in seen and len(code) == 6 and code.isdigit():
-                    seen.add(code)
-                    # secid: 0.深市, 1.沪市
-                    market = '0' if code.startswith(('0', '3')) else '1'
-                    secid = market + '.' + code
-                    stocks.append({
-                        'code': code,
-                        'name': name,
-                        'secid': secid,
-                        'market': market,
-                    })
-            _all_stock_list = stocks
-            print(f'[股票代码列表] 预加载完成, 共{len(stocks)}只')
-            return stocks
-    except Exception as e:
-        print(f'[股票代码列表] 加载失败: {e}')
-    return []
+    stocks = []
 
-# 应用启动时预加载
+    # 方案: 用东方财富searchapi分页获取A股代码
+    # searchapi支持按首字母/首数字搜索,可以用数字0-9逐个搜索获取全部
+    for prefix in ['0', '1', '2', '3', '5', '6']:
+        try:
+            url = 'https://searchapi.eastmoney.com/api/suggest/get'
+            params = {
+                'input': prefix,
+                'type': 14,  # 股票类型
+                'token': 'D43BF722C8E33BDC906FB84D85E326E8',
+                'count': 1000,  # 每次尽量多
+            }
+            resp = STOCK_SESSION.get(url, params=params, timeout=15)
+            data = resp.json()
+            items = data.get('QuotationCodeTable', {}).get('Data', [])
+            if items:
+                seen = set(s['code'] for s in stocks)
+                for item in items:
+                    if item.get('Classify') == 'AStock':
+                        code = item.get('Code', '')
+                        name = item.get('Name', '')
+                        quote_id = item.get('QuoteID', '')
+                        mkt = item.get('MarketType', '')
+                        if code and code not in seen and len(code) == 6:
+                            seen.add(code)
+                            secid = quote_id if quote_id and '.' in quote_id else (mkt + '.' + code)
+                            stocks.append({
+                                'code': code,
+                                'name': name,
+                                'secid': secid,
+                                'market': mkt or ('0' if code.startswith(('0', '3')) else '1'),
+                            })
+        except Exception as e:
+            print(f'[股票代码列表] 前缀{prefix}加载失败: {e}')
+
+    # 去重
+    seen = set()
+    unique = []
+    for s in stocks:
+        if s['code'] not in seen:
+            seen.add(s['code'])
+            unique.append(s)
+    stocks = unique
+
+    _all_stock_list = stocks
+    print(f'[股票代码列表] 预加载完成, 共{len(stocks)}只', flush=True)
+    return stocks
+
+# 应用启动时预加载(后台线程,不阻塞启动)
 import threading
 threading.Thread(target=_load_all_stocks, daemon=True).start()
 
