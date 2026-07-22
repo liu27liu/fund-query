@@ -4069,10 +4069,12 @@
     function checkTodayActualNav(historyResult, estimate) {
         if (!historyResult || !historyResult.list || historyResult.list.length === 0) return null;
         var firstRow = historyResult.list[0];
-        // 获取当日日期字符串
+        // 获取当日日期字符串(优先用估值接口返回的日期,其次用本地时间)
         var todayStr = '';
-        if (estimate && estimate.gztime) {
-            todayStr = estimate.gztime.substring(0, 10); // "2026-07-03 15:00" -> "2026-07-03"
+        if (estimate && estimate.jzrq && estimate.jzrq.length >= 10) {
+            todayStr = estimate.jzrq.substring(0, 10); // "2026-07-20" -> "2026-07-20"
+        } else if (estimate && estimate.gztime && estimate.gztime.length >= 10 && estimate.gztime.indexOf('-') > 0) {
+            todayStr = estimate.gztime.substring(0, 10);
         } else {
             var now = new Date();
             todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');

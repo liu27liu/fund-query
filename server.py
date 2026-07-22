@@ -59,6 +59,21 @@ _sector_cache = {}  # {key: {data, time}} - 板块数据缓存，60秒过期
 _hot_cache = {}  # {key: {'data': data, 'time': timestamp, 'lock': threading.Lock()}}
 _hot_cache_locks = {}  # 每个key一把锁，防止缓存击穿
 
+def _is_market_closed():
+    """判断A股是否已收盘(用北京时间,不依赖服务器时区)"""
+    # A股交易时间 9:30-15:00, 净值通常15:30后陆续公布
+    try:
+        from datetime import datetime, timezone, timedelta
+        bj_now = datetime.now(timezone(timedelta(hours=8)))
+        h, m = bj_now.hour, bj_now.minute
+        weekday = bj_now.weekday()  # 0=Mon
+        # 周末不交易, 不需要获取实际净值
+        if weekday >= 5:
+            return False
+        return h > 15 or (h == 15 and m >= 30)
+    except Exception:
+        return False
+
 def _get_cache(key, ttl):
     """读取缓存, 未过期返回数据, 否则None"""
     entry = _hot_cache.get(key)
@@ -708,10 +723,9 @@ def api_estimate():
             return jsonify(None)
         result = results[0]
         # 收盘后补充实际净值
-        now = time.localtime()
-        is_after_close = now.tm_hour > 15 or (now.tm_hour == 15 and now.tm_min >= 30)
-        today_str = time.strftime('%Y-%m-%d')
-        if is_after_close:
+        if _is_market_closed():
+            from datetime import datetime, timezone, timedelta
+            today_str = datetime.now(timezone(timedelta(hours=8))).strftime('%Y-%m-%d')
             actual_map = _fetch_actual_nav_batch([code])
             if code in actual_map and actual_map[code].get('jzrq', '') == today_str:
                 actual = actual_map[code]
@@ -733,8 +747,7 @@ def api_estimate_batch():
         return jsonify([])
 
     # 盘中5秒缓存,收盘后60秒缓存
-    now = time.localtime()
-    is_after_close = now.tm_hour > 15 or (now.tm_hour == 15 and now.tm_min >= 30)
+    is_after_close = _is_market_closed()
     est_cache_ttl = 60 if is_after_close else 5
 
     cache_key = f'batch_est:{codes}'
@@ -749,7 +762,8 @@ def api_estimate_batch():
     results = _fetch_sina_estimate(code_list)
 
     # 收盘后尝试从东方财富获取今日实际净值来补充
-    today_str = time.strftime('%Y-%m-%d')
+    from datetime import datetime, timezone, timedelta
+    today_str = datetime.now(timezone(timedelta(hours=8))).strftime('%Y-%m-%d')
     if is_after_close and results:
         code_set = [r['fundcode'] for r in results]
         # 实际净值缓存60秒(收盘后变化慢)
@@ -964,20 +978,17 @@ def api_detail():
     except Exception as e:
         print(f'[详情-pingzhongdata异常] {code}: {e}')
 
-    # 如果名称仍为空,尝试用估值接口获取
+    # 如果名称仍为空,尝试用新浪估值接口获取
     if not result['name']:
         try:
-            url = f'https://fundgz.1234567.com.cn/js/{code}.js'
-            resp = SESSION.get(url, params={'rt': int(time.time() * 1000)}, timeout=8)
-            match = re.search(r'jsonpgz\((.+)\)', resp.text.strip())
-            if match:
-                data = json.loads(match.group(1))
-                result['name'] = data.get('name', '')
+            est_results = _fetch_sina_estimate([code])
+            if est_results and est_results[0]:
+                est = est_results[0]
+                result['name'] = est.get('name', '')
                 if result['netValue'] == 0:
-                    result['netValue'] = safe_float(data.get('dwjz'))
-                    result['netValueDate'] = data.get('jzrq', '')
+                    result['netValue'] = est.get('gsz', 0)
                 if result['totalNetValue'] == 0:
-                    result['totalNetValue'] = safe_float(data.get('jzrq'))
+                    result['totalNetValue'] = est.get('gsz', 0)
         except Exception:
             pass
 
@@ -1292,44 +1303,40 @@ def _fetch_all_funds(fund_type, order):
 
 
 def _fetch_estimate_for_code(code):
-    """获取单只基金的实时估值"""
-    url = f'https://fundgz.1234567.com.cn/js/{code}.js'
-    params = {'rt': int(time.time() * 1000)}
+    """获取单只基金的实时估值(通过新浪财经)"""
     try:
-        resp = SESSION.get(url, params=params, timeout=5)
-        text = resp.text.strip()
-        match = re.search(r'jsonpgz\((.+)\)', text)
-        if match:
-            data = json.loads(match.group(1))
-            gszzl = safe_float(data.get('gszzl'))
-            gsz = safe_float(data.get('gsz'))
-            if gszzl == gszzl:  # not NaN
-                return {'code': code, 'gszzl': gszzl, 'gsz': gsz}
+        results = _fetch_sina_estimate([code])
+        if results and results[0]:
+            r = results[0]
+            gszzl = r.get('gszzl')
+            gsz = r.get('gsz')
+            if gszzl is not None and gsz is not None:
+                return {'code': code, 'gszzl': gszzl, 'gsz': gsz, 'dwjz': r.get('dwjz')}
     except Exception:
         pass
     return None
 
 
 def _build_realtime_ranking(sort_type, order, fund_type):
-    """构建全市场实时涨跌排名(服务端并发拉取估值+排序)"""
+    """构建全市场实时涨跌排名(新浪批量估值+排序)"""
     # 1. 拉取全市场基金
     all_funds, total = _fetch_all_funds(fund_type, order)
     if not all_funds:
         return {'funds': [], 'total': 0}
 
-    # 2. 并发拉取所有基金的实时估值(150并发)
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    estimates = {}
+    # 2. 通过新浪批量获取估值(每批50个,远快于逐个请求)
     codes = [f['code'] for f in all_funds]
-    with ThreadPoolExecutor(max_workers=150) as executor:
-        future_map = {executor.submit(_fetch_estimate_for_code, c): c for c in codes}
-        for future in as_completed(future_map, timeout=60):
-            try:
-                result = future.result(timeout=5)
-                if result:
-                    estimates[result['code']] = result
-            except Exception:
-                pass
+    estimates = {}
+    batch_size = 50
+    for i in range(0, len(codes), batch_size):
+        batch_codes = codes[i:i + batch_size]
+        try:
+            batch_results = _fetch_sina_estimate(batch_codes)
+            for r in batch_results:
+                if r and r.get('gszzl') is not None:
+                    estimates[r['fundcode']] = r
+        except Exception:
+            pass
 
     # 3. 合并实时估值:有估值的用估值,无估值的按0%算
     for f in all_funds:
@@ -2234,36 +2241,36 @@ def _fetch_index_sectors():
     except Exception as e:
         print(f'[宽基指数-push2] 失败: {e}', flush=True)
 
-    # 方案2: ETF估值fallback (fundgz API)
-    print('[宽基指数] push2不可用, 使用ETF估值fallback', flush=True)
+    # 方案2: ETF估值fallback (新浪财经API)
+    print('[宽基指数] push2不可用, 使用新浪估值fallback', flush=True)
     etf_list = get_index_etf_codes()
-    for std_name, etf_code in etf_list:
-        try:
-            url = f'https://fundgz.1234567.com.cn/js/{etf_code}.js'
-            resp = SESSION.get(url, params={'rt': int(time.time() * 1000)}, timeout=8)
-            text = resp.text.strip()
-            match = re.search(r'jsonpgz\((.+)\)', text)
-            if match:
-                data = json.loads(match.group(1))
+    etf_codes = [code for _, code in etf_list]
+    try:
+        est_results = _fetch_sina_estimate(etf_codes)
+        est_map = {r['fundcode']: r for r in est_results if r}
+        for std_name, etf_code in etf_list:
+            est = est_map.get(etf_code)
+            if est:
                 results.append({
                     'code': etf_code,
                     'name': std_name,
-                    'price': safe_float(data.get('gsz', 0)),
-                    'changePercent': safe_float(data.get('gszzl', 0)),
+                    'price': est.get('gsz', 0),
+                    'changePercent': est.get('gszzl', 0),
                     'change': 0,
                     'upCount': 0,
                     'downCount': 0,
                     'type': '宽基指数',
                     'category': '宽基指数'
                 })
-        except Exception as e:
-            print(f'[宽基指数-ETF-{etf_code}] 失败: {e}', flush=True)
-            results.append({
-                'code': etf_code, 'name': std_name, 'price': 0,
-                'changePercent': 0, 'change': 0,
-                'upCount': 0, 'downCount': 0,
-                'type': '宽基指数', 'category': '宽基指数'
-            })
+            else:
+                results.append({
+                    'code': etf_code, 'name': std_name, 'price': 0,
+                    'changePercent': 0, 'change': 0,
+                    'upCount': 0, 'downCount': 0,
+                    'type': '宽基指数', 'category': '宽基指数'
+                })
+    except Exception as e:
+        print(f'[宽基指数-新浪fallback] 失败: {e}', flush=True)
     return results
 
 
@@ -2321,19 +2328,11 @@ def _fetch_fund_type_sectors(fund_type, sector_defs):
             # 关键词匹配不到, 用代表性基金代码获取涨跌幅
             avg_change = 0
             valid = 0
-            for code in rep_codes:
-                try:
-                    url = f'https://fundgz.1234567.com.cn/js/{code}.js'
-                    resp = SESSION.get(url, params={'rt': int(time.time() * 1000)}, timeout=8)
-                    text = resp.text.strip()
-                    m = re.search(r'jsonpgz\((.+)\)', text)
-                    if m:
-                        data = json.loads(m.group(1))
-                        chg = safe_float(data.get('gszzl', 0))
-                        avg_change += chg
-                        valid += 1
-                except:
-                    pass
+            est_results = _fetch_sina_estimate(rep_codes)
+            for r in est_results:
+                if r and r.get('gszzl') is not None:
+                    avg_change += r['gszzl']
+                    valid += 1
             if valid > 0:
                 avg_change = avg_change / valid
             up_count = 0
