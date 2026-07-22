@@ -4949,12 +4949,12 @@
         if (homeStockState.timer) clearInterval(homeStockState.timer);
         homeStockState.timer = setInterval(function() {
             if (document.getElementById('homeStockTable')) {
-                _fetchHomeStocks();
+                _fetchHomeStocks(true); // silent模式，不显示loading
             }
         }, 3000);
     }
 
-    async function _fetchHomeStocks() {
+    async function _fetchHomeStocks(silent) {
         if (homeStockState.loading) return;
         homeStockState.loading = true;
         var myReqId = ++homeStockState.requestId;
@@ -4963,9 +4963,11 @@
         var statsContainer = document.getElementById('homeStockStats');
         var pagContainer = document.getElementById('homeStockPagination');
         if (!tableContainer) { homeStockState.loading = false; return; }
-        tableContainer.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary)"><div class="loader" style="margin:0 auto 10px"></div>加载中...</div>';
-        if (statsContainer) statsContainer.innerHTML = '';
-        if (pagContainer) pagContainer.innerHTML = '';
+        if (!silent) {
+            tableContainer.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary)"><div class="loader" style="margin:0 auto 10px"></div>加载中...</div>';
+            if (statsContainer) statsContainer.innerHTML = '';
+            if (pagContainer) pagContainer.innerHTML = '';
+        }
 
         try {
             var data = await FundAPI.getStockList({
