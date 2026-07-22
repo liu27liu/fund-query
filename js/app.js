@@ -4582,6 +4582,12 @@
         var reportDate = result.reportDate || '';
         var stockRatio = result.stockRatio || 0;
 
+        // 计算资金流向汇总
+        var totalMainFlow = result.list.reduce(function(sum, s) { return sum + (s.mainFlow || 0); }, 0);
+        var flowUpCount = result.list.filter(function(s) { return (s.mainFlow || 0) > 0; }).length;
+        var flowDownCount = result.list.filter(function(s) { return (s.mainFlow || 0) < 0; }).length;
+        var flowClass = totalMainFlow >= 0 ? 'up' : 'down';
+
         var stockListHtml = result.list.map(function (stock, idx) {
             var ratioBar = stock.ratio > 0
                 ? '<div class="ratio-bar"><div class="ratio-fill" style="width:' + Math.min(stock.ratio * 3, 100) + '%"></div></div>'
@@ -4590,6 +4596,9 @@
             var changeText = stock.dayChange || '--';
             if (changeText.indexOf('-') === 0) changeClass = 'down';
             else if (changeText !== '--' && (changeText.indexOf('+') === 0 || parseFloat(changeText) > 0)) changeClass = 'up';
+
+            var mfc = (stock.mainFlow || 0) >= 0 ? 'up' : 'down';
+            var flowText = stock.mainFlow ? formatFlowMoney(stock.mainFlow) : '--';
 
             return `
                 <tr>
@@ -4609,12 +4618,18 @@
                     <td class="num-cell">${stock.shares || '--'}</td>
                     <td class="num-cell">${stock.value || '--'}</td>
                     <td class="num-cell ${changeClass}">${changeText}</td>
+                    <td class="num-cell ${mfc}">${flowText}</td>
                 </tr>
             `;
         }).join('');
 
         wrap.innerHTML = `
             ${reportDate ? '<div class="holdings-meta">截至 <strong>' + reportDate + '</strong>' + (stockRatio > 0 ? ' · 股票占净比 <strong>' + stockRatio.toFixed(2) + '%</strong>' : '') + '</div>' : ''}
+            <div class="holdings-flow-summary">
+                <span class="hfs-item">重仓股主力净流入 <strong class="text-${flowClass}">${formatFlowMoney(totalMainFlow)}</strong></span>
+                <span class="hfs-item text-up">流入 ${flowUpCount} 只</span>
+                <span class="hfs-item text-down">流出 ${flowDownCount} 只</span>
+            </div>
             <table class="fund-table holdings-table">
                 <thead>
                     <tr>
@@ -4624,6 +4639,7 @@
                         <th class="text-right">持股数(万股)</th>
                         <th class="text-right">持仓市值(万元)</th>
                         <th class="text-right">日涨跌幅</th>
+                        <th class="text-right">主力资金流向</th>
                     </tr>
                 </thead>
                 <tbody>

@@ -3050,8 +3050,9 @@ def api_fund_holdings():
         if ratio_match:
             stock_ratio = safe_float(ratio_match.group(1))
 
-        # 解析重仓股表格行
+        # 解析重仓股表格行（HTML可能含多期数据，需要去重）
         stocks = []
+        seen_codes = set()
         rows = re.findall(r'<tr[^>]*>(.*?)</tr>', html_content, re.DOTALL)
         for row in rows:
             cells = re.findall(r'<td[^>]*>(.*?)</td>', row, re.DOTALL)
@@ -3064,6 +3065,11 @@ def api_fund_holdings():
             stock_code = clean_cells[1] if len(clean_cells) > 1 else ''
             if not stock_code or stock_code == '--':
                 continue
+
+            # 去重：只保留第一次出现的股票（最新一期数据排在前面）
+            if stock_code in seen_codes:
+                continue
+            seen_codes.add(stock_code)
 
             # 根据列数自适应：新格式9-10列(含最新价/涨跌幅/相关资讯)，旧格式7列
             if len(clean_cells) >= 9:
@@ -3080,10 +3086,11 @@ def api_fund_holdings():
                 'ratio': safe_float(ratio_str),
                 'shares': clean_cells[shares_idx] if len(clean_cells) > shares_idx else '--',
                 'value': clean_cells[value_idx] if len(clean_cells) > value_idx else '--',
-                'dayChange': '--'
+                'dayChange': '--',
+                'mainFlow': 0
             })
 
-        # 批量获取股票实时涨跌幅
+        # 批量获取股票实时涨跌幅+资金流向
         if stocks:
             try:
                 stock_codes = [s['code'] for s in stocks]
@@ -3095,17 +3102,21 @@ def api_fund_holdings():
                         secids.append('0.' + sc)
                 qurl = 'https://push2delay.eastmoney.com/api/qt/ulist.np/get'
                 qresp = SESSION.get(qurl, params={
-                    'fltt': '2', 'fields': 'f2,f3,f12,f14',
+                    'fltt': '2', 'fields': 'f2,f3,f12,f14,f62',
                     'secids': ','.join(secids)
                 }, timeout=8)
                 qdata = qresp.json()
                 if qdata and qdata.get('data') and qdata['data'].get('diff'):
                     price_map = {}
+                    flow_map = {}
                     for item in qdata['data']['diff']:
                         scode = item.get('f12', '')
                         pct = item.get('f3', 0)
+                        flow = item.get('f62', 0)
                         if scode and pct is not None:
                             price_map[scode] = safe_float(pct)
+                        if scode and flow is not None:
+                            flow_map[scode] = safe_float(flow)
                     for s in stocks:
                         if s['code'] in price_map:
                             val = price_map[s['code']]
@@ -3113,8 +3124,10 @@ def api_fund_holdings():
                                 s['dayChange'] = '+' + f'{val:.2f}%'
                             else:
                                 s['dayChange'] = f'{val:.2f}%'
+                        if s['code'] in flow_map:
+                            s['mainFlow'] = flow_map[s['code']]
             except Exception as pe:
-                print(f'[重仓股涨跌幅获取异常] {code}: {pe}')
+                print(f'[重仓股涨跌幅/资金流向获取异常] {code}: {pe}')
 
         return jsonify({
             'list': stocks,
