@@ -493,6 +493,25 @@ def api_fund_list():
     end_idx = start_idx + size
     page_funds = funds[start_idx:end_idx]
 
+    # 交易时间内用新浪估值覆盖同花顺的昨日数据
+    if page_funds and not _is_market_closed():
+        codes = [f['code'] for f in page_funds if f.get('code')]
+        if codes:
+            try:
+                est_results = _fetch_sina_estimate(codes)
+                est_map = {r['fundcode']: r for r in est_results if r}
+                from datetime import datetime, timezone, timedelta
+                today_str = datetime.now(timezone(timedelta(hours=8))).strftime('%Y-%m-%d')
+                for f in page_funds:
+                    est = est_map.get(f['code'])
+                    if est and est.get('jzrq') == today_str:
+                        f['net'] = str(est.get('gsz', f.get('net', '')))
+                        f['daily'] = str(est.get('gszzl', f.get('daily', '')))
+                        f['date'] = today_str
+                        f['isRealtime'] = True
+            except Exception:
+                pass
+
     return jsonify({
         'funds': page_funds,
         'total': total,
