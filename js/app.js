@@ -116,12 +116,12 @@
     // 应用静态HTML中的文案（页眉、页脚、导航等）
     function applyStaticText() {
         // 浏览器标签页标题
-        document.title = T('text_page_title', '基金净值通 - 实时估值 · 持仓盈亏 · 自选管理');
+        document.title = T('text_page_title', '基金净值通 - 基金估值 · 股票行情 · 自选管理');
         // 页眉Logo文字
         var logoText = document.querySelector('.logo-text');
-        if (logoText) logoText.textContent = T('text_header_logo', '基金净值通');
+        if (logoText) logoText.textContent = T('text_header_logo', '基金股票通');
         // 搜索框占位符
-        if (searchInput) searchInput.placeholder = T('text_search_placeholder', '输入基金代码 / 名称 / 拼音首字母');
+        if (searchInput) searchInput.placeholder = T('text_search_placeholder', '输入基金代码 / 股票代码 / 名称 / 拼音首字母');
         // 搜索按钮
         if (searchBtn) searchBtn.textContent = T('text_search_placeholder_btn', '搜索');
         // 导航链接
@@ -139,7 +139,7 @@
         if (loginBtn && !isLoggedIn()) loginBtn.textContent = T('text_login_btn', '登录');
         // 页脚文字
         var footerP = document.querySelector('.app-footer .footer-inner p');
-        if (footerP) footerP.textContent = T('text_footer_main', '基金净值通 · 实时估值查询平台');
+        if (footerP) footerP.textContent = T('text_footer_main', '基金股票通 · 基金估值+股票行情平台');
         // SEO meta
         var metaDesc = document.querySelector('meta[name="description"]');
         if (metaDesc) metaDesc.setAttribute('content', T('site_seo_description', metaDesc.getAttribute('content')));
@@ -302,20 +302,24 @@
                 </div>
                 <div class="hero-shine"></div>
                 <div class="hero-content">
-                    <h1 class="hero-title-anim">${T('text_hero_title', '基金净值通 · 实时估值查询平台')}</h1>
-                    <p class="hero-subtitle-anim">${T('text_hero_subtitle', '覆盖全市场基金 · 盘中实时估值 · 历史净值走势 · 自选基金管理')}</p>
+                    <h1 class="hero-title-anim">${T('text_hero_title', '基金股票通 · 基金估值+股票行情平台')}</h1>
+                    <p class="hero-subtitle-anim">${T('text_hero_subtitle', '全市场基金实时估值 · A股行情 · 主力资金流向 · 每日金句')}</p>
                     <div class="hero-stats">
                         <div class="hero-stat hero-stat-anim" style="animation-delay: 0.3s">
                             <div class="num" data-target="10000" data-suffix="+">0</div>
                             <div class="label">${T('text_hero_stat1_label', '覆盖基金')}</div>
                         </div>
+                        <div class="hero-stat hero-stat-anim" style="animation-delay: 0.4s">
+                            <div class="num" data-target="5540" data-suffix="+">0</div>
+                            <div class="label">${T('text_hero_stat2_label', 'A股股票')}</div>
+                        </div>
                         <div class="hero-stat hero-stat-anim" style="animation-delay: 0.5s">
                             <div class="num" data-target="3" data-suffix="s">0</div>
-                            <div class="label">${T('text_hero_stat2_label', '估值更新')}</div>
+                            <div class="label">${T('text_hero_stat3_label', '估值更新')}</div>
                         </div>
                         <div class="hero-stat hero-stat-anim" style="animation-delay: 0.7s">
                             <div class="num" data-target="24" data-suffix="h">0</div>
-                            <div class="label">${T('text_hero_stat3_label', '数据采集')}</div>
+                            <div class="label">${T('text_hero_stat4_label', '数据采集')}</div>
                         </div>
                     </div>
                 </div>
