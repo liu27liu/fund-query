@@ -1786,9 +1786,9 @@ ul, ol { list-style: none; }
 /* 跑马灯容器 - 网格布局 */
 .market-dashboard {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 6px;
-    margin-bottom: 16px;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px 10px;
+    margin-bottom: 24px;
 }
 
 .market-section-divider {
@@ -1818,7 +1818,7 @@ ul, ol { list-style: none; }
     position: relative;
     background: var(--card-bg);
     border-radius: 8px;
-    padding: 6px 8px;
+    padding: 10px 6px;
     border: none;
     overflow: hidden;
     display: flex;
@@ -1880,10 +1880,10 @@ ul, ol { list-style: none; }
 .market-name {
     position: relative;
     z-index: 1;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--text-tertiary);
-    margin-bottom: 2px;
+    margin-bottom: 4px;
     letter-spacing: 0.3px;
     white-space: nowrap;
     overflow: hidden;
@@ -1893,9 +1893,9 @@ ul, ol { list-style: none; }
 .market-price {
     position: relative;
     z-index: 1;
-    font-size: 15px;
+    font-size: 18px;
     font-weight: 800;
-    margin-bottom: 2px;
+    margin-bottom: 6px;
     color: var(--text);
     font-family: var(--font-num);
     letter-spacing: -0.5px;
@@ -1915,7 +1915,7 @@ ul, ol { list-style: none; }
 }
 
 .market-change-val {
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 500;
     font-family: var(--font-num);
 }
@@ -1923,11 +1923,11 @@ ul, ol { list-style: none; }
 .market-change-pct {
     display: inline-flex;
     align-items: center;
-    gap: 1px;
-    font-size: 10px;
+    gap: 2px;
+    font-size: 12px;
     font-weight: 700;
     font-family: var(--font-num);
-    padding: 1px 5px;
+    padding: 2px 6px;
     border-radius: 4px;
     line-height: 1.4;
     white-space: nowrap;
@@ -1946,10 +1946,10 @@ ul, ol { list-style: none; }
 }
 
 @media (max-width: 768px) {
-    .market-dashboard { grid-template-columns: repeat(2, 1fr); gap: 4px; }
-    .market-card { padding: 5px 6px; }
-    .market-price { font-size: 13px; }
-    .market-change-val, .market-change-pct { font-size: 9px; }
+    .market-dashboard { grid-template-columns: repeat(2, 1fr); gap: 4px 8px; }
+    .market-card { padding: 8px 6px; }
+    .market-price { font-size: 15px; }
+    .market-change-val, .market-change-pct { font-size: 10px; }
 }
 
 /* ========== 赛道行业板块看板 ========== */
