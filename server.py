@@ -363,7 +363,7 @@ STOCK_SORT_FIELDS = {
 }
 
 # 行情+资金流合并字段
-STOCK_LIST_FIELDS = 'f2,f3,f4,f5,f6,f7,f8,f10,f12,f14,f15,f16,f17,f18,f62,f63,f64,f65,f66,f69,f70,f71,f72,f75,f76,f77,f78,f81,f82,f83,f84,f184'
+STOCK_LIST_FIELDS = 'f2,f3,f6,f8,f12,f14,f62,f66,f69,f75,f81'
 
 # 全量A股代码列表(启动时预加载)
 _all_stock_list = None  # [{code, secid, market}]
@@ -1972,29 +1972,13 @@ def _build_stock_item(code, meta, item):
         'market': meta.get('market', '0'),
         'price': item.get('f2', 0),
         'changePercent': item.get('f3', 0),
-        'changeAmount': item.get('f4', 0),
-        'volume': item.get('f5', 0),
         'amount': item.get('f6', 0),
-        'amplitude': item.get('f7', 0),
         'turnover': item.get('f8', 0),
-        'high': item.get('f15', 0),
-        'low': item.get('f16', 0),
-        'open': item.get('f17', 0),
-        'prevClose': item.get('f18', 0),
         'mainFlow': item.get('f62', 0),
-        'mainFlowRatio': item.get('f184', 0),
-        'superLargeFlow': item.get('f63', 0),
-        'superLargeIn': item.get('f65', 0),
-        'superLargeOut': item.get('f66', 0),
+        'superLargeFlow': item.get('f66', 0),
         'largeFlow': item.get('f69', 0),
-        'largeIn': item.get('f71', 0),
-        'largeOut': item.get('f72', 0),
         'mediumFlow': item.get('f75', 0),
-        'mediumIn': item.get('f77', 0),
-        'mediumOut': item.get('f78', 0),
         'smallFlow': item.get('f81', 0),
-        'smallIn': item.get('f83', 0),
-        'smallOut': item.get('f84', 0),
     }
 
 
