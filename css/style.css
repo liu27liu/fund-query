@@ -4582,6 +4582,8 @@ select.form-input {
 .flow-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
 .flow-value { font-size: 18px; font-weight: 700; font-family: var(--font-num); margin-bottom: 2px; }
 .flow-ratio { font-size: 12px; color: var(--text-tertiary); }
+.flow-sub { font-size: 11px; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stock-flow-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
 @media (max-width: 768px) {
     .stock-flow-grid { grid-template-columns: repeat(3, 1fr); }
     .stock-table { font-size: 13px; }

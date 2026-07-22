@@ -1998,6 +1998,17 @@ def _build_stock_item(code, meta, item):
     }
 
 
+def _calc_flow_in_out(net_flow, net_ratio_pct, amount, amount_ratio):
+    """根据净流入、净占比和成交额比例推算流入/流出"""
+    cat_amount = amount * amount_ratio * 0.5
+    if cat_amount <= 0:
+        return 0, 0
+    net_val = abs(net_flow) if net_flow else cat_amount * abs(net_ratio_pct) / 100
+    in_val = (cat_amount + net_val) / 2
+    out_val = (cat_amount - net_val) / 2
+    return max(0, in_val), max(0, out_val)
+
+
 @app.route('/api/stocks/detail')
 def api_stock_detail():
     """个股详情(基本面+资金流向) - 东方财富push2 stock/get"""
@@ -2014,7 +2025,7 @@ def api_stock_detail():
     url = 'https://push2delay.eastmoney.com/api/qt/stock/get'
     params = {
         'secid': secid,
-        'fields': 'f43,f44,f45,f46,f47,f48,f50,f51,f52,f55,f57,f58,f60,f116,f117,f162,f167,f168,f169,f170,f171,f137,f140,f143,f146,f149,f193,f194,f195,f196,f197,f198,f199,f200,f201,f202,f203,f204,f205,f206',
+        'fields': 'f43,f44,f45,f46,f47,f48,f50,f51,f52,f55,f57,f58,f60,f116,f117,f162,f167,f168,f169,f170,f171,f137,f140,f143,f146,f149,f184,f193,f194,f195,f196,f197',
         'fltt': 2,
         'invt': 2,
     }
@@ -2043,13 +2054,43 @@ def api_stock_detail():
                 'turnover': d.get('f168', 0),
                 'prevClose': d.get('f60', 0),
                 'changePercent': d.get('f170', 0),
-                # 资金流向
+                # 资金流向 - 净流入
                 'mainFlow': d.get('f137', 0),
                 'superLargeFlow': d.get('f140', 0),
                 'largeFlow': d.get('f143', 0),
                 'mediumFlow': d.get('f146', 0),
                 'smallFlow': d.get('f149', 0),
+                'mainFlowRatio': d.get('f184', 0),
+                # 流入流出分开 - 默认0, 下面补充
+                'mainIn': 0, 'mainOut': 0,
+                'superLargeIn': 0, 'superLargeOut': 0,
+                'largeIn': 0, 'largeOut': 0,
+                'mediumIn': 0, 'mediumOut': 0,
+                'smallIn': 0, 'smallOut': 0,
             }
+
+            # 补充资金流入/流出分开的数据
+            # push2delay 的 f67/f68 等占比字段不完整，用成交额+净占比推算
+            try:
+                amount = d.get('f48', 0) or 0  # 总成交额
+                main_ratio = d.get('f193', 0) or 0  # 主力净占比(%)
+                sl_ratio = d.get('f194', 0) or 0    # 超大单净占比(%)
+                lg_ratio = d.get('f195', 0) or 0    # 大单净占比(%)
+                md_ratio = d.get('f196', 0) or 0    # 中单净占比(%)
+                sm_ratio = d.get('f197', 0) or 0    # 小单净占比(%)
+
+                # 基于占比绝对值分配成交额
+                ratios = [abs(main_ratio), abs(sl_ratio), abs(lg_ratio), abs(md_ratio), abs(sm_ratio)]
+                total_ratio = sum(ratios) or 1
+
+                result['mainIn'], result['mainOut'] = _calc_flow_in_out(result['mainFlow'], main_ratio, amount, abs(main_ratio) / total_ratio)
+                result['superLargeIn'], result['superLargeOut'] = _calc_flow_in_out(result['superLargeFlow'], sl_ratio, amount, abs(sl_ratio) / total_ratio)
+                result['largeIn'], result['largeOut'] = _calc_flow_in_out(result['largeFlow'], lg_ratio, amount, abs(lg_ratio) / total_ratio)
+                result['mediumIn'], result['mediumOut'] = _calc_flow_in_out(result['mediumFlow'], md_ratio, amount, abs(md_ratio) / total_ratio)
+                result['smallIn'], result['smallOut'] = _calc_flow_in_out(result['smallFlow'], sm_ratio, amount, abs(sm_ratio) / total_ratio)
+            except Exception as e2:
+                print(f'[个股资金流入流出推算异常] {secid}: {e2}')
+
             _set_cache(cache_key, result)
             return jsonify(result)
         return jsonify(None)
@@ -2071,11 +2112,11 @@ def api_stock_flow():
     if cached is not None:
         return jsonify(cached)
 
-    # 使用 kline 接口获取日K线资金流向（day/get在部分网络环境不可用）
+    # 使用 kline 接口获取分钟级资金流向
     url = 'https://push2delay.eastmoney.com/api/qt/stock/fflow/kline/get'
     params = {
-        'lmt': 30,
-        'klt': 101,
+        'lmt': 240,  # 一天最多240分钟
+        'klt': 1,     # 1分钟粒度
         'secid': secid,
         'fields1': 'f1,f2,f3,f7',
         'fields2': 'f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65,f66,f67,f68,f69,f70',

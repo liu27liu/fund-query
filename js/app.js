@@ -5116,6 +5116,11 @@
 
             var cc = detail.changePercent >= 0 ? 'up' : 'down';
             var mfc = (detail.mainFlow || 0) >= 0 ? 'up' : 'down';
+            // 散户 = 中单 + 小单
+            var retailFlow = (detail.mediumFlow || 0) + (detail.smallFlow || 0);
+            var retailIn = (detail.mediumIn || 0) + (detail.smallIn || 0);
+            var retailOut = (detail.mediumOut || 0) + (detail.smallOut || 0);
+            var rfc = retailFlow >= 0 ? 'up' : 'down';
             var code = detail.code;
             var market = detail.market || '1';
 
@@ -5162,23 +5167,32 @@
                     <div class="stock-flow-card ${mfc === 'up' ? 'flow-positive' : 'flow-negative'}">
                         <div class="flow-label">主力净流入</div>
                         <div class="flow-value ${mfc === 'up' ? 'text-up' : 'text-down'}">${formatFlowMoney(detail.mainFlow)}</div>
-                        <div class="flow-ratio">${((detail.mainFlowRatio || 0)).toFixed(2)}%</div>
+                        <div class="flow-sub">流入 ${formatFlowMoney(detail.mainIn)} / 流出 ${formatFlowMoney(detail.mainOut)}</div>
+                    </div>
+                    <div class="stock-flow-card ${rfc === 'up' ? 'flow-positive' : 'flow-negative'}">
+                        <div class="flow-label">散户净流入</div>
+                        <div class="flow-value ${rfc === 'up' ? 'text-up' : 'text-down'}">${formatFlowMoney(retailFlow)}</div>
+                        <div class="flow-sub">流入 ${formatFlowMoney(retailIn)} / 流出 ${formatFlowMoney(retailOut)}</div>
                     </div>
                     <div class="stock-flow-card">
                         <div class="flow-label">超大单</div>
                         <div class="flow-value ${(detail.superLargeFlow || 0) >= 0 ? 'text-up' : 'text-down'}">${formatFlowMoney(detail.superLargeFlow)}</div>
+                        <div class="flow-sub">流入 ${formatFlowMoney(detail.superLargeIn)} / 流出 ${formatFlowMoney(detail.superLargeOut)}</div>
                     </div>
                     <div class="stock-flow-card">
                         <div class="flow-label">大单</div>
                         <div class="flow-value ${(detail.largeFlow || 0) >= 0 ? 'text-up' : 'text-down'}">${formatFlowMoney(detail.largeFlow)}</div>
+                        <div class="flow-sub">流入 ${formatFlowMoney(detail.largeIn)} / 流出 ${formatFlowMoney(detail.largeOut)}</div>
                     </div>
                     <div class="stock-flow-card">
                         <div class="flow-label">中单</div>
                         <div class="flow-value ${(detail.mediumFlow || 0) >= 0 ? 'text-up' : 'text-down'}">${formatFlowMoney(detail.mediumFlow)}</div>
+                        <div class="flow-sub">流入 ${formatFlowMoney(detail.mediumIn)} / 流出 ${formatFlowMoney(detail.mediumOut)}</div>
                     </div>
                     <div class="stock-flow-card">
                         <div class="flow-label">小单</div>
                         <div class="flow-value ${(detail.smallFlow || 0) >= 0 ? 'text-up' : 'text-down'}">${formatFlowMoney(detail.smallFlow)}</div>
+                        <div class="flow-sub">流入 ${formatFlowMoney(detail.smallIn)} / 流出 ${formatFlowMoney(detail.smallOut)}</div>
                     </div>
                 </div>
             </div>
@@ -5223,7 +5237,7 @@
             if (t.length === 8 && t.indexOf(':') > 0) t = t.substring(0, 5);
             times.push(t);
             mainData.push((parseFloat(item.mainFlow || item.mainForceNetIn || 0) / 10000).toFixed(2));
-            retailData.push((parseFloat(item.smallFlow || item.smallForceNetIn || 0) / 10000).toFixed(2));
+            retailData.push(((parseFloat(item.mediumFlow || 0) + parseFloat(item.smallFlow || 0)) / 10000).toFixed(2));
         });
 
         chart.setOption({
