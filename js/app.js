@@ -302,7 +302,7 @@
                 </div>
                 <div class="hero-shine"></div>
                 <div class="hero-content">
-                    <h1 class="hero-title-anim">${T('text_hero_title', '基金股票通 · 基金估值+股票行情平台')}</h1>
+                    <h1 class="hero-title-anim">${T('text_hero_title', '基金股票净值通 · 实时估值查询平台')}</h1>
                     <p class="hero-subtitle-anim">${T('text_hero_subtitle', '全市场基金实时估值 · A股行情 · 主力资金流向 · 每日金句')}</p>
                     <div class="hero-stats">
                         <div class="hero-stat hero-stat-anim" style="animation-delay: 0.3s">
