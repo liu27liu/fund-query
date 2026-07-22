@@ -1196,8 +1196,8 @@
     // 打开资讯全文
     window.openNewsDetail = function (idx) {
         var item = window._newsDataMap[idx];
-        if (!item || !item.url) return;
-        // 用iframe弹窗打开原文链接
+        if (!item) return;
+        // 直接显示完整内容，不用iframe(新闻网站会阻止嵌入)
         var overlay = document.createElement('div');
         overlay.className = 'news-detail-overlay';
         overlay.onclick = function (e) {
@@ -1210,7 +1210,12 @@
             '    <button class="news-detail-close" onclick="closeNewsDetail()">&times;</button>' +
             '  </div>' +
             '  <div class="news-detail-body">' +
-            '    <iframe src="' + item.url + '" sandbox="allow-scripts allow-same-origin allow-popups" style="width:100%;height:100%;border:none;"></iframe>' +
+            '    <div class="news-detail-meta">' +
+            '      <span class="news-detail-source">' + (item.source || '') + '</span>' +
+            '      <span class="news-detail-time">' + (item.time || '') + '</span>' +
+            '    </div>' +
+            '    <div class="news-detail-content">' + (item.summary || '暂无详细内容') + '</div>' +
+            (item.url ? '<div class="news-detail-link"><a href="' + item.url + '" target="_blank" rel="noopener">在原文中阅读 ›</a></div>' : '') +
             '  </div>' +
             '</div>';
         document.body.appendChild(overlay);
