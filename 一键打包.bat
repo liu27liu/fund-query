@@ -2,7 +2,7 @@
 chcp 65001 >nul
 title Build Desktop App
 echo ==========================================
-echo   Fund Stock Query - Build
+echo   Build - One Click
 echo ==========================================
 echo.
 
@@ -27,9 +27,13 @@ echo [2/3] Building app (may take 2-3 minutes)...
 if exist "dist" rmdir /s /q "dist"
 if exist "build" rmdir /s /q "build"
 if exist "output" rmdir /s /q "output"
+if exist "temp_dist" rmdir /s /q "temp_dist"
 
+:: Build main app exe
 pyinstaller --noconfirm --onefile --windowed --name "FundStockQuery" ^
     --icon "assets\logo.ico" ^
+    --distpath "temp_dist" ^
+    --workpath "build\app" ^
     --add-data "index.html;." ^
     --add-data "admin.html;." ^
     --add-data "css;css" ^
@@ -64,31 +68,35 @@ pyinstaller --noconfirm --onefile --windowed --name "FundStockQuery" ^
     desktop.py
 
 if errorlevel 1 (
-    echo [ERROR] Build failed!
+    echo [ERROR] Build app failed!
     pause
     exit /b 1
 )
 echo [OK] App built
 
-:: Build installer
+:: Build installer with FundStockQuery.exe embedded
 echo Building installer...
 pyinstaller --noconfirm --onefile --windowed --name "Setup" ^
     --icon "assets\logo.ico" ^
+    --distpath "dist" ^
+    --workpath "build\installer" ^
+    --add-data "temp_dist\FundStockQuery.exe;." ^
     installer_gui.py
 
-:: Create output folder
-echo [3/3] Packaging...
-mkdir "output"
-copy /Y "dist\FundStockQuery.exe" "output\" >nul
-copy /Y "dist\Setup.exe" "output\" >nul 2>nul
-if not exist "output\Setup.exe" (
-    echo [WARN] Setup.exe build failed
+if errorlevel 1 (
+    echo [ERROR] Build installer failed!
     pause
     exit /b 1
 )
 
-:: Delete standalone exe, only keep Setup
-del /q "output\FundStockQuery.exe" >nul 2>nul
+:: Create output
+echo [3/3] Packaging...
+mkdir "output"
+copy /Y "dist\Setup.exe" "output\" >nul
+
+:: Cleanup
+rmdir /s /q "temp_dist" >nul 2>nul
+rmdir /s /q "dist" >nul 2>nul
 
 echo.
 echo ==========================================

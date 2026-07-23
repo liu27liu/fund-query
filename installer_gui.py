@@ -287,15 +287,25 @@ class InstallerApp:
             self.cancel_btn.config(state="normal", text="Close", command=self.root.quit)
 
     def get_source_exe(self):
-        """Find FundStockQuery.exe next to this installer"""
+        """Find FundStockQuery.exe - from bundled resources (PyInstaller) or next to installer"""
+        # PyInstaller: extract from _MEIPASS
+        if getattr(sys, 'frozen', False):
+            bundled = os.path.join(sys._MEIPASS, "FundStockQuery.exe")
+            if os.path.exists(bundled):
+                return bundled
+
+        # Next to installer exe
         exe_dir = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(__file__)
         exe_path = os.path.join(exe_dir, "FundStockQuery.exe")
         if os.path.exists(exe_path):
             return exe_path
+
+        # Current working directory
         exe_path = os.path.join(os.getcwd(), "FundStockQuery.exe")
         if os.path.exists(exe_path):
             return exe_path
-        raise FileNotFoundError("FundStockQuery.exe not found. Place Setup.exe next to FundStockQuery.exe.")
+
+        raise FileNotFoundError("FundStockQuery.exe not found.")
 
     def create_shortcut(self, location):
         """Create a .lnk shortcut using PowerShell"""
@@ -323,14 +333,22 @@ class InstallerApp:
         subprocess.run(["powershell", "-Command", ps_cmd], capture_output=True, timeout=10)
 
     def create_uninstaller(self):
-        """Create uninstall.bat"""
+        """Create uninstall.bat with auto-elevation"""
         uninstall_bat = os.path.join(self.install_dir, "Uninstall.bat")
         install_dir = self.install_dir
 
         bat_content = f"""@echo off\r
 chcp 65001 >nul\r
-echo Uninstalling Fund Stock Query...\r
+:: Request admin privileges\r
+net session >nul 2>&1\r
+if errorlevel 1 (\r
+    echo Requesting administrator privileges...\r
+    powershell -Command "Start-Process '%~f0' -Verb RunAs"\r
+    exit /b\r
+)\r
+echo Uninstalling...\r
 taskkill /F /IM FundStockQuery.exe 2>nul\r
+timeout /t 1 /nobreak >nul\r
 del /q "{install_dir}\\FundStockQuery.exe" 2>nul\r
 del /q "{install_dir}\\users.json" 2>nul\r
 del /q "{install_dir}\\deleted_users.json" 2>nul\r
@@ -341,7 +359,8 @@ del /q "{install_dir}\\server.log" 2>nul\r
 del /q "{install_dir}\\Uninstall.bat" 2>nul\r
 del /q "%USERPROFILE%\\Desktop\\净值通.lnk" 2>nul\r
 rmdir /s /q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Fund Stock Query" 2>nul\r
-echo Uninstalled successfully!\r
+rmdir "{install_dir}" 2>nul\r
+echo Uninstalled!\r
 timeout /t 2 /nobreak >nul\r
 """
 
@@ -356,7 +375,7 @@ timeout /t 2 /nobreak >nul\r
             root_key = winreg.HKEY_LOCAL_MACHINE if is_admin() else winreg.HKEY_CURRENT_USER
             key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\FundStockQuery"
             key = winreg.CreateKey(root_key, key_path)
-            winreg.SetValueEx(key, "DisplayName", 0, winreg.REG_SZ, "Fund Stock Query")
+            winreg.SetValueEx(key, "DisplayName", 0, winreg.REG_SZ, "净值通")
             winreg.SetValueEx(key, "DisplayVersion", 0, winreg.REG_SZ, "1.0.0")
             winreg.SetValueEx(key, "Publisher", 0, winreg.REG_SZ, "FundStockQuery")
             winreg.SetValueEx(key, "InstallLocation", 0, winreg.REG_SZ, self.install_dir)
