@@ -1,12 +1,12 @@
 @echo off
 chcp 65001 >nul
-title Build Installer
+title Build Desktop App
 echo ==========================================
-echo   Fund Stock Query - Build Installer
+echo   Fund Stock Query - Build
 echo ==========================================
 echo.
 
-:: Step 1: Check Python
+:: Check Python
 python --version >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Python not found!
@@ -17,34 +17,13 @@ if errorlevel 1 (
 )
 python --version
 
-:: Step 2: Install Python dependencies
+:: Install dependencies
 echo.
-echo [1/4] Installing Python dependencies...
+echo [1/3] Installing dependencies...
 pip install pyinstaller pywebview flask requests pillow --quiet
 
-:: Step 3: Check NSIS
-echo [2/4] Checking NSIS (installer maker)...
-where makensis >nul 2>&1
-if errorlevel 1 (
-    echo [WARN] NSIS not found, downloading...
-    curl -L -o nsis-setup.exe "https://nsis.sourceforge.io/Download" 2>nul
-    if exist nsis-setup.exe (
-        echo Please install NSIS from the downloaded file, then re-run this script.
-        echo Download: https://nsis.sourceforge.io/Download
-        start nsis-setup.exe
-        pause
-        exit /b 1
-    )
-    echo [ERROR] NSIS is required but not found.
-    echo Download and install NSIS from: https://nsis.sourceforge.io/Download
-    echo After installation, re-run this script.
-    pause
-    exit /b 1
-)
-echo [OK] NSIS found
-
-:: Step 4: Build exe
-echo [3/4] Building desktop exe (may take 2-3 minutes)...
+:: Clean old builds
+echo [2/3] Building desktop app (may take 2-3 minutes)...
 if exist "dist" rmdir /s /q "dist"
 if exist "build" rmdir /s /q "build"
 if exist "output" rmdir /s /q "output"
@@ -85,38 +64,28 @@ pyinstaller --noconfirm --onefile --windowed --name "FundStockQuery" ^
     desktop.py
 
 if errorlevel 1 (
-    echo [ERROR] Build exe failed!
+    echo [ERROR] Build failed!
     pause
     exit /b 1
 )
-echo [OK] Exe built successfully
 
-:: Step 5: Build NSIS installer
-echo [4/4] Building installer package...
+:: Create output with installer
+echo [3/3] Creating installer...
 mkdir "output"
-makensis /DVERSION=1.0.0 installer.nsi
-
-if errorlevel 1 (
-    echo [ERROR] Build installer failed!
-    pause
-    exit /b 1
-)
+copy /Y "dist\FundStockQuery.exe" "output\FundStockQuery.exe" >nul
+copy /Y "安装到电脑.bat" "output\安装到电脑.bat" >nul
 
 echo.
 echo ==========================================
 echo   BUILD SUCCESS!
 echo.
-echo   Installer: output\FundStockQuery_Setup.exe
+echo   output\FundStockQuery.exe   - App
+echo   output\安装到电脑.bat       - Installer
 echo.
-echo   Features:
-echo   - Native desktop window (not browser)
-echo   - Desktop shortcut with app icon
-echo   - Start menu shortcut
-echo   - Add/Remove Programs entry
-echo   - Uninstaller included
-echo   - No Python needed to run
+echo   Step 1: Double-click "安装到电脑.bat"
+echo           (Creates desktop shortcut + start menu)
+echo   Step 2: Double-click desktop icon to run
 echo ==========================================
 echo.
-echo Opening output folder...
 start explorer "output"
 pause
