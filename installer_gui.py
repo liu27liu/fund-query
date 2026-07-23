@@ -309,14 +309,14 @@ class InstallerApp:
                                          "Microsoft", "Windows", "Start Menu", "Programs", "Fund Stock Query")
             os.makedirs(shortcut_dir, exist_ok=True)
 
-        shortcut_path = os.path.join(shortcut_dir, "Fund Stock Query.lnk")
+        shortcut_path = os.path.join(shortcut_dir, "净值通.lnk")
 
         ps_cmd = (
             f'$ws = New-Object -ComObject WScript.Shell; '
             f'$sc = $ws.CreateShortcut("{shortcut_path}"); '
             f'$sc.TargetPath = "{target}"; '
             f'$sc.IconLocation = "{icon}"; '
-            f'$sc.Description = "Fund Stock Query Platform"; '
+            f'$sc.Description = "净值通 - Fund Stock Query"; '
             f'$sc.WorkingDirectory = "{self.install_dir}"; '
             f'$sc.Save()'
         )
@@ -339,7 +339,7 @@ del /q "{install_dir}\\admin.db-wal" 2>nul\r
 del /q "{install_dir}\\admin.db-shm" 2>nul\r
 del /q "{install_dir}\\server.log" 2>nul\r
 del /q "{install_dir}\\Uninstall.bat" 2>nul\r
-del /q "%USERPROFILE%\\Desktop\\Fund Stock Query.lnk" 2>nul\r
+del /q "%USERPROFILE%\\Desktop\\净值通.lnk" 2>nul\r
 rmdir /s /q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Fund Stock Query" 2>nul\r
 echo Uninstalled successfully!\r
 timeout /t 2 /nobreak >nul\r
