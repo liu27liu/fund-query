@@ -5506,24 +5506,28 @@
 
     function _drawStockFlowChart(el, timeline) {
         var chart = echarts.init(el);
-        var times = [], mainData = [], retailData = [];
+        var times = [], superLargeData = [], largeData = [], mediumData = [], smallData = [];
         timeline.forEach(function(item) {
             var t = item.date || item.time || '';
             if (t.length === 8 && t.indexOf(':') > 0) t = t.substring(0, 5);
             times.push(t);
-            mainData.push((parseFloat(item.mainFlow || item.mainForceNetIn || 0) / 10000).toFixed(2));
-            retailData.push(((parseFloat(item.mediumFlow || 0) + parseFloat(item.smallFlow || 0)) / 10000).toFixed(2));
+            superLargeData.push((parseFloat(item.superLargeFlow || 0) / 10000).toFixed(2));
+            largeData.push((parseFloat(item.largeFlow || 0) / 10000).toFixed(2));
+            mediumData.push((parseFloat(item.mediumFlow || 0) / 10000).toFixed(2));
+            smallData.push((parseFloat(item.smallFlow || 0) / 10000).toFixed(2));
         });
 
         chart.setOption({
-            tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-            legend: { data: ['主力', '散户'], top: 0 },
+            tooltip: { trigger: 'axis', axisPointer: { type: 'cross' }, valueFormatter: function(v) { return v + ' 万元'; } },
+            legend: { data: ['超大单', '大单', '中单', '小单'], top: 0, textStyle: { fontSize: 11 } },
             grid: { left: 60, right: 20, top: 35, bottom: 30 },
             xAxis: { type: 'category', data: times, axisLabel: { fontSize: 11 } },
-            yAxis: { type: 'value', name: '万元', axisLabel: { fontSize: 11 } },
+            yAxis: { type: 'value', name: '万元', axisLabel: { fontSize: 11 }, splitLine: { lineStyle: { type: 'dashed' } } },
             series: [
-                { name: '主力', type: 'line', data: mainData, smooth: true, lineStyle: { color: '#dc2626', width: 2 }, itemStyle: { color: '#dc2626' }, areaStyle: { color: 'rgba(220,38,38,0.08)' } },
-                { name: '散户', type: 'line', data: retailData, smooth: true, lineStyle: { color: '#059669', width: 2 }, itemStyle: { color: '#059669' }, areaStyle: { color: 'rgba(5,150,105,0.08)' } },
+                { name: '超大单', type: 'line', data: superLargeData, smooth: true, lineStyle: { color: '#dc2626', width: 2.5 }, itemStyle: { color: '#dc2626' }, symbol: 'circle', symbolSize: 4, areaStyle: { color: 'rgba(220,38,38,0.06)' } },
+                { name: '大单', type: 'line', data: largeData, smooth: true, lineStyle: { color: '#f59e0b', width: 2 }, itemStyle: { color: '#f59e0b' }, symbol: 'circle', symbolSize: 4, areaStyle: { color: 'rgba(245,158,11,0.06)' } },
+                { name: '中单', type: 'line', data: mediumData, smooth: true, lineStyle: { color: '#3b82f6', width: 2 }, itemStyle: { color: '#3b82f6' }, symbol: 'circle', symbolSize: 4, areaStyle: { color: 'rgba(59,130,246,0.06)' } },
+                { name: '小单', type: 'line', data: smallData, smooth: true, lineStyle: { color: '#059669', width: 2 }, itemStyle: { color: '#059669' }, symbol: 'circle', symbolSize: 4, areaStyle: { color: 'rgba(5,150,105,0.06)' } },
             ]
         });
         window.addEventListener('resize', function() { chart.resize(); });
