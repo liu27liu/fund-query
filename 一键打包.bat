@@ -19,11 +19,11 @@ python --version
 
 :: Install dependencies
 echo.
-echo [1/3] Installing dependencies...
+echo [1/4] Installing dependencies...
 pip install pyinstaller pywebview flask requests pillow --quiet
 
 :: Clean old builds
-echo [2/3] Building desktop app (may take 2-3 minutes)...
+echo [2/4] Building main app exe (may take 2-3 minutes)...
 if exist "dist" rmdir /s /q "dist"
 if exist "build" rmdir /s /q "build"
 if exist "output" rmdir /s /q "output"
@@ -64,27 +64,40 @@ pyinstaller --noconfirm --onefile --windowed --name "FundStockQuery" ^
     desktop.py
 
 if errorlevel 1 (
-    echo [ERROR] Build failed!
+    echo [ERROR] Build main exe failed!
     pause
     exit /b 1
 )
+echo [OK] Main exe built
 
-:: Create output with installer
-echo [3/3] Creating installer...
+:: Build installer exe
+echo [3/4] Building installer...
+pyinstaller --noconfirm --onefile --windowed --name "Setup" ^
+    --icon "assets\logo.ico" ^
+    installer_gui.py
+
+if errorlevel 1 (
+    echo [WARN] Installer build failed, using bat installer instead
+)
+
+:: Create output
+echo [4/4] Packaging...
 mkdir "output"
-copy /Y "dist\FundStockQuery.exe" "output\FundStockQuery.exe" >nul
-copy /Y "安装到电脑.bat" "output\安装到电脑.bat" >nul
+copy /Y "dist\FundStockQuery.exe" "output\" >nul
+copy /Y "dist\Setup.exe" "output\" >nul 2>nul
+if not exist "output\Setup.exe" (
+    copy /Y "安装到电脑.bat" "output\" >nul
+)
 
 echo.
 echo ==========================================
 echo   BUILD SUCCESS!
 echo.
-echo   output\FundStockQuery.exe   - App
-echo   output\安装到电脑.bat       - Installer
+echo   output\Setup.exe          - Installer (double-click to install)
+echo   output\FundStockQuery.exe - Standalone (double-click to run)
 echo.
-echo   Step 1: Double-click "安装到电脑.bat"
-echo           (Creates desktop shortcut + start menu)
-echo   Step 2: Double-click desktop icon to run
+echo   To install: Double-click Setup.exe
+echo   To run:     Double-click FundStockQuery.exe
 echo ==========================================
 echo.
 start explorer "output"
