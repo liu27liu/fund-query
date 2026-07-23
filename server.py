@@ -3386,28 +3386,34 @@ def api_user_holdings():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
     print('='*50)
-    print('基金净值查询后端服务启动')
-    print(f'访问地址: http://localhost:{port}')
-    print('数据来源: 东方财富/天天基金 (实时数据)')
+    print('Fund Stock Query')
+    print(f'Address: http://localhost:{port}')
+    print('Data: EastMoney / TiantianJiJin (Real-time)')
     if BREVO_API_KEY and BREVO_FROM_EMAIL:
-        print(f'邮件服务: Brevo API (发件人: {BREVO_FROM_EMAIL})')
+        print(f'Email: Brevo API ({BREVO_FROM_EMAIL})')
     else:
-        print('邮件服务: 未配置 (验证码将打印到控制台)')
-        print('  配置方法: 设置环境变量 BREVO_API_KEY / BREVO_FROM_EMAIL')
-        print('  获取API Key: https://app.brevo.com/settings/keys/api')
-    # 启动时从GitHub云端同步用户数据
-    print('正在从云端同步用户数据...')
+        print('Email: Not configured')
+    # 同步用户数据
+    print('Syncing user data...')
     cloud_data = _github_fetch_users()
     if cloud_data:
         try:
             with open(_USERS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(cloud_data, f, ensure_ascii=False, indent=2)
-            print(f'云端同步完成: {len(cloud_data)}个用户')
+            print(f'Synced: {len(cloud_data)} users')
         except:
             pass
     else:
-        print('云端无数据或同步失败，使用本地数据')
+        print('Using local data')
     print('='*50)
+
+    # 后台启动 Flask 服务，然后自动打开浏览器
+    import webbrowser
+    def open_browser():
+        time.sleep(2)
+        webbrowser.open(f'http://127.0.0.1:{port}')
+    threading.Thread(target=open_browser, daemon=True).start()
+
     app.run(host='0.0.0.0', port=port, debug=False)
 
 
