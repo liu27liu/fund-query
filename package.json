@@ -1,0 +1,70 @@
+{
+  "name": "fund-stock-query",
+  "version": "1.0.0",
+  "description": "基金股票综合查询平台 - 桌面版",
+  "main": "main.js",
+  "author": "Fund Stock Query",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win",
+    "dist:dir": "electron-builder --win --dir",
+    "build:backend": "pyinstaller --onefile --name backend --add-data 'requirements.txt;.' --hidden-import=flask --hidden-import=requests --hidden-import=gunicorn server.py"
+  },
+  "build": {
+    "appId": "com.fundstockquery.app",
+    "productName": "基金股票查询平台",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "admin.html",
+      "css/**/*",
+      "js/**/*",
+      "assets/**/*",
+      "server.py",
+      "admin_api.py",
+      "admin_db.py",
+      "allowed_sectors.py",
+      "sector_categories.py",
+      "yangjibao_sectors.py",
+      "requirements.txt",
+      "!node_modules",
+      "!dist",
+      "!.git"
+    ],
+    "extraResources": [
+      {
+        "from": "python-dist",
+        "to": "python",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/logo.jpg"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/logo.jpg",
+      "uninstallerIcon": "assets/logo.jpg",
+      "installerHeaderIcon": "assets/logo.jpg",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "基金股票查询平台"
+    }
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  }
+}

@@ -9,6 +9,10 @@ venv/
 *.egg-info/
 dist/
 build/
+build-temp/
+python-dist/
+node_modules/
+*.spec
 
 # IDE
 .vscode/
