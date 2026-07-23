@@ -2128,6 +2128,11 @@ def api_stock_flow():
             for k in klines:
                 parts = k.split(',')
                 if len(parts) >= 8:
+                    # 东方财富 fflow/kline/get 字段映射:
+                    # f51=时间, f52=主力净流入, f53=小单净流入, f54=中单净流入, f55=大单净流入, f56=超大单净流入,
+                    # f57=主力流入, f58=主力流出, f59=小单流入, f60=小单流出,
+                    # f61=中单流入, f62=中单流出, f63=大单流入, f64=大单流出, f65=超大单流入, f66=超大单流出
+                    # f67=主力净占比, f68=超大单净占比
                     timeline.append({
                         'date': parts[0],
                         'mainFlow': float(parts[1] or 0),
@@ -2135,8 +2140,18 @@ def api_stock_flow():
                         'mediumFlow': float(parts[3] or 0),
                         'largeFlow': float(parts[4] or 0),
                         'superLargeFlow': float(parts[5] or 0),
-                        'mainFlowRatio': float(parts[6] or 0),
-                        'superLargeFlowRatio': float(parts[7] or 0),
+                        'mainIn': float(parts[6] or 0) if len(parts) > 6 else 0,
+                        'mainOut': float(parts[7] or 0) if len(parts) > 7 else 0,
+                        'smallIn': float(parts[8] or 0) if len(parts) > 8 else 0,
+                        'smallOut': float(parts[9] or 0) if len(parts) > 9 else 0,
+                        'mediumIn': float(parts[10] or 0) if len(parts) > 10 else 0,
+                        'mediumOut': float(parts[11] or 0) if len(parts) > 11 else 0,
+                        'largeIn': float(parts[12] or 0) if len(parts) > 12 else 0,
+                        'largeOut': float(parts[13] or 0) if len(parts) > 13 else 0,
+                        'superLargeIn': float(parts[14] or 0) if len(parts) > 14 else 0,
+                        'superLargeOut': float(parts[15] or 0) if len(parts) > 15 else 0,
+                        'mainFlowRatio': float(parts[16] or 0) if len(parts) > 16 else 0,
+                        'superLargeFlowRatio': float(parts[17] or 0) if len(parts) > 17 else 0,
                     })
             # 最近一条作为 summary
             summary = {}
