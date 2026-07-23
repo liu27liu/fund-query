@@ -4,6 +4,7 @@
 管理员账户、角色权限、操作日志、搜索日志、系统配置、数据源、采集任务等
 """
 import os
+import sys
 import json
 import time
 import hashlib
@@ -11,8 +12,13 @@ import random
 import sqlite3
 from datetime import datetime, timedelta
 
-# 数据库路径：优先 /data (Railway volume)，其次项目目录
-_DB_DIR = '/data' if os.path.isdir('/data') else os.path.dirname(os.path.abspath(__file__))
+# 数据库路径：PyInstaller打包后写在exe旁边
+if getattr(sys, 'frozen', False):
+    _DB_DIR = os.path.dirname(sys.executable)
+elif os.path.isdir('/data'):
+    _DB_DIR = '/data'
+else:
+    _DB_DIR = os.path.dirname(os.path.abspath(__file__))
 os.makedirs(_DB_DIR, exist_ok=True)
 DB_PATH = os.path.join(_DB_DIR, 'admin.db')
 

@@ -9,26 +9,37 @@ echo.
 python --version >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Python not found!
-    echo Please install Python from https://www.python.org/downloads/
+    echo Please install Python 3.11+ from https://www.python.org/downloads/
     echo Make sure to check "Add Python to PATH"
     pause
     exit /b 1
 )
 python --version
 
-:: Install build tools
+:: Install dependencies
 echo.
-echo [1/3] Installing build tools...
-pip install pyinstaller flask requests --quiet
+echo [1/4] Installing dependencies...
+pip install pyinstaller pywebview flask requests --quiet
 
-:: Build exe (single file, include all web files)
-echo [2/3] Building exe (this may take a minute)...
-pyinstaller --onefile --windowed --name "FundStockQuery" ^
+:: Clean old builds
+echo [2/4] Cleaning old builds...
+if exist "dist" rmdir /s /q "dist"
+if exist "build" rmdir /s /q "build"
+if exist "output" rmdir /s /q "output"
+
+:: Build exe with PyInstaller
+echo [3/4] Building desktop app (this may take 2-3 minutes)...
+pyinstaller --noconfirm --onefile --windowed --name "FundStockQuery" ^
     --add-data "index.html;." ^
     --add-data "admin.html;." ^
     --add-data "css;css" ^
     --add-data "js;js" ^
     --add-data "assets;assets" ^
+    --add-data "allowed_sectors.py;." ^
+    --add-data "sector_categories.py;." ^
+    --add-data "yangjibao_sectors.py;." ^
+    --add-data "admin_api.py;." ^
+    --add-data "admin_db.py;." ^
     --hidden-import flask ^
     --hidden-import requests ^
     --hidden-import werkzeug ^
@@ -41,12 +52,14 @@ pyinstaller --onefile --windowed --name "FundStockQuery" ^
     --hidden-import certifi ^
     --hidden-import idna ^
     --hidden-import sqlite3 ^
+    --hidden-import webview ^
+    --hidden-import webview.platforms.edgechromium ^
     --hidden-import allowed_sectors ^
     --hidden-import sector_categories ^
     --hidden-import yangjibao_sectors ^
     --hidden-import admin_api ^
     --hidden-import admin_db ^
-    server.py
+    desktop.py
 
 if errorlevel 1 (
     echo [ERROR] Build failed!
@@ -55,15 +68,21 @@ if errorlevel 1 (
 )
 
 :: Copy to output
-echo [3/3] Packaging...
-if not exist "output" mkdir output
+echo [4/4] Packaging...
+mkdir "output"
 copy /Y "dist\FundStockQuery.exe" "output\FundStockQuery.exe" >nul
 
 echo.
 echo ==========================================
 echo   BUILD SUCCESS!
+echo.
 echo   Output: output\FundStockQuery.exe
-echo   Double-click to run the app!
+echo.
+echo   Just double-click to run!
+echo   - Native desktop window
+echo   - No browser needed
+echo   - No Python needed
+echo   - No command line needed
 echo ==========================================
 echo.
 echo Opening output folder...

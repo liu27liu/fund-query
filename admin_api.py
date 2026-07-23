@@ -5,6 +5,7 @@
       系统配置、数据源管理、采集任务、日志、缓存监控
 """
 import os
+import sys
 import json
 import time
 import functools
@@ -16,7 +17,13 @@ import admin_db
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin/api')
 
 # ========== 用户数据文件路径（与 server.py 共用）==========
-_DB_DIR = '/data' if os.path.isdir('/data') else os.path.dirname(os.path.abspath(__file__))
+# PyInstaller: write data files next to the exe, not in temp _MEIPASS
+if getattr(sys, 'frozen', False):
+    _DB_DIR = os.path.dirname(sys.executable)
+elif os.path.isdir('/data'):
+    _DB_DIR = '/data'
+else:
+    _DB_DIR = os.path.dirname(os.path.abspath(__file__))
 _USERS_FILE = os.path.join(_DB_DIR, 'users.json')
 _DELETED_USERS_FILE = os.path.join(_DB_DIR, 'deleted_users.json')
 

@@ -5,6 +5,7 @@
 所有数据实时、准确,无任何模拟数据
 """
 import re
+import sys
 import json
 import time
 import os
@@ -18,6 +19,14 @@ import requests
 from flask import Flask, request, jsonify, send_from_directory, Response
 from allowed_sectors import ALLOWED_SECTORS
 from sector_categories import get_sector_category, SECTOR_CATEGORY_MAP
+
+# PyInstaller support: use _MEIPASS for bundled resources
+if getattr(sys, 'frozen', False):
+    _BASE_DIR = sys._MEIPASS
+else:
+    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+app = Flask(__name__, static_folder=_BASE_DIR, static_url_path='')
 from yangjibao_sectors import (
     SECTOR_TOP_CATEGORIES, INDUSTRY_SECTORS, CONCEPT_SECTORS,
     BROAD_INDEX_SECTORS, BOND_SECTORS, QDII_SECTORS, MONEY_SECTORS,
@@ -29,8 +38,6 @@ from yangjibao_sectors import (
     get_index_secids, get_index_etf_codes,
     get_index_name_by_secid, get_index_secid_by_name
 )
-
-app = Flask(__name__, static_folder='.', static_url_path='')
 
 # ========== 注册后台管理蓝图 ==========
 from admin_api import admin_bp
@@ -95,8 +102,13 @@ def _get_key_lock(key):
 _sector_fund_count_cache = {'data': {}, 'time': 0}
 
 # ========== 用户数据持久化存储 ==========
-# 优先使用 /data (Railway volume)，其次用项目目录
-_DB_DIR = '/data' if os.path.isdir('/data') else os.path.dirname(os.path.abspath(__file__))
+# PyInstaller: write data files next to the exe, not in temp _MEIPASS
+if getattr(sys, 'frozen', False):
+    _DB_DIR = os.path.dirname(sys.executable)
+elif os.path.isdir('/data'):
+    _DB_DIR = '/data'
+else:
+    _DB_DIR = os.path.dirname(os.path.abspath(__file__))
 # 确保目录存在
 try:
     os.makedirs(_DB_DIR, exist_ok=True)
@@ -502,13 +514,13 @@ threading.Thread(target=_load_all_stocks, daemon=True).start()
 
 @app.route('/')
 def index():
-    return send_from_directory('.', 'index.html')
+    return send_from_directory(_BASE_DIR, 'index.html')
 
 
 @app.route('/admin')
 def admin_page():
     """后台管理页面"""
-    return send_from_directory('.', 'admin.html')
+    return send_from_directory(_BASE_DIR, 'admin.html')
 
 
 # ========== 站点文案配置（公开接口，前端启动时加载）==========
@@ -556,7 +568,7 @@ def api_announcements():
 
 @app.route('/<path:path>')
 def static_files(path):
-    return send_from_directory('.', path)
+    return send_from_directory(_BASE_DIR, path)
 
 
 # ========== 同花顺基金列表数据(10jqka) ==========
