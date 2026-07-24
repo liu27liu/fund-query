@@ -2354,6 +2354,26 @@ def _fetch_industry_sectors():
                 if s.get('code') and s['code'] in counts:
                     s['fundCount'] = counts[s['code']]
 
+        # 补充主力净流入数据(东方财富dataapi)
+        em_list = _fetch_dataapi_boards('m:90+t:2')
+        if em_list:
+            em_flow_map = {}
+            for em in em_list:
+                if em.get('code') and em.get('mainFlow'):
+                    em_flow_map[em['code']] = em['mainFlow']
+                # 按名称也映射一份
+                if em.get('name') and em.get('mainFlow'):
+                    em_flow_map[em['name']] = em['mainFlow']
+            for s in merged.values():
+                matched = False
+                if s.get('code') and s['code'] in em_flow_map:
+                    s['mainFlow'] = em_flow_map[s['code']]
+                    matched = True
+                if not matched:
+                    std_name = s.get('name', '')
+                    if std_name in em_flow_map:
+                        s['mainFlow'] = em_flow_map[std_name]
+
         print(f'[行业板块-TTJJ] 映射到 {len(merged)} 个标准板块', flush=True)
         return list(merged.values())
 
@@ -2618,6 +2638,25 @@ def _fetch_concept_sectors():
             for s in merged.values():
                 if s.get('code') and s['code'] in counts:
                     s['fundCount'] = counts[s['code']]
+
+        # 补充主力净流入数据(东方财富dataapi)
+        em_list = _fetch_dataapi_boards('m:90+t:3')
+        if em_list:
+            em_flow_map = {}
+            for em in em_list:
+                if em.get('code') and em.get('mainFlow'):
+                    em_flow_map[em['code']] = em['mainFlow']
+                if em.get('name') and em.get('mainFlow'):
+                    em_flow_map[em['name']] = em['mainFlow']
+            for s in merged.values():
+                matched = False
+                if s.get('code') and s['code'] in em_flow_map:
+                    s['mainFlow'] = em_flow_map[s['code']]
+                    matched = True
+                if not matched:
+                    std_name = s.get('name', '')
+                    if std_name in em_flow_map:
+                        s['mainFlow'] = em_flow_map[std_name]
 
         print(f'[概念题材-TTJJ] 映射到 {len(merged)} 个标准板块', flush=True)
         return list(merged.values())
