@@ -2371,6 +2371,8 @@ def _fetch_industry_sectors():
                 old['changePercent'] = round((old['changePercent'] + item['changePercent']) / 2, 2)
                 old['upCount'] += item['upCount']
                 old['downCount'] += item['downCount']
+                if item.get('mainFlow'):
+                    old['mainFlow'] = (old.get('mainFlow', 0) or 0) + item['mainFlow']
             else:
                 merged[std_name] = {
                     'code': item['code'],
@@ -2380,6 +2382,7 @@ def _fetch_industry_sectors():
                     'change': item['change'],
                     'upCount': item['upCount'],
                     'downCount': item['downCount'],
+                    'mainFlow': item.get('mainFlow', 0),
                     'type': '行业板块',
                     'category': '行业板块'
                 }
@@ -2389,6 +2392,7 @@ def _fetch_industry_sectors():
                 'code': '', 'name': name, 'price': 0,
                 'changePercent': 0, 'change': 0,
                 'upCount': 0, 'downCount': 0,
+                'mainFlow': 0,
                 'type': '行业板块', 'category': '行业板块'
             }
     return list(merged.values())
@@ -2536,6 +2540,17 @@ def _fetch_ths_industry_boards():
                     # 列: [0]序号 [1]板块名 [2]涨跌幅 [3]成交量 [4]成交额 [5]净流入 [6]上涨家数 [7]下跌家数
                     name = clean[1]
                     change_pct = safe_float(clean[2]) if clean[2] else 0
+                    # 净流入可能带有单位(亿/万), 统一转换为万元
+                    net_in = clean[5] if len(clean) > 5 else '0'
+                    main_flow = 0
+                    if net_in:
+                        net_val = safe_float(re.sub(r'[^\d\.\-]', '', net_in))
+                        if '亿' in net_in:
+                            main_flow = net_val * 10000  # 亿->万元
+                        elif '万' in net_in:
+                            main_flow = net_val
+                        else:
+                            main_flow = net_val
                     up_count = int(safe_float(clean[6])) if len(clean) > 6 else 0
                     down_count = int(safe_float(clean[7])) if len(clean) > 7 else 0
                     results.append({
@@ -2546,6 +2561,7 @@ def _fetch_ths_industry_boards():
                         'change': 0,
                         'upCount': up_count,
                         'downCount': down_count,
+                        'mainFlow': round(main_flow, 2),
                     })
             if results:
                 print(f'[同花顺-行业板块] 采集到 {len(results)} 个板块', flush=True)
@@ -2618,6 +2634,8 @@ def _fetch_concept_sectors():
                 old['changePercent'] = round((old['changePercent'] + item['changePercent']) / 2, 2)
                 old['upCount'] += item['upCount']
                 old['downCount'] += item['downCount']
+                if item.get('mainFlow'):
+                    old['mainFlow'] = (old.get('mainFlow', 0) or 0) + item['mainFlow']
             else:
                 merged[std_name] = {
                     'code': item['code'],
@@ -2627,6 +2645,7 @@ def _fetch_concept_sectors():
                     'change': item['change'],
                     'upCount': item['upCount'],
                     'downCount': item['downCount'],
+                    'mainFlow': item.get('mainFlow', 0),
                     'type': '概念题材',
                     'category': '概念题材'
                 }
@@ -2644,11 +2663,11 @@ def _fetch_concept_sectors():
 
 def _fetch_dataapi_boards(fs_code):
     """从data.eastmoney.com/dataapi采集板块原始数据
-    该API可从Railway正常访问, 返回f3(涨跌幅*100),f2(指数*100),f104(涨数),f105(跌数)
+    该API可从Railway正常访问, 返回f3(涨跌幅*100),f2(指数*100),f104(涨数),f105(跌数),f62(主力净流入)
     """
     results = []
     url = 'https://data.eastmoney.com/dataapi/bkzj/getbkzj'
-    params = {'key': 'f3,f2,f104,f105', 'code': fs_code}
+    params = {'key': 'f3,f2,f104,f105,f62', 'code': fs_code}
     headers = {
         'User-Agent': HEADERS['User-Agent'],
         'Referer': 'https://data.eastmoney.com/bkzj/gn.html',
@@ -2662,6 +2681,7 @@ def _fetch_dataapi_boards(fs_code):
                 for item in data['data']['diff']:
                     change_pct = safe_float(item.get('f3', 0)) / 100.0
                     price = safe_float(item.get('f2', 0)) / 100.0
+                    main_flow = safe_float(item.get('f62', 0))
                     results.append({
                         'code': item.get('f12', ''),
                         'name': item.get('f14', ''),
@@ -2670,6 +2690,7 @@ def _fetch_dataapi_boards(fs_code):
                         'change': round(price * change_pct / 100, 2),
                         'upCount': int(safe_float(item.get('f104', 0))),
                         'downCount': int(safe_float(item.get('f105', 0))),
+                        'mainFlow': round(main_flow / 10000, 2),  # 万元
                     })
                 print(f'[板块dataapi-{fs_code}] 采集到 {len(results)} 个', flush=True)
                 return results

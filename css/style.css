@@ -2100,6 +2100,11 @@ ul, ol { list-style: none; }
     color: var(--text-tertiary, #999);
 }
 
+.sector-flow-row {
+    margin-top: 2px;
+    text-align: right;
+}
+
 .sector-filter-bar {
     margin-left: auto;
     display: flex;

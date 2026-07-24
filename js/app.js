@@ -928,6 +928,20 @@
             pctText = (s.changePercent || 0).toFixed(4) + '%';
             upDownText = '近1年年化';
         }
+        // 主力净流入/流出
+        var flowText = '';
+        var mainFlow = s.mainFlow;
+        if (mainFlow !== undefined && mainFlow !== 0) {
+            var flowAbs = Math.abs(mainFlow);
+            var flowUnit = '万';
+            if (flowAbs >= 10000) {
+                flowAbs = flowAbs / 10000;
+                flowUnit = '亿';
+            }
+            var flowSign = mainFlow > 0 ? '+' : '-';
+            var flowColor = mainFlow > 0 ? '#ef4444' : '#22c55e';
+            flowText = '<span class="sector-flow" style="color:' + flowColor + ';font-size:11px;">主力' + (mainFlow > 0 ? '流入' : '流出') + ' ' + flowSign + flowAbs.toFixed(1) + flowUnit + '</span>';
+        }
         return `
             <div class="sector-card ${colorClass}${hotClass}" data-code="${s.code || ''}" data-name="${s.name}">
                 <div class="sector-info">
@@ -937,6 +951,7 @@
                     <span class="sector-pct">${pctText}</span>
                     ${upDownText ? '<span class="sector-updown">' + upDownText + '</span>' : ''}
                 </div>
+                ${flowText ? '<div class="sector-flow-row">' + flowText + '</div>' : ''}
             </div>
         `;
     }
